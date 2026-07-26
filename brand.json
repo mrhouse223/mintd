@@ -1,0 +1,49 @@
+{
+  "_comment": "Everything brand-specific in one place. Change these, redeploy, and you have a new platform. Nothing here affects contract security.",
+
+  "name": "mintd.fun",
+  "tagline": "LAUNCH FOR $1",
+  "domain": "https://mintd.fun",
+  "description": "Launch, trade and earn on Stable.",
+
+  "platformToken": { "name": "mintd.fun", "symbol": "MINTD" },
+  "reserveToken":  { "name": "Mintr",     "symbol": "MINTR" },
+  "goldToken":     { "name": "Mintd Gold","symbol": "MGLD"  },
+
+  "socials": {
+    "x": "https://x.com/mintddotfun",
+    "telegram": "https://t.me/mintddotfun"
+  },
+
+  "theme": {
+    "accent": "#2f7fe0",
+    "accentDark": "#4d9bf0",
+    "reserveAccent": "#7c3aed",
+    "goldAccent": "#f0a500"
+  },
+
+  "economics": {
+    "creationFeeUsdt": "1",
+    "creatorShareBps": 9000,
+    "startPriceUsdt": "0.000003",
+    "graduationUsdt": 7000,
+    "mintrSeedUsdt": "100",
+    "mintrSeedSupply": "100",
+    "synthMinCollateralBps": 15000,
+    "synthLiquidationBps": 13000
+  },
+
+  "chain": {
+    "name": "Stable Mainnet",
+    "chainId": 988,
+    "rpc": "https://rpc.stable.xyz",
+    "explorer": "https://stablescan.xyz",
+    "quoteToken": "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+    "quoteSymbol": "USDT0",
+    "quoteDecimals": 6,
+    "positionManager": "0x3BdC3437405f7D801b6036532713fc1F179136a6",
+    "swapRouter": "0x32eaf9B5d5F2CD7361c5012890C943D7de84C22a",
+    "quoter": "0xb070179E7032CdA868b53e6C1742F80c9e940d1A",
+    "goldOracle": "0xd5E244accc514b56DCAD89897DD44499E7C35a05"
+  }
+}

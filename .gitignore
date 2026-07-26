@@ -1,0 +1,10 @@
+node_modules/
+build/
+.env
+.env.local
+*.log
+.DS_Store
+
+# deployment records ARE worth committing: they are how you find your contracts
+# again. Nothing secret lives in them.
+!deployments/

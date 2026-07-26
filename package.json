@@ -1,0 +1,23 @@
+{
+  "name": "stable-launchpad",
+  "version": "1.0.0",
+  "description": "Pump.fun-style memecoin launchpad for Stablechain (chain 988) with Uniswap V2 graduation",
+  "license": "MIT",
+  "scripts": {
+    "compile": "node scripts/compile.js",
+    "test": "node scripts/compile.js && node scripts/test-instant.js && node scripts/test.js",
+    "deploy": "node scripts/deploy.js"
+  },
+  "dependencies": {
+    "@uniswap/v2-core": "^1.0.1",
+    "@uniswap/v2-periphery": "^1.1.0-beta.0",
+    "ethers": "^6.13.0",
+    "solc": "0.8.26"
+  },
+  "devDependencies": {
+    "@uniswap/swap-router-contracts": "1.3.1",
+    "@uniswap/v3-core": "1.0.1",
+    "@uniswap/v3-periphery": "1.4.4",
+    "ganache": "^7.9.2"
+  }
+}
