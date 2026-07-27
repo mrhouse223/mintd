@@ -12,22 +12,26 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-node scripts/stats-indexer.js
-
-# nothing to do if the figures are unchanged
-if git diff --quiet -- frontend/stats.json; then
-  echo "stats unchanged, nothing to publish"
-  exit 0
-fi
-
-# refuse to run mid-rebase or on a detached HEAD, where a push would be wrong
+# Checked before the indexer runs, not after: a detached HEAD or a feature
+# branch means the push would land somewhere wrong, and there is no reason to
+# spend a full pool scan discovering that.
 branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$branch" != "main" ]; then
   echo "on branch '$branch', not main: skipping publish"
   exit 0
 fi
 
+node scripts/stats-indexer.js
+
+# Staged first, then compared against the index. `git diff` reports no change
+# for an untracked path, so while stats.json is untracked a working-tree
+# comparison exits "unchanged" on every run and the file never ships.
 git add frontend/stats.json
+if git diff --cached --quiet -- frontend/stats.json; then
+  echo "stats unchanged, nothing to publish"
+  exit 0
+fi
+
 git commit -q -m "stats: refresh $(date -u +%Y-%m-%dT%H:%MZ)"
 git push -q origin main
 echo "published $(node -e 'const s=require("./frontend/stats.json");console.log("TVL $"+Number(s.tvl).toFixed(0)+", all-time vol $"+Number(s.volumeAllTime).toFixed(0))')"
