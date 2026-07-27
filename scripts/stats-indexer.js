@@ -55,6 +55,34 @@ const SPAN = Number(process.env.STATS_SPAN || "500");
 
 const CACHE = path.join(ROOT, "stats-cache.json");
 const OUT = path.join(ROOT, "frontend", "stats.json");
+const LOCK = path.join(ROOT, "stats-indexer.lock");
+
+// Two passes must never write stats-cache.json at once.
+//
+// Overlap is the normal case here, not an edge: pm2 runs this as --watch on a
+// 3 minute loop and publish-stats.sh invokes it separately. When two passes
+// overlap they both read the same base totals, sweep, and the later write
+// wins, so volume one pass already banked gets counted again. That is exactly
+// how all-time volume reached $1.1m against a verified $732k.
+function acquireLock() {
+  try {
+    const prev = Number(fs.readFileSync(LOCK, "utf8").trim());
+    if (prev && prev !== process.pid) {
+      try {
+        process.kill(prev, 0); // signal 0 only tests for existence
+        return false;
+      } catch { /* stale lock from a killed run, safe to take */ }
+    }
+  } catch { /* no lock file at all */ }
+  fs.writeFileSync(LOCK, String(process.pid));
+  return true;
+}
+
+function releaseLock() {
+  try {
+    if (Number(fs.readFileSync(LOCK, "utf8").trim()) === process.pid) fs.unlinkSync(LOCK);
+  } catch {}
+}
 
 const V3_SWAP = ethers.id("Swap(address,address,int256,int256,uint160,uint128,int24)");
 const V2_SWAP = ethers.id("Swap(address,uint256,uint256,uint256,uint256,address)");
@@ -438,4 +466,13 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error(e.shortMessage || e.message || e); process.exit(1); });
+if (!acquireLock()) {
+  // Exit 0, not 1: this is the lock doing its job, and a non-zero status would
+  // make pm2 treat a normal overlap as a crash and restart-loop.
+  console.error("another indexer pass is already running, exiting");
+  process.exit(0);
+}
+process.on("exit", releaseLock);
+for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { releaseLock(); process.exit(0); });
+
+main().catch((e) => { releaseLock(); console.error(e.shortMessage || e.message || e); process.exit(1); });

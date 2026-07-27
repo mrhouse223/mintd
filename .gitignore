@@ -13,3 +13,6 @@ build/
 # four days, so this file is the only durable record of volume older than that
 # window. Losing it silently resets all-time volume to whatever the node still
 # retains, with no error to notice.
+
+# runtime lock, never committed
+stats-indexer.lock
