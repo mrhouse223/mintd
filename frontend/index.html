@@ -168,6 +168,29 @@
     box-shadow: 0 2px 10px rgba(240, 165, 0, .35); }
   #view-synth .sidetabs .onb { background: linear-gradient(135deg, #ffc93d, #f0a500); color: #402f00; }
   #view-synth .maxb { color: #a97b00; }
+  /* MINTR hero price: the headline number, full precision */
+  .mrhero { background: var(--panel2); border-radius: 18px; padding: 20px 22px; margin: 0 0 14px;
+    box-shadow: 0 0 0 1px rgba(139,92,246,.18), 0 14px 44px rgba(139,92,246,.12); }
+  .mrhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .mrlabel { font-size: 10.5px; font-weight: 800; letter-spacing: .11em; color: var(--dim); }
+  .mrchg { font-size: 12.5px; font-weight: 800; color: var(--mintr); }
+  /* --mrfit is set from JS off the digit count, so a 16-decimal price shrinks
+     to fit one line instead of wrapping. Never truncate: every digit shows. */
+  .mrbig { font-size: clamp(19px, var(--mrfit, 5vw), 44px); font-weight: 800; letter-spacing: -.035em;
+    line-height: 1.1; margin-top: 6px; font-variant-numeric: tabular-nums;
+    background: linear-gradient(120deg, var(--mintr2), var(--mintr));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    white-space: nowrap; }
+  .mrlast { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
+    font-size: 12.5px; color: var(--dim); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .mrlast b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  /* Both mints and burns are green here, and that is not decoration: the fee
+     stays in the reserve either way, so backing per token rises on both. A red
+     burn pill would tell holders the opposite of what happened. */
+  .mrpill { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;
+    background: var(--up-soft); color: var(--up); }
+  .mrpill.sell { background: var(--up-soft); color: var(--up); }
+
   /* MINTR: purple with a soft glow. Gold stays reserved for MGLD. */
   :root { --mintr: #7c3aed; --mintr2: #a78bfa; --mintr-deep: #5b21b6; }
   [data-theme="dark"] { --mintr: #a78bfa; --mintr2: #c4b5fd; --mintr-deep: #8b5cf6; }
@@ -518,11 +541,14 @@
     --bg: #ffffff; --panel: #ffffff; --panel2: #f2f5f9; --line: #e6ebf2;
     --ink: #0b1119; --dim: #6b7a8d; --green: #2f7fe0; --green2: #1f6bc9;
     --green-soft: #e8f1fd; --red: #e0483d; --radius: 14px;
+    /* --green is the blue brand accent, so gains need their own colour */
+    --up: #12a05f; --up-soft: rgba(18,160,95,.13);
   }
   [data-theme="dark"] {
     --bg: #0a0d12; --panel: #12171f; --panel2: #161d26; --line: #1e2732;
     --ink: #f2f5f9; --dim: #8a97a8; --green: #4d9bf0; --green2: #6fb2f5;
     --green-soft: #10233a; --red: #ff6b5e;
+    --up: #34d399; --up-soft: rgba(52,211,153,.14);
   }
 
   body { font-family: "Inter Tight", system-ui, -apple-system, sans-serif;
@@ -882,14 +908,18 @@
       </div>
     </div>
 
-    <div class="heroStats">
-      <div class="hstat"><b id="stTokens" style="color:var(--green)">–</b><label>COINS</label></div>
-      <div class="hstat"><b id="stTrades" style="color:var(--green2)">–</b><label>TRADES 24H</label></div>
+    <div class="heroStats" style="grid-template-columns:repeat(5,1fr)">
+      <div class="hstat" id="tvlTile" title="Both sides of every pool, plus USDT0 backing MINTR and collateral locked in MGLD. Farms are not added on top: staked LP is the same liquidity as its pool.">
+        <b id="stTvl" style="color:var(--green)">–</b><label>TOTAL VALUE LOCKED</label></div>
+      <div class="hstat"><b id="stVolAll" style="color:var(--green2)">–</b><label>TOTAL VOLUME</label></div>
       <div class="hstat"><b id="stVol" style="color:var(--green2)">–</b><label>VOLUME 24H</label></div>
-      <div class="hstat"><b id="stGrad" style="color:var(--gold)">–</b><label>TVL</label></div>
-      <div class="hstat"><b id="stTvl" style="color:var(--green2)">–</b><label>EARN TVL</label></div>
+      <div class="hstat"><b id="stMintrTvl" style="color:var(--mintr)">–</b><label>$MINTR TVL</label></div>
       <div class="hstat"><b id="stBurn" style="color:var(--red)">–</b><label><svg class="ic" viewBox="0 0 24 24"><path d="M12 3c3 4 6 5.5 6 9a6 6 0 0 1-12 0c0-2 1-3.5 2.5-5 .3 1.2.9 2 1.8 2.4C10 7.5 10.7 5.2 12 3z"/></svg> $MINTD BURNED</label></div>
       <span id="stBurn2" style="display:none"></span>
+      <span id="stTokens" style="display:none"></span>
+      <span id="stTrades" style="display:none"></span>
+      <span id="stGrad" style="display:none"></span>
+      <span id="stFarmTvl" style="display:none"></span>
     </div>
 
     <div class="mkthead" id="mkts">
@@ -1252,9 +1282,18 @@
         <p>MINTR is 100% backed by a USDT0 reserve. Every buy and sell pays a small tax that stays in the reserve while tokens are burned, so the backing per token can only rise. Buy and sell straight from the contract at the backing price.</p>
       </div>
 
-      <div class="heroStats" style="grid-template-columns:repeat(4,1fr);margin:0 0 20px">
+      <!-- the number that matters, full precision, above everything else -->
+      <div class="mrhero">
+        <div class="mrhead">
+          <span class="mrlabel">BACKING PRICE</span>
+          <span class="mrchg" id="mrPriceChg">&nbsp;</span>
+        </div>
+        <div class="mrbig" id="mrPrice">–</div>
+        <div class="mrlast" id="mrLast">Loading recent mints</div>
+      </div>
+
+      <div class="heroStats" style="grid-template-columns:repeat(3,1fr);margin:0 0 20px">
         <div class="hstat"><b id="mrStart" style="color:var(--mintr-deep)">$1.00</b><label>STARTING PRICE</label></div>
-        <div class="hstat"><b id="mrPrice" style="color:var(--mintr)">–</b><label>CURRENT PRICE</label><small id="mrPriceChg" style="display:block;font-size:11px;font-weight:800;color:var(--mintr)">&nbsp;</small></div>
         <div class="hstat"><b id="mrApy" style="color:var(--mintr)">–</b><label>APY · TRAILING</label></div>
         <div class="hstat"><b id="mrMcap" style="color:var(--mintr-deep)">–</b><label>MARKET CAP</label></div>
       </div>
@@ -2124,6 +2163,7 @@ async function loadAllInner() {
     loadDexStats();
     loadBurn();
     loadMintswapTvl();
+    loadProtocolStats();
   } catch (e) { console.error(e); toast(e.shortMessage || e.message, "err"); }
 }
 
@@ -2476,9 +2516,12 @@ async function doSwap() {
   } catch (e) { toast(e.shortMessage || e.message, "err"); }
 }
 
-/* ------------------------------------------- MintSwap TVL (front page) */
+/* ------------------------------------------- MintSwap farm TVL
+   Writes to a hidden span now. The headline TOTAL VALUE LOCKED tile owns
+   #stTvl and deliberately does NOT add farm TVL: staked LP is the same
+   liquidity as the pool it came from, so adding both would double count. */
 async function loadMintswapTvl() {
-  const el = document.getElementById("stTvl");
+  const el = document.getElementById("stFarmTvl");
   if (!el || !MINTSWAP.farms || !MINTSWAP.farms.length) return;
   try {
     let tvl = 0;
@@ -2529,12 +2572,17 @@ async function loadMintr() {
     mrFees = { b: Number(bf), s: Number(sf), p: Number(pf) };
     const priceNum = Number(ethers.formatEther(price));
     mrPriceNum = priceNum;
-    $("mrPrice").textContent = fmtPrice(priceNum);
+    // full precision: the backing moves in tiny increments, so show every digit
+    // the contract actually tracks rather than rounding it away
+    const priceStr = "$" + trimZeros(ethers.formatEther(price));
+    $("mrPrice").textContent = priceStr;
+    fitMrPrice(priceStr);
     $("mrPrice2").textContent = fmtPrice(priceNum) + " USDT0";
     // gain since the $1.00 seed price
     const chg = (priceNum - MINTR_START_PRICE) / MINTR_START_PRICE * 100;
-    $("mrPriceChg").textContent = (chg >= 0 ? "▲ +" : "▼ ") + chg.toFixed(2) + "%";
-    $("mrPriceChg").style.color = chg >= 0 ? "var(--mintr)" : "var(--red)";
+    $("mrPriceChg").textContent = (chg >= 0 ? "▲ +" : "▼ ") + pctStr(Math.abs(chg)) + " since launch";
+    $("mrPriceChg").style.color = chg >= 0 ? "var(--up)" : "var(--red)";
+    loadMintrLastTrade();
     $("mrMcap").textContent = fmtUsd(Number(ethers.formatEther(supply)) * priceNum);
     mrSetSide(mrBuy);
     mrBalance();
@@ -2546,6 +2594,182 @@ async function loadMintr() {
 }
 // Trailing APY: compare price1e18 now vs ~24h ago onchain (falls back to
 // shorter windows on a young deployment), annualized with daily compounding.
+// Size the backing price so the whole number fits its panel on one line.
+// Measured against the real panel width rather than guessed from a breakpoint,
+// so it holds up on any screen and at any digit count.
+function fitMrPrice(text, retry = 0) {
+  const el = $("mrPrice");
+  if (!el) return;
+  // the element's own clientWidth already excludes the panel's padding
+  const avail = el.clientWidth;
+  // zero means the MINTR tab is still hidden: measure once it is laid out
+  if (!avail) {
+    if (retry < 20) requestAnimationFrame(() => fitMrPrice(text, retry + 1));
+    return;
+  }
+  // Inter Tight tabular digits sit near 0.60em wide, plus the -.035em tracking
+  const perChar = 0.60 - 0.035;
+  const ideal = avail / (text.length * perChar);
+  el.style.setProperty("--mrfit", Math.max(19, Math.min(44, Math.floor(ideal))) + "px");
+}
+addEventListener("resize", () => {
+  const el = $("mrPrice");
+  if (el && el.textContent && el.textContent !== "–") fitMrPrice(el.textContent);
+});
+
+// Backing moves in tiny increments, so a fixed 2dp would print "+0.00%" for a
+// real change. Grow precision until two significant digits survive, cap at 8.
+function pctStr(pct) {
+  const a = Math.abs(pct);
+  if (a === 0) return "0%";
+  let dp = 2;
+  while (dp < 8 && a < 5 / Math.pow(10, dp)) dp++;
+  return pct.toFixed(dp).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") + "%";
+}
+
+// keep every meaningful digit up to 16 decimals, dropping trailing zeros
+function trimZeros(s, maxDp = 16) {
+  if (!s.includes(".")) return s + ".00";
+  const [w, d = ""] = s.split(".");
+  const t = (w + "." + d.slice(0, maxDp)).replace(/0+$/, "").replace(/\.$/, "");
+  return t.includes(".") ? t : t + ".00";
+}
+
+// Log scanning gets its own provider with batching disabled. The shared `rp`
+// runs batchMaxCount 20, and ethers batches every request pending in the same
+// tick regardless of who issued it: connecting a wallet fires balance lookups
+// alongside this scan, they end up in one JSON-RPC array, and this chain
+// rejects the whole array. Sequential-only here, unaffected by the rest.
+let logRp = null;
+function logProvider() {
+  if (!logRp) logRp = new ethers.JsonRpcProvider(CHAIN.rpcUrls[0], parseInt(CHAIN.chainId, 16),
+    { staticNetwork: true, batchMaxCount: 1 });
+  return logRp;
+}
+
+// Last mint or burn on the MINTR contract, and exactly how much it moved the
+// backing. Bought mints against the reserve, Sold burns; both carry the
+// post-trade price, so the bump is the difference against the previous one.
+// The block we find is cached, so later loads resume instead of rescanning.
+const MR_LAST_KEY = "mrLastTradeBlock";
+async function loadMintrLastTrade() {
+  const el = $("mrLast");
+  if (!el || !MINTR_ADDR) return;
+  try {
+    const boughtTopic = ethers.id("Bought(address,uint256,uint256,uint256)");
+    const soldTopic = ethers.id("Sold(address,uint256,uint256,uint256)");
+    const iface = new ethers.Interface([
+      "event Bought(address indexed buyer, uint256 usdtIn, uint256 mintrOut, uint256 price1e18)",
+      "event Sold(address indexed seller, uint256 mintrIn, uint256 usdtOut, uint256 price1e18)",
+    ]);
+    const lp = logProvider();
+    const head = await lp.getBlockNumber();
+    const SPAN = 5000, WINDOWS = 60; // up to 300k blocks, one request each
+    let logs = [], scanned = 0, errors = 0, hitFloor = false, firstErr = null;
+
+    // resume from the last mint we found instead of rescanning from head
+    const cached = Number(localStorage.getItem(MR_LAST_KEY) || 0);
+    const floor = cached && cached < head ? Math.max(0, cached - SPAN) : 0;
+
+    // Always filter by topic. An address-only query also returns every ERC-20
+    // Transfer on MINTR, which blows past this RPC's result cap and fails the
+    // whole window. One sequential request per topic, halving the span on
+    // failure so a busy stretch degrades instead of disappearing.
+    async function windowLogs(from, to, topic) {
+      for (let span = to - from; span >= 250; span = Math.floor(span / 2)) {
+        try {
+          const out = [];
+          for (let a = from; a <= to; a += span + 1) {
+            out.push(...await lp.getLogs({ address: MINTR_ADDR, topics: [topic], fromBlock: a, toBlock: Math.min(to, a + span) }));
+          }
+          return out;
+        } catch (e) {
+          console.warn(`getLogs ${from}-${to} span ${span} failed:`, e.shortMessage || e.message);
+        }
+      }
+      throw new Error(`window ${from}-${to} unreadable`);
+    }
+
+    for (let w = 0; w < WINDOWS && logs.length < 2; w++) {
+      const to = head - w * SPAN;
+      const from = Math.max(0, to - SPAN);
+      if (to <= 0) break;
+      scanned = head - from;
+      try {
+        const b = await windowLogs(from, to, boughtTopic);
+        const s = await windowLogs(from, to, soldTopic);
+        logs = b.concat(s).concat(logs);
+      } catch (e) {
+        errors++;
+        firstErr = firstErr || (e.shortMessage || e.message || String(e));
+        continue;
+      }
+      // past the last known mint there is nothing older worth paging for
+      if (floor && from <= floor && logs.length) { hitFloor = true; break; }
+    }
+    if (!logs.length) {
+      // never blame an empty chain for what was actually a broken RPC, and put
+      // the reason on screen: this panel is the only diagnostic most users see
+      if (errors) {
+        console.error(`MINTR mint/burn lookup: ${errors} RPC failures over ${scanned} blocks`, firstErr);
+        el.innerHTML = `<span style="opacity:.75">Mint history unavailable</span>` +
+          `<span style="opacity:.5;font-size:11px">${esc(String(firstErr).slice(0, 90))}</span>`;
+      } else {
+        console.warn(`no MINTR mints or burns in the last ${scanned} blocks`);
+        el.textContent = `No mints in the last ${scanned.toLocaleString()} blocks`;
+      }
+      return;
+    }
+    if (!hitFloor) { try { localStorage.setItem(MR_LAST_KEY, String(logs[logs.length - 1].blockNumber)); } catch {} }
+
+    logs.sort((a, b) => a.blockNumber - b.blockNumber || (a.index ?? 0) - (b.index ?? 0));
+    const lastLog = logs[logs.length - 1];
+    const last = iface.parseLog(lastLog);
+    const isBuy = last.name === "Bought";
+    const priceAfter = Number(ethers.formatEther(last.args.price1e18));
+
+    // prefer the previous event's price; fall back to deriving the pre-trade
+    // price from the trade itself so a single-event history still shows a bump
+    let priceBefore = null;
+    if (logs.length > 1) {
+      priceBefore = Number(ethers.formatEther(iface.parseLog(logs[logs.length - 2]).args.price1e18));
+    } else if (isBuy) {
+      const usdIn = Number(ethers.formatUnits(last.args.usdtIn, 6));
+      const got = Number(ethers.formatEther(last.args.mintrOut));
+      if (got > 0) priceBefore = (usdIn * (1 - (mrFees.b + mrFees.p) / 10000)) / got;
+    }
+    const bump = priceBefore && priceBefore > 0 ? ((priceAfter - priceBefore) / priceBefore) * 100 : null;
+    const size = isBuy
+      ? fmtUsd(ethers.formatUnits(last.args.usdtIn, 6))
+      : fmtUsd(ethers.formatUnits(last.args.usdtOut, 6));
+
+    // age it off this page's own block reference, not the Discover ticker's.
+    // sequential again: a two-call Promise.all is enough to trigger batching
+    let when = "";
+    try {
+      const hb = await lp.getBlock(head);
+      const ob = await lp.getBlock(lastLog.blockNumber);
+      const s = Math.max(0, hb.timestamp - ob.timestamp);
+      when = s < 90 ? "just now" : s < 3600 ? Math.round(s / 60) + "m ago"
+           : s < 86400 ? Math.round(s / 3600) + "h ago" : Math.round(s / 86400) + "d ago";
+    } catch {}
+
+    // Bought mints new MINTR against the reserve, Sold burns it. Either way the
+    // backing per token can only rise, because the fee stays in the reserve.
+    // That is why a burn is shown in the same green as a mint.
+    el.innerHTML =
+      `<span class="mrpill${isBuy ? "" : " sell"}">LAST ${isBuy ? "MINT" : "BURN"}</span>` +
+      `<b>${size}</b>` +
+      (bump != null && bump > 0
+        ? `<span>price increase <b style="color:var(--up)">+${pctStr(bump)}</b></span>`
+        : `<span>price held</span>`) +
+      (when ? `<span style="opacity:.7">${when}</span>` : "");
+  } catch (e) {
+    console.error("MINTR mint/burn lookup failed", e);
+    el.textContent = "Mint history unavailable";
+  }
+}
+
 async function loadMintrApy(pNow) {
   try {
     const latest = await rp.getBlock("latest");
@@ -3616,6 +3840,213 @@ function restoreTokens() {
     });
   } catch { return []; }
 }
+/* ---------------------------------------------------- protocol stat bar
+   stats.json is produced by scripts/stats-indexer.js, which walks every pool
+   from creation. All-time volume cannot be computed cheaply in a browser, so
+   the file supplies it; everything else is refreshed live from chain here and
+   overwrites the file's value, so a stale deploy still shows current TVL. */
+let STATS = null;
+async function loadProtocolStats() {
+  try {
+    const r = await fetch("stats.json?" + Math.floor(Date.now() / 60000), { cache: "no-store" });
+    if (r.ok) {
+      STATS = await r.json();
+      if (STATS.volumeAllTime) $("stVolAll").textContent = fmtUsd(STATS.volumeAllTime);
+      if (STATS.tvl) $("stTvl").textContent = fmtUsd(STATS.tvl);
+      if (STATS.mintrTvl) $("stMintrTvl").textContent = fmtUsd(STATS.mintrTvl);
+      if (STATS.volume24h) $("stVol").textContent = fmtUsd(STATS.volume24h);
+      // show the methodology on the tile so the number is checkable
+      const b = STATS.tvlBreakdown;
+      if (b) $("tvlTile").title =
+        `Pools (both sides): ${fmtUsd(b.pools)}\n` +
+        `MINTR reserve: ${fmtUsd(b.mintrReserve)}\n` +
+        `MGLD collateral: ${fmtUsd(b.mgldCollateral)}\n\n` +
+        `Farms are not added on top: staked LP is the same liquidity as its pool.`;
+    }
+  } catch { /* no stats.json yet, live values below still fill the bar */ }
+  liveProtocolStats();
+  if (!STATS || !Number(STATS.volumeAllTime)) loadAllTimeVolume();
+}
+
+/* All-time volume without the indexer.
+   Scans BACKWARD from the chain head, pool by pool, banking each pool's running
+   total and how far back it has reached in localStorage. Backward matters: the
+   chain is millions of blocks deep and these pools are days old, so scanning
+   forward from zero spends the whole budget on empty history and finds nothing.
+   Going backward means the newest (and largest) volume lands first and the
+   figure is useful on the very first load, then deepens over later visits.
+   Budgeted per page load so it can never hammer the RPC. */
+const VOL_KEY = "volAllCache_v2";
+const VOL_SPAN = 20000;       // blocks per request; halved per pool on failure
+const VOL_BUDGET = 120;       // getLogs calls per page load
+const VOL_MAX_BACK = 3000000; // stop reaching back past this many blocks
+
+// A stalled request must never leave the tile stuck on "scanning".
+function withTimeout(p, ms = 12000) {
+  return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+}
+
+async function loadAllTimeVolume() {
+  const el = $("stVolAll");
+  if (!el) return;
+  // Every failure below used to be silent, which made this impossible to
+  // diagnose without devtools. Now the tile says what went wrong.
+  const fail = (why) => { el.textContent = "–"; el.title = why; console.warn("all-time volume:", why); };
+  try {
+    await volScan(el, fail);
+  } catch (e) {
+    fail("scan threw: " + (e.shortMessage || e.message || e));
+  }
+}
+
+async function volScan(el, fail) {
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem(VOL_KEY) || "{}"); } catch {}
+
+  const targets = [];
+  const seenT = new Set();
+  for (const t of tokens) {
+    if (!t.pool || seenT.has(t.pool.toLowerCase())) continue;
+    seenT.add(t.pool.toLowerCase());
+    targets.push({ addr: t.pool.toLowerCase(), v3: true, usdtIs0: !t.tokenIs0 });
+  }
+  for (const f of MINTSWAP.farms || []) {
+    if (f.lp && !seenT.has(f.lp.toLowerCase())) {
+      seenT.add(f.lp.toLowerCase());
+      targets.push({ addr: f.lp.toLowerCase(), v3: false });
+    }
+  }
+  if (!targets.length) return fail(`no pools to scan (tokens loaded: ${tokens.length})`);
+  el.textContent = "scanning…";
+
+  const lp = logProvider();
+  let head;
+  try { head = await withTimeout(lp.getBlockNumber()); }
+  catch (e) { return fail("getBlockNumber failed: " + (e.shortMessage || e.message)); }
+
+  // V2 pairs do not tell us which side is USDT0 up front: read token0 once and
+  // keep it in the same cache entry so it is never fetched twice.
+  for (const t of targets) {
+    if (t.v3) continue;
+    const c = cache[t.addr];
+    if (c && c.usdtIs0 !== undefined) { t.usdtIs0 = c.usdtIs0; continue; }
+    try {
+      const t0 = await withTimeout(new ethers.Contract(t.addr, ["function token0() view returns (address)"], lp).token0());
+      t.usdtIs0 = t0.toLowerCase() === ADDR.usdt0.toLowerCase();
+      cache[t.addr] = Object.assign(cache[t.addr] || { from: 0, total: 0 }, { usdtIs0: t.usdtIs0 });
+    } catch { t.skip = true; }
+  }
+
+  const paint = () => {
+    const sum = Object.values(cache).reduce((s, c) => s + Number(c.total || 0), 0);
+    if (sum > 0) el.textContent = fmtUsd(sum);
+  };
+  paint();
+
+  const tally = (t, logs, c) => {
+    for (const lg of logs) {
+      try {
+        if (t.v3) {
+          const a = swapIface.parseLog(lg).args;
+          const d = t.usdtIs0 ? a.amount0 : a.amount1;
+          c.total += Number(ethers.formatUnits(d < 0n ? -d : d, 6));
+        } else {
+          const a = v2SwapIface.parseLog(lg).args;
+          const inA = t.usdtIs0 ? a.amount0In : a.amount1In;
+          const outA = t.usdtIs0 ? a.amount0Out : a.amount1Out;
+          c.total += Number(ethers.formatUnits(inA > 0n ? inA : outA, 6));
+        }
+      } catch { /* not a swap we can read */ }
+    }
+  };
+
+  let calls = 0, swaps = 0, errs = 0, firstErr = null;
+  // round 1: catch up the NEW blocks since last visit, for every pool
+  for (const t of targets) {
+    if (t.skip || calls >= VOL_BUDGET) continue;
+    const c = cache[t.addr] || (cache[t.addr] = { newest: head, oldest: head, total: 0 });
+    while (c.newest < head && calls < VOL_BUDGET) {
+      const from = c.newest + 1;
+      const to = Math.min(head, from + VOL_SPAN);
+      let logs;
+      try { logs = await withTimeout(lp.getLogs({ address: t.addr, topics: [t.v3 ? SWAP_TOPIC : V2_SWAP_TOPIC], fromBlock: from, toBlock: to })); }
+      catch (e) { errs++; firstErr = firstErr || (e.shortMessage || e.message); break; }
+      calls++;
+      swaps += logs.length;
+      tally(t, logs, c);
+      c.newest = to;
+    }
+  }
+  paint();
+  try { localStorage.setItem(VOL_KEY, JSON.stringify(cache)); } catch {}
+
+  // Round 2: reach back through history BREADTH FIRST, one window per pool per
+  // lap. Depth first would sink the whole budget into the first pool, which is
+  // usually a dead launchpad token with no trades at all, and the tile would
+  // sit at zero while the busy pools were never touched.
+  const floor = Math.max(0, head - VOL_MAX_BACK);
+  let progressed = true;
+  while (calls < VOL_BUDGET && progressed) {
+    progressed = false;
+    for (const t of targets) {
+      if (t.skip || calls >= VOL_BUDGET) continue;
+      const c = cache[t.addr];
+      if (!c || c.oldest <= floor) continue;
+      const span = t.span || (t.span = VOL_SPAN);
+      const to = c.oldest - 1;
+      const from = Math.max(floor, to - span);
+      if (to < from) { c.oldest = floor; continue; }
+      let logs;
+      try { logs = await withTimeout(lp.getLogs({ address: t.addr, topics: [t.v3 ? SWAP_TOPIC : V2_SWAP_TOPIC], fromBlock: from, toBlock: to })); }
+      catch (e) {
+        errs++; firstErr = firstErr || (e.shortMessage || e.message);
+        // a window that is too big for this RPC should shrink, not disqualify
+        // the pool: halve it and retry on the next lap
+        t.span = Math.floor(span / 2);
+        if (t.span < 500) t.skip = true;
+        calls++; progressed = true;
+        continue;
+      }
+      calls++;
+      swaps += logs.length;
+      tally(t, logs, c);
+      c.oldest = from;
+      progressed = true;
+    }
+    paint();
+    try { localStorage.setItem(VOL_KEY, JSON.stringify(cache)); } catch {}
+  }
+
+  const sum = Object.values(cache).reduce((s, c) => s + Number(c.total || 0), 0);
+  const diag = `${targets.length} pools, ${calls} requests, ${swaps} swaps, ${errs} errors` +
+    (firstErr ? ` (${firstErr})` : "");
+  console.log("all-time volume scan:", diag);
+  if (sum > 0) { el.textContent = fmtUsd(sum); el.title = diag; }
+  else fail(diag);
+}
+
+// Live TVL straight from chain, so the headline is never stale even if
+// stats.json is. Only all-time volume depends on the indexer.
+async function liveProtocolStats() {
+  try {
+    let poolTvl = 0n;
+    const seen = new Set();
+    for (const t of tokens) {
+      if (!t.pool || seen.has(t.pool.toLowerCase())) continue;
+      seen.add(t.pool.toLowerCase());
+      if (t.poolUsdt != null) poolTvl += t.poolUsdt * 2n; // both sides
+    }
+    // poolUsdt is carried in 18-dec form on token records
+    let tvl18 = poolTvl;
+    let reserve6 = 0n, coll18 = 0n;
+    try { reserve6 = await new ethers.Contract(MINTR_ADDR, ["function reserve() view returns (uint256)"], rp).reserve(); } catch {}
+    try { coll18 = await new ethers.Contract(SYNTH_ADDR, ["function totalCollateral() view returns (uint256)"], rp).totalCollateral(); } catch {}
+    const total18 = tvl18 + reserve6 * 1000000000000n + coll18;
+    if (total18 > 0n) $("stTvl").textContent = fmtUsd(ethers.formatEther(total18));
+    if (reserve6 > 0n) $("stMintrTvl").textContent = fmtUsd(ethers.formatUnits(reserve6, 6));
+  } catch { /* leave whatever stats.json supplied */ }
+}
+
 // header figures from cached data so nothing sits on a dash at first paint
 function paintCachedStats() {
   try {

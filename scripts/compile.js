@@ -20,6 +20,7 @@ for (const rel of [
   "contracts/MintSynth.sol",
   "contracts/V3PositionLocker.sol",
   "contracts/MintrArb.sol",
+  "contracts/MintrArbMulti.sol",
   "contracts/test/MockPads.sol",
   "contracts/test/MockAggregator.sol",
   "contracts/test/WETH9.sol",

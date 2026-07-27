@@ -24,7 +24,10 @@ const USDT0 = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736";
 const MINTR = process.env.MINTR || "0x8817D05f2560189F3697028f639Dbb4C68688400";
 const FACTORY = process.env.FACTORY || "0x65E12569E20E8706A4a60fCAB13e9069B78F9f8E";
 const BUY_TOKEN = process.env.BUY_TOKEN || "🟣"; // purple circle per buy size, MINTR brand
-const LOGO_URL = process.env.LOGO_URL || "https://mintd.fun/mintr.png"; // purple M logo; alerts post as a photo
+// Text-only alerts by default: they are more compact in a busy chat and can't
+// break on a bad image host. Set LOGO_URL=https://mintd.fun/mintr.png to post
+// each alert as a photo instead.
+const LOGO_URL = process.env.LOGO_URL || "";
 const MIN_USD = Number(process.env.MIN_USD || "1");
 const POLL_MS = Number(process.env.POLL_MS || "12000");
 
@@ -38,12 +41,33 @@ const MINTR_ABI = ["function price1e18() view returns (uint256)", "function tota
 
 async function tg(method, body) {
   const token = process.env.TG_BOT_TOKEN;
-  const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
-  });
-  const j = await r.json();
-  if (!j.ok) console.error("telegram error:", j.description);
-  return j;
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    if (!j.ok) {
+      console.error(`telegram ${method} failed: ${j.description}`);
+      // 401 means the token itself is wrong: say so plainly rather than
+      // letting it look like an ordinary transient hiccup
+      if (j.error_code === 401) console.error("  -> TG_BOT_TOKEN is invalid. Check ~/mintd/.env, then: pm2 restart all --update-env");
+    }
+    return j;
+  } catch (e) {
+    console.error(`telegram ${method} threw:`, e.message);
+    return { ok: false, description: e.message };
+  }
+}
+
+// Backing moves in tiny increments, so a fixed 2dp prints "+0.00%" for a real
+// change. Grow the precision until at least two significant digits survive,
+// capped at 8dp so it never turns into noise.
+function pctStr(pct) {
+  const a = Math.abs(pct);
+  if (a === 0) return "0%";
+  let dp = 2;
+  while (dp < 8 && a < 5 / Math.pow(10, dp)) dp++;
+  return pct.toFixed(dp).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") + "%";
 }
 
 function emojiRow(usd) {
@@ -92,6 +116,12 @@ async function main() {
   console.log(`  chat:  ${chat}`);
   console.log(`  min:   $${MIN_USD}   poll: ${POLL_MS}ms`);
 
+  // Prove the token works at boot. Otherwise the bot happily scans for hours
+  // and every alert dies at the Telegram API with nobody watching.
+  const me = await tg("getMe", {});
+  if (me.ok) console.log(`  telegram: @${me.result.username}  OK`);
+  else console.error(`  telegram: NOT AUTHENTICATED - no alerts will be delivered`);
+
   // --- command listener: /price and /help in the chat ---
   async function mintrStats() {
     const px = await mintrC.price1e18();
@@ -121,7 +151,7 @@ async function main() {
             } catch { await tg("sendMessage", { chat_id: from, text: "couldn't read MINTR price right now, try again in a sec" }); }
           } else if (text === "/help" || text === "/start") {
             await tg("sendMessage", { chat_id: from, parse_mode: "Markdown",
-              text: [`*MINTR bot*`, `/price — current MINTR backing price & market cap`, `Buy alerts post here automatically.`].join("\n") });
+              text: [`*MINTR bot*`, `/price - current MINTR backing price and market cap`, `Buy alerts post here automatically.`].join("\n") });
           }
         }
       } catch (e) { console.error("cmd error:", e.message); }
@@ -132,31 +162,36 @@ async function main() {
   handleCommands();
 
   // MINTR contract "Bought" event (buys made on the site's MINTR page, minted
-  // against the reserve — these never touch the pool, so watch them separately)
+  // against the reserve: these never touch the pool, so watch them separately)
   const boughtTopic = ethers.id("Bought(address,uint256,uint256,uint256)");
   const mintrIface = new ethers.Interface(["event Bought(address indexed buyer,uint256 usdtIn,uint256 mintrOut,uint256 price1e18)"]);
 
   let lastBacking = null; // last backing price we reported, for the "since last buy" delta
-  async function postBuy({ usd, mintr, contractPx, mcap, txHash, via }) {
+  // `minted` means the buy went through the contract on the site: new MINTR was
+  // created against the reserve and the backing price moved. A pool swap just
+  // changes hands, so it stays a plain buy.
+  async function postBuy({ usd, mintr, contractPx, mcap, txHash, via, minted }) {
     let backingLine = "";
     if (contractPx != null) {
       let deltaTxt = "";
       if (lastBacking != null && lastBacking > 0) {
         const pct = ((contractPx - lastBacking) / lastBacking) * 100;
-        if (pct > 0.0001) deltaTxt = ` (▲ +${pct.toFixed(2)}% since last buy)`;
-        else if (pct < -0.0001) deltaTxt = ` (▼ ${pct.toFixed(2)}%)`;
+        if (pct > 0) deltaTxt = ` (▲ +${pctStr(pct)} since last buy)`;
+        else if (pct < 0) deltaTxt = ` (▼ ${pctStr(pct)})`;
       }
       backingLine = `📈 Backing price: $${contractPx.toFixed(8)}${deltaTxt}`;
       lastBacking = contractPx;
     }
     const lines = [
-      `*MINTR Buy!*`,
+      minted ? `*MINTR MINTED!*` : `*MINTR Buy!*`,
       emojiRow(usd),
       ``,
       `💵 *$${usd.toFixed(2)}* (${usd.toFixed(2)} USDT0)`,
-      `🪙 Got *${mintr.toLocaleString(undefined, { maximumFractionDigits: 2 })} MINTR*`,
+      minted
+        ? `🪙 Minted *${mintr.toLocaleString(undefined, { maximumFractionDigits: 2 })} MINTR*`
+        : `🪙 Got *${mintr.toLocaleString(undefined, { maximumFractionDigits: 2 })} MINTR*`,
       backingLine,
-      `🟣 MINTR only goes up`,
+      minted ? `🔒 Reserve grew, backing price up for every holder` : `🟣 MINTR only goes up`,
       mcap != null ? `🏦 Market cap: $${mcap.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : ``,
       via ? `_via ${via}_` : ``,
       ``,
@@ -165,9 +200,18 @@ async function main() {
       `[Chart](${chartUrl}) | [Buy on mintd.fun](https://mintd.fun/#mintr) | [Tx](https://stablescan.xyz/tx/${txHash})`,
     ].filter(Boolean);
     const text = lines.join("\n");
-    if (LOGO_URL) await tg("sendPhoto", { chat_id: chat, photo: LOGO_URL, caption: text, parse_mode: "Markdown" });
-    else await tg("sendMessage", { chat_id: chat, text, parse_mode: "Markdown", disable_web_page_preview: true });
-    console.log(`posted buy $${usd.toFixed(2)} (${txHash})`);
+    let res;
+    if (LOGO_URL) {
+      res = await tg("sendPhoto", { chat_id: chat, photo: LOGO_URL, caption: text, parse_mode: "Markdown" });
+      // a broken image URL shouldn't cost us the alert: fall back to plain text
+      if (!res.ok && res.error_code !== 401) {
+        res = await tg("sendMessage", { chat_id: chat, text, parse_mode: "Markdown", disable_web_page_preview: true });
+      }
+    } else {
+      res = await tg("sendMessage", { chat_id: chat, text, parse_mode: "Markdown", disable_web_page_preview: true });
+    }
+    // only claim success when Telegram actually accepted it
+    console.log(`${res.ok ? "posted" : "FAILED TO POST"} buy $${usd.toFixed(2)} (${txHash})`);
   }
   async function statsSafe() {
     try {
@@ -181,10 +225,36 @@ async function main() {
   let last = await provider.getBlockNumber();
   let fails = 0;
   const MAX_RANGE = Number(process.env.MAX_RANGE || "2000"); // never scan more blocks than this per poll
+
+  // Stable's RPC rate-limits in bursts, surfacing as "could not coalesce error"
+  // or "exceeded maximum retry limit". Retrying the individual call with a
+  // short backoff clears almost all of them without losing the scan position.
+  async function rpc(fn, label) {
+    let lastErr;
+    for (let i = 0; i < 4; i++) {
+      try { return await fn(); } catch (e) {
+        lastErr = e;
+        const wait = 300 * Math.pow(3, i) + Math.random() * 300; // 0.3s, 0.9s, 2.7s, 8.1s
+        if (i < 3) await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+    throw new Error(`${label}: ${lastErr.shortMessage || lastErr.message}`);
+  }
+
+  // A failure halfway through a scan makes us re-read blocks we already
+  // handled. Remember what we posted so a retry can't double-alert the chat.
+  const posted = new Set();
+  const seen = (h) => {
+    if (posted.has(h)) return true;
+    posted.add(h);
+    if (posted.size > 500) posted.delete(posted.values().next().value);
+    return false;
+  };
+
   try { lastBacking = Number(ethers.formatEther(await mintrC.price1e18())); console.log(`  starting backing price: $${lastBacking.toFixed(8)}`); } catch {}
   async function loop() {
     try {
-      const head = await provider.getBlockNumber();
+      const head = await rpc(() => provider.getBlockNumber(), "getBlockNumber");
       if (head >= last) {
         // clamp the scan window so a bad stretch can't grow the range until
         // the RPC rejects every request (the old stuck-forever failure mode)
@@ -192,7 +262,7 @@ async function main() {
         if (from > last) console.log(`range clamp: skipped blocks ${last}..${from - 1}`);
         // 1) pool swaps (MintSwap + Uniswap MINTR/USDT0)
         for (const pool of pools) {
-          const swaps = await provider.getLogs({ address: pool.addr, topics: [swapTopic], fromBlock: from, toBlock: head });
+          const swaps = await rpc(() => provider.getLogs({ address: pool.addr, topics: [swapTopic], fromBlock: from, toBlock: head }), "getLogs pool");
           for (const log of swaps) {
             const { args } = iface.parseLog(log);
             const usdtIn = pool.usdtIs0 ? args.amount0In : args.amount1In;
@@ -200,21 +270,23 @@ async function main() {
             if (usdtIn > 0n && mintrOut > 0n) {
               const usd = Number(ethers.formatUnits(usdtIn, 6));
               if (usd < MIN_USD) continue;
+              if (seen(log.transactionHash + ":" + log.index)) continue;
               const s = await statsSafe();
               await postBuy({ usd, mintr: Number(ethers.formatEther(mintrOut)), ...s, txHash: log.transactionHash, via: pool.label });
             }
           }
         }
         // 2) contract buys (MINTR page, minted from reserve)
-        const boughts = await provider.getLogs({ address: MINTR, topics: [boughtTopic], fromBlock: from, toBlock: head });
+        const boughts = await rpc(() => provider.getLogs({ address: MINTR, topics: [boughtTopic], fromBlock: from, toBlock: head }), "getLogs contract");
         for (const log of boughts) {
           const { args } = mintrIface.parseLog(log);
           const usd = Number(ethers.formatUnits(args.usdtIn, 6));
           if (usd < MIN_USD) continue;
+          if (seen(log.transactionHash + ":" + log.index)) continue;
           const contractPx = Number(ethers.formatEther(args.price1e18));
           let mcap = null;
           try { const supply = await mintrC.totalSupply(); mcap = contractPx * Number(ethers.formatEther(supply)); } catch {}
-          await postBuy({ usd, mintr: Number(ethers.formatEther(args.mintrOut)), contractPx, mcap, txHash: log.transactionHash, via: "mintd.fun (backing)" });
+          await postBuy({ usd, mintr: Number(ethers.formatEther(args.mintrOut)), contractPx, mcap, txHash: log.transactionHash, via: "mintd.fun", minted: true });
         }
         last = head + 1;
         fails = 0;
@@ -222,13 +294,20 @@ async function main() {
     } catch (e) {
       fails++;
       console.error(`loop error (${fails} in a row):`, e.shortMessage || e.message);
-      // after 5 straight failures, jump to the chain head instead of retrying
-      // the same doomed range forever. Missing a few alerts beats going silent.
-      if (fails >= 5) {
-        try { last = (await provider.getBlockNumber()) + 1; fails = 0; console.log(`resynced to chain head, resuming from block ${last}`); } catch {}
+      // Do NOT jump to head here. The old code skipped every block in between,
+      // which silently dropped any buy that happened during the bad stretch.
+      // MAX_RANGE already bounds the scan, so the safe move is to keep our
+      // position and let the backoff below give the RPC room to recover.
+      if (fails >= 10) {
+        // genuinely wedged: step forward one clamped window so we make progress
+        last = last + MAX_RANGE;
+        fails = 0;
+        console.error(`still failing, stepping forward to block ${last} (blocks may have been missed)`);
       }
     }
-    setTimeout(loop, POLL_MS);
+    // back off hard while the RPC is unhappy, then return to the normal cadence
+    const delay = fails ? Math.min(POLL_MS * Math.pow(2, fails), 120000) : POLL_MS;
+    setTimeout(loop, delay);
   }
   loop();
 }

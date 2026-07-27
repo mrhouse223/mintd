@@ -10,7 +10,7 @@
 //   SYNTH        MintSynth engine, for the oracle price + system stats
 //   MIN_USD      ignore buys under this (default "1")
 //   POLL_MS      poll interval (default "12000")
-//   LOGO_URL     image posted with each alert (default the site's gold bar)
+//   LOGO_URL     optional image posted with each alert (default: text only)
 //   BUY_TOKEN    emoji repeated per unit of buy size (default 🟡)
 const { ethers } = require("ethers");
 
@@ -21,7 +21,8 @@ const SYNTH = process.env.SYNTH || "0x09Eb7D9B18e56270F8898C4f3Ac3F2dc99F3b213";
 const V3_POOL = process.env.V3_POOL || "0x3191ad893DB28A571Fd551d37A618E289451A363";
 const V2_POOL = process.env.V2_POOL || "";
 const BUY_TOKEN = process.env.BUY_TOKEN || "🟡";
-const LOGO_URL = process.env.LOGO_URL || "https://mintd.fun/mgld.png";
+// text-only by default; set LOGO_URL to post alerts as a photo
+const LOGO_URL = process.env.LOGO_URL || "";
 const MIN_USD = Number(process.env.MIN_USD || "1");
 const POLL_MS = Number(process.env.POLL_MS || "12000");
 const MAX_RANGE = Number(process.env.MAX_RANGE || "2000");
@@ -42,12 +43,20 @@ const SYNTH_ABI = [
 
 async function tg(method, body) {
   const token = process.env.TG_BOT_TOKEN;
-  const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
-  });
-  const j = await r.json();
-  if (!j.ok) console.error("telegram error:", j.description);
-  return j;
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    if (!j.ok) {
+      console.error(`telegram ${method} failed: ${j.description}`);
+      if (j.error_code === 401) console.error("  -> TG_BOT_TOKEN is invalid. Check ~/mintd/.env, then: pm2 restart all --update-env");
+    }
+    return j;
+  } catch (e) {
+    console.error(`telegram ${method} threw:`, e.message);
+    return { ok: false, description: e.message };
+  }
 }
 function emojiRow(usd) {
   const n = Math.min(48, Math.max(1, Math.floor(usd / 5)));
@@ -76,6 +85,10 @@ async function main() {
   console.log(`  engine:   ${SYNTH}`);
   console.log(`  chat:     ${chat}`);
   console.log(`  min:      $${MIN_USD}   poll: ${POLL_MS}ms`);
+
+  const me = await tg("getMe", {});
+  if (me.ok) console.log(`  telegram: @${me.result.username}  OK`);
+  else console.error(`  telegram: NOT AUTHENTICATED - no alerts will be delivered`);
 
   async function stats() {
     try {
@@ -106,22 +119,52 @@ async function main() {
       `[Mint](https://mintd.fun/#/synth) | [Chart](https://dexscreener.com/stable/${V3_POOL}) | [Tx](https://stablescan.xyz/tx/${txHash})`,
     ].filter(Boolean);
     const text = lines.join("\n");
-    if (LOGO_URL) await tg("sendPhoto", { chat_id: chat, photo: LOGO_URL, caption: text, parse_mode: "Markdown" });
-    else await tg("sendMessage", { chat_id: chat, text, parse_mode: "Markdown", disable_web_page_preview: true });
-    console.log(`posted buy $${usd.toFixed(2)} (${txHash})`);
+    let res;
+    if (LOGO_URL) {
+      res = await tg("sendPhoto", { chat_id: chat, photo: LOGO_URL, caption: text, parse_mode: "Markdown" });
+      if (!res.ok && res.error_code !== 401) {
+        res = await tg("sendMessage", { chat_id: chat, text, parse_mode: "Markdown", disable_web_page_preview: true });
+      }
+    } else {
+      res = await tg("sendMessage", { chat_id: chat, text, parse_mode: "Markdown", disable_web_page_preview: true });
+    }
+    console.log(`${res.ok ? "posted" : "FAILED TO POST"} buy $${usd.toFixed(2)} (${txHash})`);
   }
 
   let last = await provider.getBlockNumber();
   let fails = 0;
+
+  // Stable's RPC rate-limits in bursts ("could not coalesce error", "exceeded
+  // maximum retry limit"). Retry the individual call before failing the scan.
+  async function rpc(fn, label) {
+    let lastErr;
+    for (let i = 0; i < 4; i++) {
+      try { return await fn(); } catch (e) {
+        lastErr = e;
+        if (i < 3) await new Promise((r) => setTimeout(r, 300 * Math.pow(3, i) + Math.random() * 300));
+      }
+    }
+    throw new Error(`${label}: ${lastErr.shortMessage || lastErr.message}`);
+  }
+
+  // a retried scan re-reads blocks we already handled: never alert twice
+  const posted = new Set();
+  const seen = (h) => {
+    if (posted.has(h)) return true;
+    posted.add(h);
+    if (posted.size > 500) posted.delete(posted.values().next().value);
+    return false;
+  };
+
   async function loop() {
     try {
-      const head = await provider.getBlockNumber();
+      const head = await rpc(() => provider.getBlockNumber(), "getBlockNumber");
       if (head >= last) {
         const from = Math.max(last, head - MAX_RANGE);
         if (from > last) console.log(`range clamp: skipped ${last}..${from - 1}`);
 
         // Uniswap V3: negative amount means the pool paid it out
-        const v3logs = await provider.getLogs({ address: V3_POOL, topics: [V3_SWAP_TOPIC], fromBlock: from, toBlock: head });
+        const v3logs = await rpc(() => provider.getLogs({ address: V3_POOL, topics: [V3_SWAP_TOPIC], fromBlock: from, toBlock: head }), "getLogs v3");
         for (const lg of v3logs) {
           const { args } = v3Iface.parseLog(lg);
           const usdtDelta = v3UsdtIs0 ? args.amount0 : args.amount1;   // + means USDT0 came in
@@ -129,12 +172,13 @@ async function main() {
           if (usdtDelta > 0n && mgldDelta < 0n) {
             const usd = Number(ethers.formatUnits(usdtDelta, 6));
             if (usd < MIN_USD) continue;
+            if (seen(lg.transactionHash + ":" + lg.index)) continue;
             await postBuy({ usd, mgld: Number(ethers.formatEther(-mgldDelta)), txHash: lg.transactionHash, via: "Uniswap V3" });
           }
         }
 
         if (V2_POOL) {
-          const v2logs = await provider.getLogs({ address: V2_POOL, topics: [V2_SWAP_TOPIC], fromBlock: from, toBlock: head });
+          const v2logs = await rpc(() => provider.getLogs({ address: V2_POOL, topics: [V2_SWAP_TOPIC], fromBlock: from, toBlock: head }), "getLogs v2");
           for (const lg of v2logs) {
             const { args } = v2Iface.parseLog(lg);
             const usdtIn = v2UsdtIs0 ? args.amount0In : args.amount1In;
@@ -142,6 +186,7 @@ async function main() {
             if (usdtIn > 0n && mgldOut > 0n) {
               const usd = Number(ethers.formatUnits(usdtIn, 6));
               if (usd < MIN_USD) continue;
+              if (seen(lg.transactionHash + ":" + lg.index)) continue;
               await postBuy({ usd, mgld: Number(ethers.formatEther(mgldOut)), txHash: lg.transactionHash, via: "MintSwap" });
             }
           }
@@ -152,11 +197,15 @@ async function main() {
     } catch (e) {
       fails++;
       console.error(`loop error (${fails} in a row):`, e.shortMessage || e.message);
-      if (fails >= 5) {
-        try { last = (await provider.getBlockNumber()) + 1; fails = 0; console.log(`resynced to head ${last}`); } catch {}
+      // never jump to head on failure: that silently drops every buy in the gap
+      if (fails >= 10) {
+        last = last + MAX_RANGE;
+        fails = 0;
+        console.error(`still failing, stepping forward to block ${last} (blocks may have been missed)`);
       }
     }
-    setTimeout(loop, POLL_MS);
+    const delay = fails ? Math.min(POLL_MS * Math.pow(2, fails), 120000) : POLL_MS;
+    setTimeout(loop, delay);
   }
   loop();
 }

@@ -59,8 +59,17 @@ module.exports = {
     },
     {
       ...common,
+      name: "stats-indexer",
+      script: "scripts/stats-indexer.js",
+      args: "--watch",
+      env: {
+        STATS_POLL_MS: env.STATS_POLL_MS || "180000",
+      },
+    },
+    {
+      ...common,
       name: "arb-keeper",
-      script: "scripts/arb-keeper.js",
+      script: "scripts/arb-keeper-multi.js",
       env: {
         ARB: env.ARB,
         PRIVATE_KEY: env.KEEPER_KEY, // dedicated gas-only wallet, not the deployer
