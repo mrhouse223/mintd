@@ -192,7 +192,7 @@ async function rescueBlock(rp, block, addrs) {
 // Returns the ranges it could not read, so the caller can retry them and park
 // the cursor precisely instead of throwing away a whole pass.
 async function sweepLogs(rp, from, to, span, onLogs, addrs = []) {
-  let cur = from, width = span;
+  let cur = from, width = span, rateWaits = 0;
   const failed = [];
   while (cur <= to) {
     const end = Math.min(to, cur + width - 1);
@@ -219,14 +219,28 @@ async function sweepLogs(rp, from, to, span, onLogs, addrs = []) {
         cur = m ? Number(m[1]) : end + 1; // jump to what the node still has
         continue;
       }
+      // Rate limiting is transient, so back off and retry the same range
+      // rather than burning it. Sustained scanning does trip this.
+      if (/retry limit|rate|timeout|econnreset|socket/i.test(msg) && rateWaits < 8) {
+        rateWaits++;
+        const ms = Math.min(30000, 1000 * 2 ** rateWaits);
+        console.error(`  rate limited at ${cur}, backing off ${ms}ms (${rateWaits}/8)`);
+        await new Promise((r) => setTimeout(r, ms));
+        continue;
+      }
       // Logged, not swallowed: a silent count reads as a clean run while the
       // reported volume is quietly short by whatever those blocks held.
       console.error(`  window ${cur}-${end} failed: ${(msg).trim().slice(0, 110)}`);
       failed.push([cur, end]);
       cur = end + 1;
+      // Reset the width. Without this, one shrink to a single block leaves
+      // every later window one block wide, so a rate-limited stretch turns a
+      // 1000 window sweep into tens of thousands and never recovers.
+      width = span;
       continue;
     }
     onLogs(logs);
+    rateWaits = 0; // a success means the throttle has cleared
     // Creep back up so one busy stretch does not slow the whole sweep.
     if (logs.length < 200 && width < span) width = Math.min(span, width * 2);
     cur = end + 1;
