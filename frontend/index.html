@@ -3877,7 +3877,12 @@ async function loadProtocolStats() {
    figure is useful on the very first load, then deepens over later visits.
    Budgeted per page load so it can never hammer the RPC. */
 const VOL_KEY = "volAllCache_v2";
-const VOL_SPAN = 20000;       // blocks per request; halved per pool on failure
+// Stable's RPC rejects any getLogs wider than 500 blocks, so this is a hard
+// ceiling, not a tuning knob. It was 20000, which failed every round 1 request
+// outright, and round 2 halved 20000 down through 625 to 312: that trips the
+// skip floor below before ever reaching a width the RPC would accept, so every
+// pool was abandoned and the tile could never show a figure.
+const VOL_SPAN = 500;
 const VOL_BUDGET = 120;       // getLogs calls per page load
 const VOL_MAX_BACK = 3000000; // stop reaching back past this many blocks
 
@@ -4003,7 +4008,9 @@ async function volScan(el, fail) {
         // a window that is too big for this RPC should shrink, not disqualify
         // the pool: halve it and retry on the next lap
         t.span = Math.floor(span / 2);
-        if (t.span < 500) t.skip = true;
+        // Floor sits well under the 500 the RPC allows, so shrinking has room
+        // to find a working width instead of disqualifying the pool at one.
+        if (t.span < 50) t.skip = true;
         calls++; progressed = true;
         continue;
       }

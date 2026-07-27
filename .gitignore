@@ -8,4 +8,8 @@ build/
 # deployment records ARE worth committing: they are how you find your contracts
 # again. Nothing secret lives in them.
 !deployments/
-stats-cache.json
+
+# stats-cache.json is committed on purpose. The RPC prunes history after about
+# four days, so this file is the only durable record of volume older than that
+# window. Losing it silently resets all-time volume to whatever the node still
+# retains, with no error to notice.
