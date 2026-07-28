@@ -5446,12 +5446,17 @@ function cacheTokens(list) {
       delete o.traders;
       return o;
     });
-    localStorage.setItem(ck("tokCache"), JSON.stringify({ at: Date.now(), list: slim }));
+    localStorage.setItem(tokCacheKey(), JSON.stringify({ at: Date.now(), list: slim }));
   } catch { /* quota, skip */ }
 }
+// The token list belongs to a specific pad, not just a chain. Keying it by
+// chain alone meant swapping the launchpad (v1 -> v2 -> the secure factory) left
+// the old pad's tokens cached, which showed a stale coin and a phantom TVL until
+// a hard refresh. Including the pad makes any pad change drop the cache for free.
+function tokCacheKey() { return ck("tokCache:" + padAddr().toLowerCase()); }
 function restoreTokens() {
   try {
-    const raw = JSON.parse(localStorage.getItem(ck("tokCache")) || "null");
+    const raw = JSON.parse(localStorage.getItem(tokCacheKey()) || "null");
     if (!raw || !Array.isArray(raw.list)) return [];
     return raw.list.map((t) => {
       const o = { ...t, cached: true };
@@ -5670,10 +5675,18 @@ async function liveProtocolStats() {
     // poolUsdt is carried in 18-dec form on token records
     let tvl18 = poolTvl;
     let reserve6 = 0n, coll18 = 0n;
-    try { reserve6 = await new ethers.Contract(MINTR_ADDR, ["function reserve() view returns (uint256)"], rp).reserve(); } catch {}
-    try { coll18 = await new ethers.Contract(SYNTH_ADDR, ["function totalCollateral() view returns (uint256)"], rp).totalCollateral(); } catch {}
+    // Only count reserves for engines the chain actually runs. mintd.money has
+    // MINTR and the gold engine disabled, so counting MINTR's reserve there put
+    // a phantom couple of dollars in the headline TVL of a launchpad that,
+    // pre-launch, holds nothing.
+    if (NET.features.mintr !== false) {
+      try { reserve6 = await new ethers.Contract(MINTR_ADDR, ["function reserve() view returns (uint256)"], rp).reserve(); } catch {}
+    }
+    if (NET.features.gold !== false) {
+      try { coll18 = await new ethers.Contract(SYNTH_ADDR, ["function totalCollateral() view returns (uint256)"], rp).totalCollateral(); } catch {}
+    }
     const total18 = tvl18 + reserve6 * 1000000000000n + coll18;
-    if (total18 > 0n) $("stTvl").textContent = fmtUsd(ethers.formatEther(total18));
+    $("stTvl").textContent = fmtUsd(ethers.formatEther(total18)); // 0 is a real answer pre-launch, not a dash
     if (reserve6 > 0n) $("stMintrTvl").textContent = fmtUsd(ethers.formatUnits(reserve6, 6));
   } catch { /* leave whatever stats.json supplied */ }
 }
