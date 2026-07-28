@@ -185,6 +185,87 @@
     .tradehead, .traderow2 { grid-template-columns: 64px 52px minmax(0,1fr) 92px; }
     .tradehead span:nth-child(4), .traderow2 span:nth-child(4) { display: none; }
   }
+  /* ---------------------------------------------- launchpad, pons-inspired
+     Structure borrowed from ponsfamily.com/launchpad: pill nav, a prominent
+     search row, one big rounded section holding the grid, and image-forward
+     cards. Colours are ours: the accent is mintd blue, not their lime. */
+
+  /* The nav pill group is a fixed-width flex item now, so the logo has to be
+     told not to give up its space. Without this it compresses to "mintd.fur". */
+  header .logo { flex: 0 0 auto; white-space: nowrap; }
+  header .logo small { white-space: nowrap; }
+
+  /* header nav as a single pill group rather than loose buttons */
+  @media (min-width: 1281px) {
+    header nav { background: var(--panel2); border: 1px solid var(--line);
+      border-radius: 999px; padding: 4px; gap: 2px; }
+    header nav button { border-radius: 999px; padding: 8px 15px; font-size: 13.5px; }
+    header nav button.active { background: var(--panel); color: var(--green);
+      box-shadow: 0 1px 3px rgba(0,0,0,.16); }
+  }
+  #connectBtn { border-radius: 999px; }
+
+  /* prominent search row */
+  .searchrow { display: flex; gap: 10px; align-items: center; margin: 26px 0 18px; }
+  .bigsearch { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    padding: 0 20px; height: 52px; }
+  .bigsearch:focus-within { border-color: var(--green); }
+  .bigsearch .ic { width: 18px; height: 18px; stroke: var(--dim); fill: none;
+    stroke-width: 2; flex: 0 0 auto; }
+  .bigsearch input { flex: 1; min-width: 0; background: none; border: 0; outline: none;
+    color: var(--ink); font-size: 15px; font-family: inherit; }
+  .createbtn { display: flex; align-items: center; gap: 7px; background: var(--green);
+    color: #fff; border-radius: 999px; height: 52px; padding: 0 24px;
+    font-weight: 700; font-size: 15px; white-space: nowrap; }
+  .createbtn:hover { background: var(--green2); }
+  .createbtn .ic { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2.4; }
+
+  /* one rounded section holding the whole grid, tinted at the top */
+  .seccard { background: var(--panel); border: 1px solid var(--line);
+    border-radius: 26px; padding: 22px; margin-bottom: 28px;
+    background-image: linear-gradient(var(--green-soft), transparent 190px); }
+  .seccard .mkthead { margin-bottom: 16px; }
+  .seccard .mkthead h2 { display: flex; align-items: center; gap: 9px; }
+  .cnt { font-size: 12px; font-weight: 800; background: var(--green-soft);
+    color: var(--green); border-radius: 999px; padding: 3px 10px; }
+
+  /* image-forward cards */
+  .cards { grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 16px; }
+  .tcard { padding: 10px; border-radius: 20px; }
+  .cart { position: relative; width: 100%; aspect-ratio: 1; border-radius: 14px;
+    overflow: hidden; background: var(--panel2); display: flex;
+    align-items: center; justify-content: center;
+    font-weight: 800; font-size: 34px; color: var(--green); }
+  .cart img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ctag { position: absolute; top: 8px; left: 8px; font-size: 10px; font-weight: 800;
+    letter-spacing: .02em; padding: 4px 9px; border-radius: 999px;
+    background: rgba(0,0,0,.62); color: #fff; backdrop-filter: blur(6px); }
+  .ctag.grad { background: var(--gold); color: #241a00; }
+  .ctag.plat { background: var(--green); color: #fff; }
+  .cbody { padding: 11px 4px 0; }
+  /* one line each: a long name must never make one card taller than its row */
+  .cname { font-weight: 800; font-size: 14.5px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  .cticker { font-size: 12.5px; color: var(--dim); font-weight: 600; margin-top: 1px; }
+  .cmc { margin-top: 7px; font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .cmc small { font-size: 10px; color: var(--dim); font-weight: 700; margin-left: 2px; }
+  .cbar { height: 3px; border-radius: 999px; background: var(--line); margin-top: 9px; overflow: hidden; }
+  .cbar i { display: block; height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--green), var(--green2)); }
+  .cfoot { display: flex; justify-content: space-between; gap: 8px;
+    margin-top: 10px; padding: 8px 4px 2px; border-top: 1px solid var(--line);
+    font-size: 10.5px; color: var(--dim); }
+  .cadr { font-family: var(--mono); }
+
+  @media (max-width: 560px) {
+    .cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .seccard { padding: 14px; border-radius: 20px; }
+    .searchrow { margin: 18px 0 14px; }
+    .bigsearch, .createbtn { height: 46px; }
+    /* the label goes, the icon carries it */
+    .createbtn { padding: 0 18px; }
+  }
   /* mintscreener */
   .schead, .scrow { display: grid; align-items: center; gap: 12px;
     grid-template-columns: 28px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 62px 150px; }
@@ -1048,7 +1129,7 @@
     <button id="nav-more" onclick="toggleMore(event)">More ▾</button>
   </nav>
   <div class="spacer"></div>
-  <input class="search" id="search" placeholder="⌕  Name, ticker, or contract" oninput="debouncedRender()" />
+  <input class="search" id="search" placeholder="⌕  Name, ticker, or contract" oninput="mirrorSearch(this.value)" />
   <a class="themebtn" href="https://x.com/mintddotfun" target="_blank" title="X">𝕏</a>
   <a class="themebtn" href="https://t.me/mintddotfun" target="_blank" title="Telegram"><svg width="18" height="18" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg"><circle cx="120" cy="120" r="120" fill="#29A9EB"/><path fill="#fff" d="M53 118.5l122.7-47.3c5.7-2.1 10.7 1.4 8.8 10l-20.9 98.4c-1.5 7-5.7 8.7-11.5 5.4l-31.8-23.4-15.3 14.8c-1.7 1.7-3.1 3.1-6.4 3.1l2.3-32.3 58.9-53.2c2.6-2.3-.6-3.6-4-1.3l-72.8 45.8-31.4-9.8c-6.8-2.1-6.9-6.8 1.4-10.2z"/></svg></a>
   <div class="chainwrap" id="chainPill"></div>
@@ -1087,8 +1168,19 @@
       <span id="stFarmTvl" style="display:none"></span>
     </div>
 
+    <div class="searchrow">
+      <div class="bigsearch">
+        <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="search2" placeholder="Search tokens" oninput="mirrorSearch(this.value)" />
+      </div>
+      <button class="createbtn" onclick="go('launch')">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Create
+      </button>
+    </div>
+
+    <div class="seccard">
     <div class="mkthead" id="mkts">
-      <h2>Coins</h2>
+      <h2>Coins <span class="cnt" id="coinCount">0</span></h2>
       <span class="live"><span class="dot"></span><span id="liveLbl">updated ...</span></span>
       <div class="spacer"></div>
       <div class="chips" id="filterChips">
@@ -1105,6 +1197,7 @@
       <button class="chip" onclick="loadAll()"><svg class="ic" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></button>
     </div>
     <div class="cards" id="cards"><div class="empty">Open ⚙ settings and set the launchpad contract address.</div></div>
+    </div>
   </section>
 
   <!-- TOKEN -->
@@ -2447,7 +2540,10 @@ function init() {
     { staticNetwork: true, batchMaxCount: (LC ? 20 : NET.batchMaxCount ?? 1) });
   pad = new ethers.Contract(padAddr(), PAD_ABI, rp);
   quoterR = new ethers.Contract(ADDR.quoter, QUOTER_ABI, rp);
-  Promise.all([pad.creationFee(), pad.creatorShareBps(), pad.startPriceUsdt1e18(), pad.usdt0()]).then(([f, s, p, w]) => {
+  // sequential, not Promise.all: four simultaneous reads at boot is exactly
+  // the burst that Arc drops, and losing this leaves the fee and share
+  // showing their placeholder defaults.
+  retryRead(async () => [await pad.creationFee(), await pad.creatorShareBps(), await pad.startPriceUsdt1e18(), await pad.usdt0()]).then(([f, s, p, w]) => {
     cfg = { creationFee: f, share: s, startPrice: p };
     weth = new ethers.Contract(w, ERC20_ABI, rp);
     const sh = Number(s) / 100, pl = 100 - sh;
@@ -2507,6 +2603,18 @@ async function loadAll() {
   loadAllPromise = loadAllInner().finally(() => { loadingAll = false; });
   return loadAllPromise;
 }
+// Critical reads get retried. A transient RPC failure on tokenCount() used to
+// skip the whole pad and render "No tokens yet" on a chain with tokens, which
+// is indistinguishable from an empty launchpad.
+async function retryRead(fn, tries = 4) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try { return await fn(); }
+    catch (e) { last = e; await new Promise((r) => setTimeout(r, 250 * 2 ** i)); }
+  }
+  throw last;
+}
+
 async function loadAllInner() {
   try {
     // MINTR's USD price (MINTR is backed by USDT0 = $1), read once
@@ -2521,9 +2629,14 @@ async function loadAllInner() {
       const abi = sameAddr(pa, OLD_PAD) ? PAD_ABI_OLD : PAD_ABI;
       const pc = new ethers.Contract(pa, abi, rp);
       try {
-        const cnt = Number(await pc.tokenCount());
+        const cnt = Number(await retryRead(() => pc.tokenCount()));
         for (let i = cnt - 1; i >= 0; i--) jobs.push({ pa, pc, i });
-      } catch (e) { /* skip a pad that can't be read */ }
+      } catch (e) {
+        // Only after retries. Say so: a silently skipped pad looks exactly
+        // like a launchpad with nothing on it.
+        console.error(`pad ${pa} unreadable after retries`, e.shortMessage || e.message);
+        toast("Could not read the launchpad. Retrying shortly.", "err");
+      }
     }
     $("stTokens").textContent = jobs.length;
     const loaded = await Promise.all(jobs.map(async ({ pa, pc, i }) => {
@@ -2624,6 +2737,15 @@ async function loadAllInner() {
 
 // keystrokes should never block on a full grid rebuild
 let renderTimer = 0;
+// Two search inputs now: the header one and the prominent row on Discover.
+// They stay in step so typing in either filters the same list.
+function mirrorSearch(v) {
+  const a = $("search"), b = $("search2");
+  if (a && a.value !== v) a.value = v;
+  if (b && b.value !== v) b.value = v;
+  debouncedRender();
+}
+
 function debouncedRender() {
   clearTimeout(renderTimer);
   // Typing narrows the list, so the old page number is meaningless.
@@ -2697,27 +2819,29 @@ function renderCards() {
     // A ticker identical to the name reads as a stutter and is the single
     // biggest cause of the title needing two lines.
     const dupTicker = String(t.name).trim().toLowerCase() === String(t.symbol).trim().toLowerCase();
+    // Image-forward: the artwork is the card, the numbers sit under it. The
+    // old layout was a stat table with a 44px avatar, which reads as a
+    // spreadsheet next to a wall of token art.
+    const tag = t.platform ? `<span class="ctag plat">&#9733; PLATFORM</span>`
+      : t.grad ? `<span class="ctag grad">Graduated</span>`
+      : isNew ? `<span class="ctag new">New</span>` : "";
     c.innerHTML = `
-      <div class="top">
-        <div class="avatar">${av}</div>
-        <div class="nmwrap"><div class="nm" title="${esc(t.name)} $${esc(t.symbol)}">${esc(t.name)}${dupTicker ? "" : ` <span>$${esc(t.symbol)}</span>`}</div><div class="ago">${ago(t.createdAt)}</div></div>
-        ${t.isMintr ? '<span class="badge" style="background:rgba(139,92,246,.16);color:var(--mintr)">MINTR</span>' : ''}
-        ${t.platform ? '<span class="badge grad">&#9733; PLATFORM</span>' : t.grad ? '<span class="badge grad">GRAD</span>' : isNew ? '<span class="badge new">NEW</span>' : ""}
-        ${socialLinks(t)}
+      <div class="cart">${av}${tag}</div>
+      <div class="cbody">
+        <div class="cname" title="${esc(t.name)}">${esc(t.name)}</div>
+        <div class="cticker">$${esc(t.symbol)}</div>
+        <div class="cmc">${fmtUsd(ethers.formatEther(t.mcap))} <small>MC</small>${chgTag(t.chg24)}</div>
+        <div class="cbar"><i style="width:${t.prog}%"></i></div>
       </div>
-      <div class="tstats">
-        <div><label>MARKET CAP</label><b>${fmtUsd(ethers.formatEther(t.mcap))}${chgTag(t.chg24)}</b></div>
-        <div><label>24H VOL</label><b>${t.vol24 !== undefined ? fmtUsd(t.vol24) : `<span title="No trades recorded in the last 24h" style="color:var(--dim)">–</span>`}</b></div>
-        <div style="display:flex;align-items:flex-end;justify-content:flex-end">
-          <button class="btn claimbtn has-rewards tradenow" onclick="event.stopPropagation();openToken('${t.addr}')">Trade now</button>
-        </div>
-      </div>
-      <div class="bar"><i style="width:${t.prog}%"></i></div>
-      <div class="barlbl">${t.prog.toFixed(1)}% to graduation</div>`;
+      <div class="cfoot">
+        <span class="cadr">${short(t.addr)}</span>
+        <span>${ago(t.createdAt)}</span>
+      </div>`;
     c.onclick = () => openToken(t.addr);
     frag.appendChild(c);
   }
   el.replaceChildren(frag);
+  const cc = $("coinCount"); if (cc) cc.textContent = total;
   renderPager(total, pages);
 }
 
