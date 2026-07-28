@@ -42,6 +42,10 @@ for (const rel of [
   "contracts/ArcLaunchpad.sol",
   "contracts/FeeClaimAll.sol",
   "contracts/FeeSplitter.sol",
+  // Third declaration of MemeToken20, after InstantLaunchpad and ArcLaunchpad.
+  // Same caveat: identical source, different metadata hash, so the artifact is
+  // whichever compiled last. Use predictToken() for CREATE2 addresses.
+  "contracts/MintdLaunchpad.sol",
 ]) {
   sources[rel] = { content: fs.readFileSync(path.join(root, rel), "utf8") };
 }
