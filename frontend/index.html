@@ -61,10 +61,10 @@
      the mid-word wrap into horizontal overflow, so below that the nav drops to
      its own line: the same shape the phone layout already uses, applied earlier.
      The tagline goes too, since it repeats the hero headline directly below. */
-  @media (min-width: 1181px) {
+  @media (min-width: 1281px) {
     header nav button, header #connectBtn { white-space: nowrap; flex: 0 0 auto; }
   }
-  @media (max-width: 1180px) {
+  @media (max-width: 1280px) {
     header { flex-wrap: wrap; gap: 10px 12px; padding: 12px 16px; }
     .logo small { display: none; }
     header nav { order: 3; width: 100%; overflow-x: auto; scrollbar-width: none; }
@@ -161,6 +161,38 @@
   .pairsw button.on { background: var(--green-soft); color: var(--green); box-shadow: 0 1px 5px rgba(30,55,80,.10); }
   .pairsw button[data-p="mintr"].on { background: rgba(59,130,246,.14); color: #2f6fe0; }
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  /* mintscreener */
+  .schead, .scrow { display: grid; align-items: center; gap: 12px;
+    grid-template-columns: 28px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 62px 150px; }
+  .schead { font-size: 10px; letter-spacing: .1em; color: var(--dim); font-weight: 800;
+    padding: 0 12px 8px; }
+  .scrow { padding: 11px 12px; border-top: 1px solid var(--line); cursor: pointer;
+    transition: background .12s; }
+  .scrow:hover { background: var(--panel2); }
+  .scrank { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .sccoin { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .sccoin .avatar { width: 32px; height: 32px; border-radius: 9px; font-size: 11px; }
+  /* Names clamp rather than wrap: a long name must not make one row taller
+     than its neighbours, which is what broke the Discover grid. */
+  .scname { display: block; font-weight: 800; font-size: 14px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .scsym { display: block; font-size: 11px; color: var(--green); font-weight: 700; }
+  .scnum { text-align: right; font-weight: 700; font-size: 13.5px;
+    font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .scchg { font-size: 10.5px; font-weight: 700; margin-left: 5px; }
+  .scchart { min-width: 0; }
+  .scnone { font-size: 11px; color: var(--dim); }
+  @media (max-width: 900px) {
+    /* pool and swap count go first: price, cap and the chart are the row */
+    .schead, .scrow { grid-template-columns: 22px minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr) 110px; }
+    .schead span:nth-child(5), .scrow span:nth-child(5),
+    .schead span:nth-child(6), .scrow span:nth-child(6) { display: none; }
+  }
+  @media (max-width: 560px) {
+    .schead, .scrow { grid-template-columns: minmax(0,1.4fr) minmax(0,1fr) 88px; }
+    .schead span:nth-child(1), .scrow span:nth-child(1),
+    .schead span:nth-child(4), .scrow span:nth-child(4) { display: none; }
+  }
   /* furnace */
   .fuinfo { font-size: 12.5px; color: var(--dim); margin-top: 7px; }
   /* Deliberately loud. This is the only action on the site with no recovery
@@ -986,6 +1018,7 @@
     <button id="nav-launch" onclick="go('launch')">Launch</button>
     <button id="nav-mintswap" onclick="go('mintswap')">Swap</button>
     <button id="nav-earn" onclick="go('earn')">Earn</button>
+    <button id="nav-screener" onclick="go('screener')">Screener</button>
     <button id="nav-mintr" onclick="go('mintr')">MINTR</button>
     <button id="nav-synth" onclick="go('synth')">Gold</button>
     <button id="nav-more" onclick="toggleMore(event)">More ▾</button>
@@ -1536,6 +1569,26 @@
   </section>
 
   <!-- BRIDGE -->
+  <section class="view" id="view-screener">
+    <div class="heroC" style="margin:26px auto 18px;max-width:900px">
+      <div class="badgepill">LIVE ONCHAIN · <span class="chainpill">STABLE</span></div>
+      <h1 style="font-size:40px">Mint<span class="g">screener.</span></h1>
+      <p>Every coin launched through mintd on this chain, priced from its own pool. Charts are built from onchain swaps, not an indexer, so a coin appears the moment it trades.</p>
+    </div>
+    <div class="chips" id="scSort" style="margin-bottom:14px">
+      <button class="chip on" data-s="mcap">Market cap</button>
+      <button class="chip" data-s="vol">Volume</button>
+      <button class="chip" data-s="new">Newest</button>
+      <button class="chip" data-s="prog">Progress</button>
+    </div>
+    <div class="schead">
+      <span>#</span><span>COIN</span><span class="scnum">PRICE</span>
+      <span class="scnum">MARKET CAP</span><span class="scnum">POOL</span>
+      <span class="scnum">SWAPS</span><span class="scchart">LAST TRADES</span>
+    </div>
+    <div id="scList"><div class="empty">Loading…</div></div>
+  </section>
+
   <section class="view" id="view-burn">
     <div class="launchC" style="max-width:760px">
       <div class="heroC" style="margin:30px auto 22px">
@@ -1840,7 +1893,7 @@ const CHAINS = {
       mintswapRouter: "0xb9274bEdaDcf31136F54A9501232e642a35C6Eb7",
       furnace: null,
     },
-    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true },
+    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, screener: true },
     statsFile: "stats.json",
     faucet: null,
     // Stable rejects any batch outright, so the shared provider batches only
@@ -1877,7 +1930,7 @@ const CHAINS = {
     },
     // No gold engine and no MINTD token on Arc yet, so those pages are hidden
     // rather than shown broken.
-    features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true },
+    features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true, screener: true },
     statsFile: null,   // no indexer running against Arc yet
     faucet: "https://faucet.circle.com",
     // Arc accepts batches and then rate limits them: a batch of 8 returns one
@@ -2294,6 +2347,10 @@ async function route() {
     showView("locker");
     if (!tokens.length && padAddr()) await loadAll(); // prices for locked launchpad tokens
     lkInit();
+  } else if (h === "screener") {
+    showView("screener");
+    if (!tokens.length && padAddr()) await loadAll();
+    scRender();
   } else if (h === "burn") {
     showView("burn");
     if (!tokens.length && padAddr()) await loadAll(); // supply the burn leaderboard
@@ -2317,7 +2374,8 @@ function applyChainUi() {
   // A page whose contract does not exist on this chain is hidden, not shown
   // broken: Arc has no gold engine and no MINTD, so those read as failures.
   const map = { "nav-launch": "launch", "nav-mintswap": "swap", "nav-earn": "earn",
-                "nav-mintr": "mintr", "nav-synth": "gold", "nav-locker": "locker", "nav-burn": "burn" };
+                "nav-mintr": "mintr", "nav-synth": "gold", "nav-locker": "locker", "nav-burn": "burn",
+                "nav-screener": "screener" };
   for (const [id, feat] of Object.entries(map)) {
     const b = $(id);
     if (b) b.style.display = NET.features[feat] === false ? "none" : "";
@@ -2522,6 +2580,7 @@ async function loadAllInner() {
     $("liveLbl").textContent = "updated " + new Date().toLocaleTimeString();
     cacheTokens(tokens); // next visit paints instantly from this
     renderCards();
+    if ($("view-screener") && $("view-screener").classList.contains("on")) scRender();
     loadTrades();
     loadDexStats();
     loadBurn();
@@ -2674,8 +2733,95 @@ function goPage(n) {
 
 // page = 0 on every filter or sort change: staying on page 5 of a list that
 // just shrank to two pages shows an empty grid and reads as a broken filter.
+if ($("scSort")) $("scSort").onclick = (e) => {
+  if (!e.target.dataset.s) return;
+  scSort = e.target.dataset.s;
+  document.querySelectorAll("#scSort .chip").forEach((c) => c.classList.toggle("on", c === e.target));
+  scRender();
+};
 $("filterChips").onclick = (e) => { if (!e.target.dataset.f) return; filter = e.target.dataset.f; page = 0; document.querySelectorAll("#filterChips .chip").forEach((c) => c.classList.toggle("on", c === e.target)); renderCards(); };
 $("sortChips").onclick = (e) => { if (!e.target.dataset.s) return; sort = e.target.dataset.s; page = 0; document.querySelectorAll("#sortChips .chip").forEach((c) => c.classList.toggle("on", c === e.target)); renderCards(); };
+
+/* ------------------------------------------------------------- mintscreener
+   A price row per launched coin, with a sparkline drawn from that coin's own
+   Swap events. Deliberately not Dexscreener: it does not index Arc, so on a
+   new chain an external screener shows nothing at all while the pools are
+   trading fine. Reading the pool directly means a coin appears the moment it
+   has one swap. */
+let scSort = "mcap";
+
+// Price series for one token, oldest to newest, derived from sqrtPriceX96 on
+// each swap. tradeLogs is already scanned and cached for the ticker, so this
+// costs no extra RPC.
+function scSeries(addr) {
+  return tradeLogs
+    .filter((x) => sameAddr(x.addr, addr) && x.sqrtP)
+    .slice(0, 60)
+    .reverse()
+    .map((x) => Number(ethers.formatEther(priceFromSqrt(x.sqrtP, x.tokenIs0))))
+    .filter((n) => Number.isFinite(n) && n > 0);
+}
+
+function scSpark(pts) {
+  if (pts.length < 2) return '<span class="scnone">no trades yet</span>';
+  const W = 140, H = 34;
+  const min = Math.min(...pts), max = Math.max(...pts);
+  const span = max - min || max * 0.05 || 1;
+  const xy = pts.map((p, i) => `${(i / (pts.length - 1)) * W},${H - 3 - ((p - min) / span) * (H - 6)}`);
+  const up = pts[pts.length - 1] >= pts[0];
+  const col = up ? "var(--green2)" : "var(--red)";
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:${H}px">
+    <polyline points="${xy.join(" ")}" fill="none" stroke="${col}" stroke-width="1.8"
+      stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+  </svg>`;
+}
+
+// Change across the cached window. Labelled "since first indexed swap" rather
+// than 24h, because the scan covers 5,000 blocks and calling that a day would
+// be wrong on any chain.
+function scChange(pts) {
+  if (pts.length < 2) return "";
+  const d = ((pts[pts.length - 1] - pts[0]) / pts[0]) * 100;
+  if (!Number.isFinite(d) || Math.abs(d) < 0.01) return "";
+  const up = d >= 0;
+  return `<span class="scchg" style="color:${up ? "var(--green)" : "var(--red)"}">${up ? "▲" : "▼"}${Math.abs(d).toFixed(1)}%</span>`;
+}
+
+function scRender() {
+  const el = $("scList");
+  if (!el) return;
+  let list = [...tokens];
+  if (scSort === "mcap") list.sort((a, b) => (b.mcap > a.mcap ? 1 : -1));
+  if (scSort === "vol") list.sort((a, b) => (b.vol24 || 0) - (a.vol24 || 0));
+  if (scSort === "new") list.sort((a, b) => b.createdAt - a.createdAt);
+  if (scSort === "prog") list.sort((a, b) => b.prog - a.prog);
+
+  if (!list.length) {
+    el.innerHTML = `<div class="empty">No coins launched on ${esc(NET.short)} yet. Be the first.</div>`;
+    return;
+  }
+  el.innerHTML = list.map((t, i) => {
+    const pts = scSeries(t.addr);
+    const swaps = tradeLogs.filter((x) => sameAddr(x.addr, t.addr)).length;
+    const logo = t.meta && t.meta.image ? safeImg(t.meta.image) : (t.platform ? "logo.png" : "");
+    const initials = (t.symbol || "?").slice(0, 2).toUpperCase();
+    return `<div class="scrow" onclick="openToken('${t.addr}')">
+      <span class="scrank">${i + 1}</span>
+      <span class="sccoin">
+        <span class="avatar">${logo ? `<img src="${logo}" loading="lazy" onerror="this.parentNode.textContent='${initials}'">` : initials}</span>
+        <span style="min-width:0">
+          <span class="scname">${esc(t.name)}</span>
+          <span class="scsym">$${esc(t.symbol)}</span>
+        </span>
+      </span>
+      <span class="scnum">${fmtPrice(Number(ethers.formatEther(t.price)))}${scChange(pts)}</span>
+      <span class="scnum">${fmtUsd(ethers.formatEther(t.mcap))}</span>
+      <span class="scnum">${fmtUsd(ethers.formatEther(t.poolUsdt))}</span>
+      <span class="scnum">${swaps || "–"}</span>
+      <span class="scchart">${scSpark(pts)}</span>
+    </div>`;
+  }).join("");
+}
 
 /* ---------------------------------------------------------------- furnace
    Burning is a plain ERC-20 transfer to 0x…dEaD. No contract of our own sits
@@ -4772,12 +4918,12 @@ async function loadDexStats() {
 let tradeLogs = [];
 // keep the ticker warm across visits: revive the last saved trades instantly
 try {
-  tradeLogs = JSON.parse(localStorage.getItem("tradeLogs") || "[]")
+  tradeLogs = JSON.parse(localStorage.getItem(ck("tradeLogs")) || "[]")
     .map((x) => ({ ...x, usdt: BigInt(x.usdt), sqrtP: BigInt(x.sqrtP) }));
 } catch { tradeLogs = []; }
 function saveTradeLogs() {
   try {
-    localStorage.setItem("tradeLogs", JSON.stringify(tradeLogs.slice(0, 100)
+    localStorage.setItem(ck("tradeLogs"), JSON.stringify(tradeLogs.slice(0, 100)
       .map((x) => ({ ...x, usdt: x.usdt.toString(), sqrtP: x.sqrtP.toString() }))));
   } catch { /* storage full is fine */ }
 }
@@ -4854,6 +5000,7 @@ async function loadTrades() {
     saveTradeLogs();
     const all = tradeLogs;
     renderCards(); // trader counts just landed, repaint the grid
+    if ($("view-screener") && $("view-screener").classList.contains("on")) scRender();
     // fallback only: don't overwrite Dexscreener's 24h numbers if present
     if (!dexStatsLoaded) {
       $("stTrades").textContent = all.length;
