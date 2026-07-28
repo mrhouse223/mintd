@@ -27,6 +27,8 @@ for (const rel of [
   "contracts/FarmRewards.sol",
   "contracts/test/MockRouter.sol",
   "contracts/test/MockUSDT0.sol",
+  "contracts/Furnace.sol",
+  "contracts/test/MockFeeToken.sol",
 ]) {
   sources[rel] = { content: fs.readFileSync(path.join(root, rel), "utf8") };
 }

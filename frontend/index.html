@@ -1273,7 +1273,7 @@
             <div class="gnum">3</div>
             <div>
               <b>Get USDT0 onto Stable</b>
-              <p>USDT0 is both the money and the gas on Stable, so you need some before anything else works. Open the <a href="#/bridge" onclick="go('bridge')">Bridge</a> tab, pick whichever chain your funds are on, and follow it through. Most transfers land in seconds. Bring a little extra for gas; fees here are a fraction of a cent, so a dollar goes a very long way.</p>
+              <p>USDT0 is both the money and the gas on Stable, so you need some before anything else works. Open the <a href="/bridge" onclick="event.preventDefault();go('bridge')">Bridge</a> tab, pick whichever chain your funds are on, and follow it through. Most transfers land in seconds. Bring a little extra for gas; fees here are a fraction of a cent, so a dollar goes a very long way.</p>
             </div>
           </div>
 
@@ -1281,7 +1281,7 @@
             <div class="gnum">4</div>
             <div>
               <b>Find the coin</b>
-              <p>Browse <a href="#/" onclick="go('discover')">Discover</a>, or paste a contract address into the search box if someone shared one with you. Always match the full address, not just the ticker, since anyone can launch a coin with any name. Every token page shows its market cap, 24h volume, liquidity and a live chart.</p>
+              <p>Browse <a href="/" onclick="event.preventDefault();go('discover')">Discover</a>, or paste a contract address into the search box if someone shared one with you. Always match the full address, not just the ticker, since anyone can launch a coin with any name. Every token page shows its market cap, 24h volume, liquidity and a live chart.</p>
             </div>
           </div>
 
@@ -2005,9 +2005,14 @@ function toggleTheme() {
 document.documentElement.dataset.theme = localStorage.getItem("theme") === "light" ? "light" : "dark";
 paintThemeBtn();
 
-/* ------------------------------------------------ hash routing (real pages)
-   URLs: #/ (markets)  #/launch  #/token/0x… , browser back/forward work,
-   and token pages are directly linkable/shareable. */
+/* ------------------------------------------------ path routing (real pages)
+   URLs: /  /launch  /furnace  /token/0x… , browser back/forward work, and
+   token pages are directly linkable and shareable.
+
+   These were #/ hash routes. Clean paths need two things the hash did not:
+   the host must serve index.html for an unknown path (netlify.toml has the
+   200 rewrite), and old shared links must keep working, which migrateHash()
+   below handles by rewriting #/x to /x once on load. */
 function showView(view) {
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("on"));
   document.querySelectorAll("nav button").forEach((b) => b.classList.remove("active"));
@@ -2065,13 +2070,29 @@ function goGuide() {
     if (g) { g.classList.add("jump"); setTimeout(() => g.classList.remove("jump"), 1400); }
   }, 120);
 }
-function go(view) {
-  const target = view === "discover" ? "#/" : "#/" + view;
-  if (location.hash === target) route();
-  else location.hash = target;
+// Single place that changes the URL, so pushState and route() can never
+// disagree about what page is showing.
+function navTo(path, replace = false) {
+  const target = path.startsWith("/") ? path : "/" + path;
+  if (location.pathname === target) { route(); return; }
+  history[replace ? "replaceState" : "pushState"]({}, "", target);
+  route();
 }
+function go(view) { navTo(view === "discover" ? "/" : "/" + view); }
+
+// Anything still holding a #/ link, which is every link shared before this
+// change, lands here and is moved to the clean path once. Plain #anchor
+// fragments inside the docs page are left alone: they are not routes.
+function migrateHash() {
+  const h = location.hash;
+  if (!h.startsWith("#/")) return false;
+  const path = h.slice(1) || "/";
+  history.replaceState({}, "", path);
+  return true;
+}
+
 async function route() {
-  const h = location.hash.replace(/^#\/?/, "");
+  const h = location.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
   if (h.startsWith("token/")) {
     const addr = h.slice(6);
     if (!tokens.find((t) => t.addr.toLowerCase() === addr.toLowerCase())) await loadAll();
@@ -2116,7 +2137,10 @@ async function route() {
   }
   else showView("discover");
 }
-window.addEventListener("hashchange", route);
+window.addEventListener("popstate", route);
+// A #/ link arriving from outside is rewritten before the first route() runs,
+// so the page never renders the wrong view and then jump-corrects.
+migrateHash();
 
 function init() {
   if (!padAddr()) return;
@@ -4621,7 +4645,7 @@ async function loadTrades() {
       .slice(0, 18);
     const items = buys.map((x) => {
       const when = tradeAgo(x.block);
-      return `<a class="tick" href="#/token/${x.addr}">💎 <span class="b">BUY</span> <span class="sym">$${esc(x.sym)}</span> <span class="amt">$${nf(ethers.formatEther(x.usdt), 2)}</span>${when ? ` <span class="when">${when}</span>` : ""}</a>`;
+      return `<a class="tick" href="/token/${x.addr}" onclick="event.preventDefault();navTo('/token/${x.addr}')">💎 <span class="b">BUY</span> <span class="sym">$${esc(x.sym)}</span> <span class="amt">$${nf(ethers.formatEther(x.usdt), 2)}</span>${when ? ` <span class="when">${when}</span>` : ""}</a>`;
     }).join("");
     // nothing recent: hide the bar entirely rather than announcing the silence
     $("ticker").innerHTML = items ? items + items : "";
@@ -5261,9 +5285,7 @@ async function lkExtend(id) {
 
 /* ------------------------------------------------------------ token page */
 function openToken(addr) {
-  const target = "#/token/" + addr;
-  if (location.hash === target) route();
-  else location.hash = target;
+  navTo("/token/" + addr);
 }
 /* --------------------------------------- creator page edits (registry) */
 const META_REGISTRY_ADDR = "0x95B93c48522d0D53Bd2419bbC5Dc7e36E130E2BB"; // TokenMetaRegistry on Stable
