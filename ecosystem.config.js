@@ -68,6 +68,17 @@ module.exports = {
     },
     {
       ...common,
+      // Records how long each address holds MINTD, for an Arc allocation.
+      // This one is genuinely irreplaceable: the RPC keeps four to five days
+      // of logs and has no archive, so any stretch this process is not running
+      // for is holding history that can never be reconstructed. If it is down,
+      // fix it the same day.
+      name: "holder-ledger",
+      script: "scripts/holder-ledger.js",
+      args: "--watch",
+    },
+    {
+      ...common,
       name: "arb-keeper",
       script: "scripts/arb-keeper-multi.js",
       env: {
