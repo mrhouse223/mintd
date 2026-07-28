@@ -1,7 +1,39 @@
 # LP agent
 
-Status: draft
-Date: 2026-07-27
+Status: **contract built and tested, 32 tests green. Not deployed.**
+Date: 2026-07-27, updated 2026-07-28
+
+## Build status
+
+`contracts/AgentVault.sol` implements the security model below.
+`scripts/test-agent-vault.js` is the proof, run against real Uniswap V3 in
+ganache with a fixed mnemonic so results do not move between runs.
+
+The hostile-keeper result, which is the test that decides whether this ships:
+
+```
+12 attack attempts:  0 executed, 12 reverted
+vault value fell     1.49%   (attacker's own market impact, not theft)
+owner recovered      100.1%  after the keeper had free rein
+```
+
+Two follow-ups were added because the first result was not conclusive on its
+own. Every attack died at the TWAP-derived minimum output, which meant the
+cumulative-loss breaker was never reached and therefore never proven:
+
+- **Slow grind**: 25 rebalances at honest prices, no manipulation, to test the
+  patient attack a per-action cap cannot bound. Cost 0.085%. Grinding is
+  ineffective here because the swap needed on each rebalance is small when the
+  position is already near its target ratio.
+- **Breaker fires**: tolerance set to zero so any loss must halt the agent.
+  Reverts with `loss breaker` on the first rebalance, and re-arming is
+  owner-only and manual.
+
+Human-in-the-loop is implemented as four owner-settable modes: PAUSED,
+PROPOSE_ONLY (default), TIMELOCKED with a veto window, and AUTONOMOUS.
+
+Still to do before anyone else's money goes in: `/security-review`, a keeper
+script, and the dogfooding period in Deploy steps below.
 
 The first consumer-facing agentic liquidity product. See `docs/STRATEGY.md`
 for why this is the first build rather than the institutional version.

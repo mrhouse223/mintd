@@ -46,6 +46,7 @@ for (const rel of [
   // Same caveat: identical source, different metadata hash, so the artifact is
   // whichever compiled last. Use predictToken() for CREATE2 addresses.
   "contracts/MintdLaunchpad.sol",
+  "contracts/AgentVault.sol",
 ]) {
   sources[rel] = { content: fs.readFileSync(path.join(root, rel), "utf8") };
 }
