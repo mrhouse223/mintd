@@ -73,7 +73,13 @@
     header #connectBtn { white-space: nowrap; margin-left: auto; }
     .themebtn.themetoggle span:last-child { display: none; }
   }
-  @media (max-width: 1000px) { .netpill { display: none; } }
+  @media (max-width: 1000px) {
+    .netpill { display: none; }
+    /* the switcher stays: it is how you change chain, not a status badge */
+    .chainbtn .cn { display: none; }
+    .chainbtn { padding: 8px 10px; }
+    .faucetbtn { display: none; }
+  }
   nav { display: flex; gap: 4px; }
   nav button { background: none; color: var(--ink); padding: 8px 14px; border-radius: 20px; font-size: 14px; font-weight: 600; }
   nav button.active { background: var(--green-soft); color: var(--green); }
@@ -83,6 +89,27 @@
   .netpill b { color: var(--ink); font-size: 12px; display: block; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green2); }
   .themebtn { background: var(--panel2); border: 1px solid var(--line); border-radius: 50%; width: 36px; height: 36px; font-size: 15px; }
+  /* chain switcher */
+  .chainwrap { position: relative; }
+  .chainbtn { display: flex; align-items: center; gap: 7px; background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px;
+    font-size: 12.5px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+  .chainbtn:hover { border-color: var(--green); }
+  .chainbtn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green2); flex: 0 0 auto; }
+  .chainbtn .dot.t { background: #ffab00; }   /* testnet reads amber, not green */
+  .chainbtn .cv { color: var(--dim); font-size: 10px; }
+  .chainmenu { display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 95;
+    min-width: 190px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 6px; box-shadow: 0 18px 44px rgba(0,0,0,.34); }
+  .chainmenu.on { display: block; }
+  .chainmenu button { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; text-align: left; padding: 9px 11px; border-radius: 9px;
+    font-size: 13px; font-weight: 600; color: var(--ink); background: none; }
+  .chainmenu button:hover { background: var(--panel2); }
+  .chainmenu button.on { color: var(--green); font-weight: 800; }
+  .tnet { font-size: 9px; font-weight: 800; letter-spacing: .06em; color: #ffab00;
+    border: 1px solid rgba(255,171,0,.4); border-radius: 5px; padding: 1px 5px; }
+  .faucetbtn { padding: 8px 12px; font-size: 12.5px; white-space: nowrap; }
   /* Styled here rather than inline on the elements. As inline styles these beat
      the max-width:820px rule that hides them, so on a phone they stayed visible,
      overflowed the header, and pushed the theme toggle onto a row of its own. */
@@ -967,7 +994,8 @@
   <input class="search" id="search" placeholder="⌕  Name, ticker, or contract" oninput="debouncedRender()" />
   <a class="themebtn" href="https://x.com/mintddotfun" target="_blank" title="X">𝕏</a>
   <a class="themebtn" href="https://t.me/mintddotfun" target="_blank" title="Telegram"><svg width="18" height="18" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg"><circle cx="120" cy="120" r="120" fill="#29A9EB"/><path fill="#fff" d="M53 118.5l122.7-47.3c5.7-2.1 10.7 1.4 8.8 10l-20.9 98.4c-1.5 7-5.7 8.7-11.5 5.4l-31.8-23.4-15.3 14.8c-1.7 1.7-3.1 3.1-6.4 3.1l2.3-32.3 58.9-53.2c2.6-2.3-.6-3.6-4-1.3l-72.8 45.8-31.4-9.8c-6.8-2.1-6.9-6.8 1.4-10.2z"/></svg></a>
-  <div class="netpill"><span class="dot"></span><span>NETWORK<b>Stable</b></span></div>
+  <div class="chainwrap" id="chainPill"></div>
+  <span id="faucetSlot"></span>
   <button class="btn" id="connectBtn" onclick="connect()">Connect wallet</button>
   <button class="themebtn themetoggle" onclick="toggleTheme()" id="themeBtn" title="Toggle light / dark"><span id="themeIcon">☀</span><span id="themeLbl">Light</span></button>
 </header>
@@ -978,9 +1006,9 @@
   <!-- DISCOVER -->
   <section class="view on" id="view-discover">
     <div class="heroC">
-      <div class="badgepill">STABLE MAINNET · CREATORS KEEP <span id="heroShare">90%</span> OF FEES</div>
-      <h1>Launch on Stable for $1.<br /><span class="g">Earn fees instantly.</span></h1>
-      <p>Every coin trades on a bonding curve from its very first block. The curve lives inside a permanently locked USDT0 pool on Uniswap V3, so there is no migration and no LP withdrawal, ever. Coins graduate at 7,000 USDT0 in the pool. Creators claim 90% of every trading fee any time, and 100% of $MINTD token fees are burned.</p>
+      <div class="badgepill"><span id="heroNet">STABLE MAINNET</span> · CREATORS KEEP <span id="heroShare">90%</span> OF FEES</div>
+      <h1>Launch on <span id="heroChain">Stable</span> for $1.<br /><span class="g">Earn fees instantly.</span></h1>
+      <p id="heroBlurb"></p>
       <div class="herobtns">
         <button class="btn" onclick="go('launch')">Launch a token</button>
         <button class="btn ghost" onclick="document.getElementById('mkts').scrollIntoView({behavior:'smooth'})">Browse coins</button>
@@ -1779,17 +1807,133 @@
 // scripts/local-testnet.js serves this page with window.LOCAL_CONFIG set,
 // overriding everything below to point at a local sandbox chain.
 const LC = window.LOCAL_CONFIG || null;
-const CHAIN = LC ? LC.chain : {
-  chainId: "0x3dc", chainName: "Stable Mainnet",
-  nativeCurrency: { name: "USDT0", symbol: "USDT0", decimals: 18 },
-  rpcUrls: ["https://rpc.stable.xyz"], blockExplorerUrls: ["https://stablescan.xyz"],
+
+// Every chain mintd runs on. `features` is not decoration: Arc has no gold
+// engine and no buyback burner deployed, and a nav button leading to a page
+// that reads a nonexistent contract renders as a broken page rather than an
+// absent one.
+const CHAINS = {
+  stable: {
+    key: "stable", label: "Stable", short: "Stable",
+    chain: {
+      chainId: "0x3dc", chainName: "Stable Mainnet",
+      nativeCurrency: { name: "USDT0", symbol: "USDT0", decimals: 18 },
+      rpcUrls: ["https://rpc.stable.xyz"], blockExplorerUrls: ["https://stablescan.xyz"],
+    },
+    addr: { // canonical Uniswap v3 on Stable (docs.stable.xyz/en/reference/dexes)
+      router: "0x32eaf9B5d5F2CD7361c5012890C943D7de84C22a",   // SwapRouter02
+      quoter: "0xb070179E7032CdA868b53e6C1742F80c9e940d1A",   // QuoterV2
+      npm: "0x3BdC3437405f7D801b6036532713fc1F179136a6",      // NonfungiblePositionManager
+      usdt0: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",    // gas token as a 6-dec ERC-20
+    },
+    mintd: {
+      pad: "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0",
+      oldPad: "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0",
+      mintd: "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
+      mintr: "0x8817D05f2560189F3697028f639Dbb4C68688400",
+      synth: "0x09Eb7D9B18e56270F8898C4f3Ac3F2dc99F3b213",
+      mgld: "0x872a3C280B846759187c9E57F62d1Ed8407b135C",
+      locker: "0x1833D9442021AFDa97a573d9cdA65e2aa3449160",
+      v3locker: "0x55233aef2ecEE21a73a4655d9527D44eF13ba0d2",
+      meta: "0x95B93c48522d0D53Bd2419bbC5Dc7e36E130E2BB",
+      mintswapFactory: "0x65E12569E20E8706A4a60fCAB13e9069B78F9f8E",
+      mintswapRouter: "0xb9274bEdaDcf31136F54A9501232e642a35C6Eb7",
+      furnace: null,
+    },
+    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true },
+    statsFile: "stats.json",
+    faucet: null,
+  },
+  "arc-testnet": {
+    key: "arc-testnet", label: "Arc Testnet", short: "Arc",
+    testnet: true,
+    chain: {
+      chainId: "0x4cef52", chainName: "Arc Testnet",
+      nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+      rpcUrls: ["https://rpc.testnet.arc.network"], blockExplorerUrls: ["https://testnet.arcscan.app"],
+    },
+    addr: {
+      router: "0xDf982D7119dD6a5Ec266aE69f6D6537C90F3680a",
+      quoter: "0xa13559d6cD9A2b36aeF70cb0742820a3fd8934FE",
+      npm: "0xe4c473Eea2dF9e6Aa3db7b97695117FF31c0Fbfc",
+      usdt0: "0x3600000000000000000000000000000000000000",
+    },
+    mintd: {
+      pad: "0xd6fdA9A0Fd4b4ee724ab0c0B958a712E5bb37E96",
+      oldPad: null,
+      mintd: null,
+      mintr: "0x3e1184203B9c1760654CbEFCd111ce1185Ae57be",
+      synth: null, mgld: null,
+      locker: "0xAcc8EA03ea4722F23aE0b40Ac707e3fAAa8F6a6A",
+      v3locker: "0x8530b966C12E2d2493f712be9d5Cf39f364DD3B7",
+      meta: "0x09c419226e83A91323FDC170144526D8C4a39B75",
+      mintswapFactory: "0x5481A9aBAC5747252Dda1f40A269A2D48Af2b8Db",
+      mintswapRouter: "0x7de1C45839C56f8CC3252C5F394b3410393d996d",
+      furnace: "0x17E5C63ab0Ff682e5C1Cb2e391870d1a57104C5F",
+    },
+    // No gold engine and no MINTD token on Arc yet, so those pages are hidden
+    // rather than shown broken.
+    features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true },
+    statsFile: null,   // no indexer running against Arc yet
+    faucet: "https://faucet.circle.com",
+  },
 };
-const ADDR = LC ? LC.addr : { // canonical Uniswap v3 on Stable (docs.stable.xyz/en/reference/dexes)
-  router: "0x32eaf9B5d5F2CD7361c5012890C943D7de84C22a",   // SwapRouter02
-  quoter: "0xb070179E7032CdA868b53e6C1742F80c9e940d1A",   // QuoterV2
-  npm: "0x3BdC3437405f7D801b6036532713fc1F179136a6",      // NonfungiblePositionManager
-  usdt0: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",    // USDT0 ERC-20 (6 decimals)
-};
+
+// Selected chain. `let` throughout, not const: switching chains reassigns
+// these in place so the several hundred existing references keep working
+// without threading a chain argument through every call site.
+let CHAIN_KEY = (() => {
+  if (LC) return "local";
+  try { const s = localStorage.getItem("chainKey"); if (s && CHAINS[s]) return s; } catch {}
+  return "stable";
+})();
+let NET = CHAINS[CHAIN_KEY] || CHAINS.stable;
+let CHAIN = LC ? LC.chain : NET.chain;
+let ADDR = LC ? LC.addr : NET.addr;
+
+// Cache keys are namespaced per chain. Sharing them would show Stable's token
+// list on Arc and mix two chains' volume history into one number.
+function ck(name) { return CHAIN_KEY + ":" + name; }
+
+// Switching chains reloads rather than re-wiring live state.
+//
+// Half the app holds addresses, cached token lists, an open position and two
+// providers built for the old chain. Unpicking all of that correctly at
+// runtime is a large amount of code whose failure mode is showing one chain's
+// numbers under another chain's name, which is the single worst bug this page
+// could have. A reload is instant on a static file and provably clean.
+function switchChain(key) {
+  if (!CHAINS[key] || key === CHAIN_KEY) return;
+  try { localStorage.setItem("chainKey", key); } catch {}
+  location.href = "/";
+}
+
+function chainPill() {
+  const el = $("chainPill");
+  if (!el) return;
+  const opts = Object.values(CHAINS).map((c) =>
+    `<button class="${c.key === CHAIN_KEY ? "on" : ""}" onclick="switchChain('${c.key}')">
+       ${esc(c.label)}${c.testnet ? ' <span class="tnet">TESTNET</span>' : ""}
+     </button>`).join("");
+  el.innerHTML =
+    `<button class="chainbtn" onclick="event.stopPropagation();document.getElementById('chainMenu').classList.toggle('on')">
+       <span class="dot${NET.testnet ? " t" : ""}"></span>
+       <span class="cn">${esc(NET.short)}</span>
+       <span class="cv">▾</span>
+     </button>
+     <div class="chainmenu" id="chainMenu">${opts}</div>`;
+  document.addEventListener("click", () => {
+    const m = $("chainMenu"); if (m) m.classList.remove("on");
+  });
+}
+
+// Only rendered on a chain that has one, so it cannot advertise a faucet for
+// a mainnet.
+function faucetLink() {
+  if (!NET.faucet) return "";
+  return `<a class="btn ghost faucetbtn" target="_blank" rel="noopener" href="${NET.faucet}">
+    Get test ${esc(NET.chain.nativeCurrency.symbol)} ↗</a>`;
+}
 const D6 = 10n ** 12n; // scale 6-dec USDT0 ERC-20 amounts up to 18-dec for display
 const POOL_FEE = 10000;
 // The original pad's launches() has NO `quote` field (7 returns); the new pad
@@ -1953,12 +2097,20 @@ function isGraduated(addr, reachedNow) {
 // mintd.fun launchpad on Stable Mainnet. Takes priority over the ⚙-settings
 // value so a stale saved address can't point at an old deployment.
 const DEFAULT_PAD = LC ? LC.pad : "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0";
-function padAddr() { return DEFAULT_PAD || localStorage.getItem("padAddr") || ""; }
+function padAddr() { return NET.mintd.pad || DEFAULT_PAD || localStorage.getItem(ck("padAddr")) || ""; }
 // Discover reads the current pad AND the original pad, so tokens launched on
 // either (incl. $MINTD, which lives on the original pad) all show up. Deduped.
-const OLD_PAD = "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0";
+let OLD_PAD = NET.mintd.oldPad;
+// Null-safe address compare. Not every chain has every contract: Arc has no
+// legacy pad, no MINTD and no gold engine, and a bare .toLowerCase() on those
+// throws during module evaluation, which silently kills every declaration
+// after it.
+function sameAddr(a, b) {
+  return !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase();
+}
 function allPads() {
-  return [padAddr(), OLD_PAD].filter((a, i, arr) => a && arr.map((x) => x.toLowerCase()).indexOf(a.toLowerCase()) === i);
+  const list = [padAddr(), OLD_PAD].filter(Boolean);
+  return list.filter((a, i) => list.findIndex((x) => sameAddr(x, a)) === i);
 }
 // Featured tokens launched OUTSIDE the launchpad (standalone USDT0-paired V3
 // pools). They show in Discover and trade normally; they just have no
@@ -1970,7 +2122,7 @@ const EXTERNAL_TOKENS = [
 ];
 // Permanent Uniswap V3 position locker: holds LP forever, fees stay claimable
 // by the recorded beneficiary. Liquidity can never be withdrawn by anyone.
-const V3_LOCKER_ADDR = "0x55233aef2ecEE21a73a4655d9527D44eF13ba0d2";
+let V3_LOCKER_ADDR = NET.mintd.v3locker;
 const V3_LOCKER_ABI = [
   "function beneficiaryOf(uint256) view returns (address)",
   "function isLocked(uint256) view returns (bool)",
@@ -2151,7 +2303,33 @@ window.addEventListener("popstate", route);
 // so the page never renders the wrong view and then jump-corrects.
 migrateHash();
 
+function applyChainUi() {
+  chainPill();
+  // A page whose contract does not exist on this chain is hidden, not shown
+  // broken: Arc has no gold engine and no MINTD, so those read as failures.
+  const map = { "nav-launch": "launch", "nav-mintswap": "swap", "nav-earn": "earn",
+                "nav-mintr": "mintr", "nav-synth": "gold", "nav-locker": "locker", "nav-burn": "burn" };
+  for (const [id, feat] of Object.entries(map)) {
+    const b = $(id);
+    if (b) b.style.display = NET.features[feat] === false ? "none" : "";
+  }
+  const f = $("faucetSlot");
+  if (f) f.innerHTML = faucetLink();
+  // Copy follows the chain. "Launch on Stable" while connected to Arc, quoting
+  // USDT0 on a USDC chain, is the kind of wrong that reads as unfinished.
+  const sym = NET.chain.nativeCurrency.symbol;
+  const hn = $("heroNet"); if (hn) hn.textContent = NET.chain.chainName.toUpperCase();
+  const hc = $("heroChain"); if (hc) hc.textContent = NET.short;
+  const hb = $("heroBlurb");
+  if (hb) hb.textContent =
+    `Every coin trades on a bonding curve from its very first block. The curve lives inside a `
+    + `permanently locked ${sym} pool on Uniswap V3, so there is no migration and no LP withdrawal, `
+    + `ever. Coins graduate at 7,000 ${sym} in the pool. Creators claim 90% of every trading fee any time`
+    + (NET.mintd.mintd ? ", and 100% of $MINTD token fees are burned." : ".");
+}
+
 function init() {
+  applyChainUi();
   if (!padAddr()) return;
   // staticNetwork skips the eth_chainId round-trip on every call. Batching is
   // kept small but ON: unbatched, a cold load fires 100+ separate requests and
@@ -2225,7 +2403,7 @@ async function loadAllInner() {
     // original pad uses the legacy launches() ABI (no `quote` field).
     const jobs = [];
     for (const pa of allPads()) {
-      const abi = pa.toLowerCase() === OLD_PAD.toLowerCase() ? PAD_ABI_OLD : PAD_ABI;
+      const abi = sameAddr(pa, OLD_PAD) ? PAD_ABI_OLD : PAD_ABI;
       const pc = new ethers.Contract(pa, abi, rp);
       try {
         const cnt = Number(await pc.tokenCount());
@@ -2276,7 +2454,7 @@ async function loadAllInner() {
       const grad = isGraduated(addr, prog >= 100);
       return { addr, padOf: pa, quote, isMintr, pool: l.pool, creator: l.creator, positionId: l.positionId, createdAt: l.createdAt,
                tokenIs0, price, mcap, poolUsdt, prog: grad ? 100 : prog, grad,
-               platform: addr.toLowerCase() === MINTD_ADDR.toLowerCase(), ...t };
+               platform: sameAddr(addr, MINTD_ADDR), ...t };
      } catch (e) { return null; } // one bad token never breaks the whole grid
     }));
     tokens = loaded.filter(Boolean);
@@ -2494,7 +2672,7 @@ const FU_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function transfer(address,uint256) returns (bool)",
 ];
-const FU_SEEN = "furnaceSeen_v1"; // tokens burned from this browser, so they persist in the list
+const FU_SEEN = ck("furnaceSeen_v1"); // tokens burned from this browser, so they persist in the list
 let fuTok = null;
 
 function fuSeen() { try { return JSON.parse(localStorage.getItem(FU_SEEN) || "[]"); } catch { return []; } }
@@ -2682,10 +2860,10 @@ const FEE_TIERS = [100, 500, 3000, 10000];
 let swBest = null, swTimer = null;
 const tokenMetaCache = {};
 
-const MINTD_ADDR = "0xE62C47074abb52A2bc87B62E47e3411A0020f020";
+let MINTD_ADDR = NET.mintd.mintd;
 const TOKEN_LOGOS = {
   [ADDR.usdt0.toLowerCase()]: "https://stablescan.xyz/token/images/usdt0_64.png",
-  [MINTD_ADDR.toLowerCase()]: "logo.png",
+  ...(MINTD_ADDR ? { [MINTD_ADDR.toLowerCase()]: "logo.png" } : {}),
   "0x872a3c280b846759187c9e57f62d1ed8407b135c": "mgld.png", // $MGLD
   "0x8817d05f2560189f3697028f639dbb4c68688400": "mintr.png", // $MINTR
 };
@@ -2936,7 +3114,7 @@ async function loadMintswapTvl() {
 }
 
 /* -------------------------------------------------------------- MINTR */
-const MINTR_ADDR = "0x8817D05f2560189F3697028f639Dbb4C68688400"; // MINTR reserve token
+let MINTR_ADDR = NET.mintd.mintr; // MINTR reserve token
 const BUYBACK_ADDR = "0x7F007fbc6061806888A39A79763808aF5B94F4f4"; // MINTD buyback + burn
 const BUYBACK_ABI = [
   "function pending() view returns (uint256)",
@@ -4248,12 +4426,12 @@ function cacheTokens(list) {
       delete o.traders;
       return o;
     });
-    localStorage.setItem("tokCache", JSON.stringify({ at: Date.now(), list: slim }));
+    localStorage.setItem(ck("tokCache"), JSON.stringify({ at: Date.now(), list: slim }));
   } catch { /* quota, skip */ }
 }
 function restoreTokens() {
   try {
-    const raw = JSON.parse(localStorage.getItem("tokCache") || "null");
+    const raw = JSON.parse(localStorage.getItem(ck("tokCache")) || "null");
     if (!raw || !Array.isArray(raw.list)) return [];
     return raw.list.map((t) => {
       const o = { ...t, cached: true };
@@ -4270,7 +4448,11 @@ function restoreTokens() {
 let STATS = null;
 async function loadProtocolStats() {
   try {
-    const r = await fetch("stats.json?" + Math.floor(Date.now() / 60000), { cache: "no-store" });
+    // stats.json is produced by the indexer for Stable only. On any other
+    // chain there is no such file, and serving Stable's TVL and volume under
+    // Arc's name would be the worst number on the page.
+    if (!NET.statsFile) { liveProtocolStats(); return; }
+    const r = await fetch(NET.statsFile + "?" + Math.floor(Date.now() / 60000), { cache: "no-store" });
     if (r.ok) {
       STATS = await r.json();
       if (STATS.volumeAllTime) $("stVolAll").textContent = fmtUsd(STATS.volumeAllTime);
@@ -4298,7 +4480,7 @@ async function loadProtocolStats() {
    Going backward means the newest (and largest) volume lands first and the
    figure is useful on the very first load, then deepens over later visits.
    Budgeted per page load so it can never hammer the RPC. */
-const VOL_KEY = "volAllCache_v2";
+const VOL_KEY = ck("volAllCache_v2");
 // Stable's RPC rejects any getLogs wider than 500 blocks, so this is a hard
 // ceiling, not a tuning knob. It was 20000, which failed every round 1 request
 // outright, and round 2 halved 20000 down through 625 to 312: that trips the
@@ -4663,8 +4845,8 @@ async function loadTrades() {
 }
 
 /* ------------------------------------------------- Mintd Gold ($MGLD) */
-const SYNTH_ADDR = "0x09Eb7D9B18e56270F8898C4f3Ac3F2dc99F3b213"; // Mintd Gold CDP engine
-const MGLD_ADDR = "0x872a3C280B846759187c9E57F62d1Ed8407b135C";  // $MGLD token
+let SYNTH_ADDR = NET.mintd.synth; // Mintd Gold CDP engine
+let MGLD_ADDR = NET.mintd.mgld;  // $MGLD token
 const SYNTH_ABI = [
   "function synth() view returns (address)",
   "function price() view returns (uint256)",
@@ -5007,7 +5189,7 @@ $("brChips").onclick = (e) => {
 };
 
 /* ------------------------------------------------------------ token locker */
-const LOCKER_ADDR = "0x1833D9442021AFDa97a573d9cdA65e2aa3449160"; // TokenLocker on Stable
+let LOCKER_ADDR = NET.mintd.locker;
 const LOCKER_ABI = [
   "function lockFee() view returns (uint256)",
   "function lock(address token, uint256 amount, uint64 unlockTime) payable returns (uint256)",
@@ -5297,7 +5479,7 @@ function openToken(addr) {
   navTo("/token/" + addr);
 }
 /* --------------------------------------- creator page edits (registry) */
-const META_REGISTRY_ADDR = "0x95B93c48522d0D53Bd2419bbC5Dc7e36E130E2BB"; // TokenMetaRegistry on Stable
+let META_REGISTRY_ADDR = NET.mintd.meta;
 const META_REG_ABI = [
   "function metaOf(address) view returns (string)",
   "function creatorOf(address) view returns (address)",
