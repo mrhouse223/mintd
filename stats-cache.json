@@ -5,7 +5,7 @@
       "token": "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       "createdAt": 1784844341,
       "usdtIs0": true,
-      "allTime": "535011501446"
+      "allTime": "535160001446"
     },
     "0x63ccf0c040845aa59a3b0898b28bf6c090850c2b": {
       "kind": "v3",
@@ -851,5 +851,5 @@
       "allTime": "139897081"
     }
   },
-  "lastBlock": 33448967
+  "lastBlock": 33449436
 }
