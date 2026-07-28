@@ -11,6 +11,13 @@
   publish = "."
   command = ""
 
+# The landing copy lives at /about. This must come BEFORE the catch-all, since
+# Netlify applies the first matching rule.
+[[redirects]]
+  from = "/about"
+  to = "/landing.html"
+  status = 200
+
 # Clean URLs, same reasoning as the root config: the host must answer /vaults
 # and /docs with the app rather than a 404, and status 200 rather than 301 so
 # the URL stays as the visitor typed it.

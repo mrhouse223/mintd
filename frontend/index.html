@@ -2739,6 +2739,14 @@ function applyChainUi() {
   }
   const f = $("faucetSlot");
   if (f) f.innerHTML = faucetLink();
+  // Headline tiles for things this chain does not have. A "$MINTR TVL" of $2
+  // and a blank burn counter read as a broken site, not an absent feature.
+  const tiles = { stMintrTvl: "mintr", stBurn: "burn" };
+  for (const [id, feat] of Object.entries(tiles)) {
+    const el = $(id);
+    const tile = el && el.closest(".hstat");
+    if (tile) tile.style.display = NET.features[feat] === false ? "none" : "";
+  }
   // Copy follows the chain. "Launch on Stable" while connected to Arc, quoting
   // USDT0 on a USDC chain, is the kind of wrong that reads as unfinished.
   const sym = NET.chain.nativeCurrency.symbol;
@@ -3285,12 +3293,18 @@ async function loadAllInner() {
       // immutable half: from cache when we have it, one-time fetch otherwise
       let base = tokBaseCache(pa, i);
       if (!base) {
-        const addr = await pc.allTokens(i);
-        const [l, td] = await Promise.all([pc.launches(addr), (async () => {
-          const c = new ethers.Contract(addr, ERC20_ABI, rp);
-          const [name, symbol, uri] = await Promise.all([c.name(), c.symbol(), c.metadataURI().catch(() => "")]);
-          return { name, symbol, uri };
-        })()]);
+        // Sequential, and retried. These were four concurrent reads per token,
+        // which is precisely what CLAUDE.md gotcha 1 forbids: Arc rate-limits
+        // the burst, returns 429, and the per-token catch below swallows it, so
+        // the coin simply never appears. Observed directly, alternating between
+        // one token and none on identical loads with no error anywhere.
+        const addr = await retryRead(() => pc.allTokens(i));
+        const l = await retryRead(() => pc.launches(addr));
+        const c = new ethers.Contract(addr, ERC20_ABI, rp);
+        const name = await retryRead(() => c.name());
+        const symbol = await retryRead(() => c.symbol());
+        const uri = await retryRead(() => c.metadataURI()).catch(() => "");
+        const td = { name, symbol, uri };
         // old-pad launches have no `quote` field; default them to USDT0
         const q = (l.quote && l.quote !== ethers.ZeroAddress) ? l.quote : usdtAddr;
         base = { addr, quote: q, pool: l.pool, creator: l.creator,
@@ -3305,8 +3319,10 @@ async function loadAllInner() {
       const pool = new ethers.Contract(l.pool, POOL_ABI, rp);
       const tokenIs0 = BigInt(addr) < BigInt(quote);
       const qc = new ethers.Contract(quote, ERC20_ABI, rp);
-      // mutable half: the only two calls a routine refresh makes
-      const [slot, poolQuoteBal] = await Promise.all([pool.slot0(), qc.balanceOf(l.pool)]);
+      // mutable half: the only two calls a routine refresh makes. Sequential
+      // for the same reason as above; two at once is enough to be rejected.
+      const slot = await retryRead(() => pool.slot0());
+      const poolQuoteBal = await retryRead(() => qc.balanceOf(l.pool));
       // price + liquidity, both in 1e18-scaled USD
       let price, poolUsdt;
       if (isMintr) {
