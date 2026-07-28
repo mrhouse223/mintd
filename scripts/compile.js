@@ -29,6 +29,19 @@ for (const rel of [
   "contracts/test/MockUSDT0.sol",
   "contracts/Furnace.sol",
   "contracts/test/MockFeeToken.sol",
+  // ArcLaunchpad redeclares MemeToken20 verbatim from InstantLaunchpad, and
+  // artifacts are keyed by contract NAME, so build/MemeToken20.json is written
+  // twice and the last one wins. The two are NOT interchangeable even though
+  // the source is identical: solc appends a metadata hash derived from the
+  // source file, so the creation code differs in its tail and therefore so
+  // does its keccak. That silently broke CREATE2 address prediction once, and
+  // which copy survives depends on the order of this list.
+  // The ABI and runtime behaviour are the same, so it is safe for tests that
+  // only need to call a token. Anything needing the creation-code hash must
+  // use ArcLaunchpad.predictToken instead of deriving it from the artifact.
+  "contracts/ArcLaunchpad.sol",
+  "contracts/FeeClaimAll.sol",
+  "contracts/FeeSplitter.sol",
 ]) {
   sources[rel] = { content: fs.readFileSync(path.join(root, rel), "utf8") };
 }

@@ -36,6 +36,12 @@ const enc = (types, vals) => new ethers.AbiCoder().encode(types, vals).slice(2);
 // artifacts built with a different compiler and would each need their own
 // settings; they are listed at the end as knowingly unverified.
 const TARGETS = [
+  { name: "ArcLaunchpad", file: "ArcLaunchpad.sol", addr: C.ArcLaunchpad,
+    args: enc(
+      ["address", "address", "address", "address", "address", "uint256", "uint256", "uint256", "uint256", "address", "uint256"],
+      [C.NonfungiblePositionManager, C.SwapRouter02, REC.gasToken.address,
+       REC.deployer, REC.deployer,
+       ethers.parseEther("1"), 8000n, 8000n, 3000000000000n, C.MINTR, 3000000000000n]) },
   { name: "Furnace", file: "Furnace.sol", addr: C.Furnace, args: "" },
   { name: "TokenMetaRegistry", file: "TokenMetaRegistry.sol", addr: C.TokenMetaRegistry,
     args: enc(["address[]"], [[C.InstantLaunchpad]]) },

@@ -1891,12 +1891,45 @@
         <div class="frow">
           <div class="field"><label>WEBSITE</label><input id="fWeb" placeholder="https://…" /></div>
           <div class="field">
-            <div class="inhead" style="margin-bottom:6px"><span style="letter-spacing:.12em">DEV BUY (USDT0, OPTIONAL)</span><span><span class="bal" id="lDevBal">Bal: –</span><span class="maxb" onclick="useMax('lDevBal','fDev')">MAX</span></span></div>
-            <input id="fDev" type="number" min="0" step="any" placeholder="0" />
+            <div class="inhead" style="margin-bottom:6px"><span style="letter-spacing:.12em">DEV BUY (<span class="qsym">USDT0</span>, OPTIONAL)</span><span><span class="bal" id="lDevBal">Bal: –</span><span class="maxb" onclick="useMax('lDevBal','fDev')">MAX</span></span></div>
+            <input id="fDev" type="number" min="0" step="any" placeholder="0" oninput="checkDevCap()" />
+            <div class="finenote" id="lDevCap" style="margin-top:6px;display:none"></div>
           </div>
         </div>
         <button class="btn" style="width:100%;padding:14px" id="launchBtn" onclick="doLaunch()">Launch token</button>
         <div class="finenote">Launching creates a fixed 1B supply, immutable ERC-20 with no owner, taxes, blacklist, buy limits, or same-block restrictions.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEV: operator dashboard. Hidden from the nav unless the connected wallet
+       is in DEV_ADDRS. This is visibility, NOT access control: every number on
+       this page is public onchain data, and claimFees is permissionless for
+       everyone. Nothing here is gated in a way that would matter if bypassed. -->
+  <section class="view" id="view-dev">
+    <div class="launchC" style="max-width:1000px">
+      <div class="heroC" style="margin:28px auto 20px">
+        <div class="badgepill">OPERATOR</div>
+        <h1 style="font-size:38px">Pending fees</h1>
+        <p>Unclaimed Uniswap V3 pool fees across every token launched on mintd. Claiming pays each token's creator and the protocol recipient directly; the caller only pays gas.</p>
+      </div>
+
+      <div class="heroStats" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
+        <div class="hstat"><b id="dvProto" style="color:var(--green)">–</b><label>PROTOCOL PENDING</label></div>
+        <div class="hstat"><b id="dvMine" style="color:var(--green2)">–</b><label>YOUR CREATOR FEES</label></div>
+        <div class="hstat"><b id="dvCount">–</b><label>TOKENS WITH FEES</label></div>
+        <div class="hstat"><b id="dvScanned">–</b><label>TOKENS SCANNED</label></div>
+      </div>
+
+      <div class="trade">
+        <div class="mkthead">
+          <h2>Breakdown</h2>
+          <div class="spacer"></div>
+          <button class="chip" onclick="devLoad(true)">Rescan</button>
+          <button class="btn" id="dvClaimBtn" onclick="devClaimAll()">Claim all</button>
+        </div>
+        <div id="dvNote" class="finenote" style="margin-bottom:10px"></div>
+        <div id="dvRows"><div class="empty">Connect an operator wallet.</div></div>
       </div>
     </div>
   </section>
@@ -1955,6 +1988,7 @@
         <button id="nav-portfolio" onclick="go('portfolio')"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="1.5"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg> Portfolio</button>
         <button id="nav-burn" onclick="go('burn')"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3c1.5 3 4.5 4.2 4.5 8a4.5 4.5 0 0 1-9 0C7.5 8 9 6.5 12 3z"/><path d="M12 21c-3 0-5.5-2-5.5-4.5"/><path d="M12 21c3 0 5.5-2 5.5-4.5"/></svg> Furnace</button>
         <button id="nav-docs" onclick="go('docs')"><svg class="ic" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg> Docs</button>
+        <button id="nav-dev" onclick="go('dev')" style="display:none"><svg class="ic" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg> Dev</button>
         <button id="nav-install" onclick="a2hsShowNow()" style="display:none"><svg class="ic" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg> Add to Home Screen</button>
         <div class="moresocial">
           <a href="https://x.com/mintddotfun" target="_blank" rel="noopener"><span style="font-weight:800">𝕏</span> Follow on X</a>
@@ -2014,6 +2048,14 @@ const CHAINS = {
       mintswapFactory: "0x65E12569E20E8706A4a60fCAB13e9069B78F9f8E",
       mintswapRouter: "0xb9274bEdaDcf31136F54A9501232e642a35C6Eb7",
       furnace: null,
+      // FeeClaimAll: batch fee-claim trigger behind the /dev dashboard.
+      // Holds nothing and has no owner, so it is safe to leave public.
+      claimer: "0x69FE040785513d207230334E4eC9d4c6cd4CaAEe",
+      // Stable's deployed bytecode predates the `quote` field, so launches()
+      // returns 7 values here and 8 everywhere else. Tied to the chain, not to
+      // oldPad: Arc's v1 pad is also an "old" pad but was built from the
+      // current source and returns 8.
+      legacyPadAbi: true,
     },
     features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, screener: true },
     statsFile: "stats.json",
@@ -2040,8 +2082,11 @@ const CHAINS = {
       usdt0: "0x3600000000000000000000000000000000000000",
     },
     mintd: {
-      pad: "0xd6fdA9A0Fd4b4ee724ab0c0B958a712E5bb37E96",
-      oldPad: null,
+      // v2: 80/20 creator split, 5% dev buy cap, pre-initialized pools rejected.
+      // v1 (0xd6fdA9A0…) stays live and its tokens keep v1 terms; it is listed
+      // as oldPad so existing launches still load.
+      pad: "0xcF22a3E32dE43787881b9a87B5424E34F3BF65E6",
+      oldPad: "0xd6fdA9A0Fd4b4ee724ab0c0B958a712E5bb37E96",
       mintd: null,
       mintr: "0x3e1184203B9c1760654CbEFCd111ce1185Ae57be",
       synth: null, mgld: null,
@@ -2145,6 +2190,17 @@ const PAD_ABI = [
   "function mintr() view returns (address)",
   "function launch(string, string, string, uint256) payable returns (address)",
   "function claimFees(address)",
+  // ArcLaunchpad (v2) only. The quote asset is USDC there, so these getters
+  // carry USDC names; the v1 pads have no such functions. readQuoteCfg() picks
+  // whichever pair the connected pad actually answers to.
+  "function startPriceUsdc1e18() view returns (uint256)",
+  "function usdc() view returns (address)",
+  "function buybackShareBps() view returns (uint256)",
+  "function MAX_DEV_BUY_BPS() view returns (uint256)",
+  "function MAX_DEV_BUY_TOKENS() view returns (uint256)",
+  "function maxDevBuyQuote(address) view returns (uint256)",
+  "function previewDevBuyCap(uint128, bool) pure returns (uint256)",
+  "function launchLiquidity(address) view returns (uint128)",
 ];
 const ERC20_ABI = [
   "function name() view returns (string)", "function symbol() view returns (string)",
@@ -2483,6 +2539,10 @@ async function route() {
     fuInit();
   } else if (h === "docs") {
     showView("docs");
+  } else if (h === "dev") {
+    showView("dev");
+    if (!tokens.length && padAddr()) await loadAll(); // symbols for the table
+    devLoad();
   } else if (h === "portfolio") {
     showView("portfolio");
     if (!tokens.length && padAddr()) await loadAll();
@@ -2522,12 +2582,87 @@ function applyChainUi() {
     const e = $(id);
     if (e && /USDT0/.test(e.textContent)) e.textContent = sym + " \u25BE";
   }
+  paintHeroBlurb();
+}
+
+// Split out because the creator share is read from chain after applyChainUi
+// has already run. Hardcoding 90% here printed the wrong number the moment the
+// Arc pad moved to 70/30.
+function paintHeroBlurb() {
   const hb = $("heroBlurb");
-  if (hb) hb.textContent =
+  if (!hb) return;
+  const sym = NET.chain.nativeCurrency.symbol;
+  const share = cfg && cfg.share ? Number(cfg.share) / 100 : null;
+  hb.textContent =
     `Every coin trades on a bonding curve from its very first block. The curve lives inside a `
     + `permanently locked ${sym} pool on Uniswap V3, so there is no migration and no LP withdrawal, `
-    + `ever. Coins graduate at 7,000 ${sym} in the pool. Creators claim 90% of every trading fee any time`
+    + `ever. Coins graduate at 7,000 ${sym} in the pool. `
+    + (share != null ? `Creators claim ${share}% of every trading fee any time` : `Creators claim the majority of every trading fee any time`)
+    + (devCapBps != null ? `, and no launch can dev-buy more than ${devCapBps / 100}% of supply` : "")
     + (NET.mintd.mintd ? ", and 100% of $MINTD token fees are burned." : ".");
+}
+
+// The v2 launchpad quotes in USDC and names its getters accordingly; v1 pads
+// on both chains use the USDT0 names. Neither answers to the other's name, so
+// try in order rather than branching on chain: repointing the frontend at a
+// different pad must not also require a code edit to boot.
+async function readQuoteCfg(p) {
+  try { return [await p.startPriceUsdc1e18(), await p.usdc()]; }
+  catch { return [await p.startPriceUsdt1e18(), await p.usdt0()]; }
+}
+
+// Dev buy cap, v2 only. A v1 pad has no cap and no such function, so a failed
+// read means "uncapped", not "broken", and must not surface as an error.
+let devCapBps = null, devCapTokens = null, devCapQuote = null;
+async function readDevCap() {
+  try {
+    devCapBps = Number(await pad.MAX_DEV_BUY_BPS());
+    devCapTokens = await pad.MAX_DEV_BUY_TOKENS();
+    // The cap in quote terms is identical for every launch on a given pad,
+    // because start price and supply are fixed, so it is computed once from
+    // the curve rather than per token.
+    devCapQuote = await padDevCapQuote();
+  } catch { devCapBps = devCapTokens = devCapQuote = null; }
+  paintDevCap();
+  paintHeroBlurb(); // the blurb quotes the cap, and cfg only exists by now
+}
+
+// Cost of buying the cap on a fresh launch. Derived from any existing launch's
+// liquidity, which is the same for all of them; falls back to null rather than
+// guessing if the pad has no launches yet.
+async function padDevCapQuote() {
+  try {
+    const n = Number(await pad.tokenCount());
+    if (!n) return null;
+    const t = await pad.allTokens(n - 1);
+    return await pad.maxDevBuyQuote(t);
+  } catch { return null; }
+}
+
+function paintDevCap() {
+  const e = $("lDevCap");
+  if (!e) return;
+  if (devCapBps == null) { e.style.display = "none"; return; }
+  const sym = NET.chain.nativeCurrency.symbol;
+  const pct = devCapBps / 100;
+  e.style.display = "";
+  e.innerHTML = `Max dev buy is <b>${pct}%</b> of supply`
+    + (devCapQuote != null ? `, about <b>${nf(Number(ethers.formatUnits(devCapQuote, 6)), 2)} ${esc(sym)}</b>` : "")
+    + `. Sending more than that reverts the launch. This caps the launch transaction only, `
+    + `not what a creator can buy afterwards.`;
+  checkDevCap();
+}
+
+// Warn before the wallet does. The contract reverts rather than clamping, so a
+// creator who overshoots loses the gas and the launch.
+function checkDevCap() {
+  const e = $("lDevCap"), i = $("fDev");
+  if (!e || !i || devCapQuote == null) return;
+  const v = Number(i.value || 0);
+  const cap = Number(ethers.formatUnits(devCapQuote, 6));
+  const over = v > cap;
+  e.style.color = over ? "var(--red)" : "";
+  i.style.borderColor = over ? "var(--red)" : "";
 }
 
 function init() {
@@ -2543,7 +2678,7 @@ function init() {
   // sequential, not Promise.all: four simultaneous reads at boot is exactly
   // the burst that Arc drops, and losing this leaves the fee and share
   // showing their placeholder defaults.
-  retryRead(async () => [await pad.creationFee(), await pad.creatorShareBps(), await pad.startPriceUsdt1e18(), await pad.usdt0()]).then(([f, s, p, w]) => {
+  retryRead(async () => [await pad.creationFee(), await pad.creatorShareBps(), ...(await readQuoteCfg(pad))]).then(([f, s, p, w]) => {
     cfg = { creationFee: f, share: s, startPrice: p };
     weth = new ethers.Contract(w, ERC20_ABI, rp);
     const sh = Number(s) / 100, pl = 100 - sh;
@@ -2552,6 +2687,7 @@ function init() {
     const openV = Number(ethers.formatEther(p)) * 1e9;
     $("lpOpenVal").textContent = nf(openV, 0);
     $("lpGradVal").textContent = "7,000";
+    readDevCap();
   }).catch(() => toast("Could not read launchpad. Check the address in ⚙", "err"));
 }
 
@@ -2565,7 +2701,9 @@ async function connect() {
     signer = await bp.getSigner();
     wallet = signer.address;
     $("connectBtn").textContent = short(wallet);
-    toast("Connected to Stable", "ok");
+    toast("Connected to " + NET.label, "ok"); // was hardcoded "Stable", wrong on Arc
+    devNavSync();
+    if ($("view-dev").classList.contains("on")) devLoad();
     if (cur) refreshTrade();
     if ($("view-mintswap").classList.contains("on")) swBalance();
     if ($("view-earn").classList.contains("on")) { loadFarm(); loadFeePools(); loadPools(); }
@@ -2575,6 +2713,127 @@ async function connect() {
     if ($("view-synth").classList.contains("on")) syLoad();
     if ($("view-launch").classList.contains("on")) setNativeBalTag("lDevBal", 3);
   } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+/* ------------------------------------------------------------------- dev */
+// Operator dashboard. The address list controls VISIBILITY ONLY. Every number
+// on the page is public onchain data and claimFees is permissionless for
+// everyone, so there is nothing here that would matter if the check were
+// bypassed. Do not add anything to this page that assumes otherwise.
+const DEV_ADDRS = [
+  "0x8fc933374a2c1aa6d19c5f2bda33ad0b6be9eba4", // original deployer
+  "0xe5f40204c8e921834c70b0e2631be79f076b0e28", // Safe, current owner and feeRecipient
+];
+const isDevWallet = () => !!wallet && DEV_ADDRS.includes(wallet.toLowerCase());
+
+const CLAIMER_ABI = [
+  "function previewRange(address launchpad, uint256 start, uint256 count, address quoteToken) returns (tuple(address token, address creator, uint256 creatorQuote, uint256 creatorToken, uint256 protocolQuote, uint256 protocolToken, bool ok)[])",
+  "function claimAll(address launchpad, address[] tokens) returns (uint256 claimed, uint256 failed)",
+];
+
+let dvPending = [];   // rows with something to claim
+
+function devNavSync() {
+  const b = $("nav-dev");
+  if (b) b.style.display = isDevWallet() ? "" : "none";
+}
+
+async function devLoad(force) {
+  const rows = $("dvRows"), note = $("dvNote");
+  if (!isDevWallet()) {
+    rows.innerHTML = `<div class="empty">Connect an operator wallet.</div>`;
+    return;
+  }
+  const claimer = NET.mintd.claimer;
+  if (!claimer) {
+    rows.innerHTML = `<div class="empty">FeeClaimAll is not deployed on ${esc(NET.label)} yet.</div>`;
+    note.textContent = "";
+    return;
+  }
+  if (!pad) init();
+  rows.innerHTML = `<div class="empty">Scanning…</div>`;
+  note.textContent = "Reading pending fees. This simulates a claim per token, so it takes a moment.";
+
+  try {
+    const c = new ethers.Contract(claimer, CLAIMER_ABI, rp);
+    const total = Number(await pad.tokenCount());
+    const quote = ADDR.usdt0;
+    const out = [];
+    // Chunked because preview performs a real collect per token inside the
+    // eth_call; the whole list at once exceeds the node's call gas budget.
+    for (let i = 0; i < total; i += 20) {
+      const part = await c.previewRange.staticCall(padAddr(), i, 20, quote);
+      for (const r of part) out.push(r);
+    }
+
+    const me = wallet.toLowerCase();
+    let proto = 0n, mine = 0n, n = 0;
+    dvPending = [];
+    for (const r of out) {
+      const has = r.creatorQuote > 0n || r.protocolQuote > 0n || r.creatorToken > 0n || r.protocolToken > 0n;
+      if (!has) continue;
+      n++;
+      proto += r.protocolQuote;
+      // Counted once, not twice: when the connected wallet is both the
+      // creator and the feeRecipient, both legs describe the same address.
+      if (r.creator.toLowerCase() === me) mine += r.creatorQuote;
+      dvPending.push(r);
+    }
+
+    $("dvProto").textContent = "$" + nf(Number(ethers.formatUnits(proto, 6)), 2);
+    $("dvMine").textContent = "$" + nf(Number(ethers.formatUnits(mine, 6)), 2);
+    $("dvCount").textContent = String(n);
+    $("dvScanned").textContent = String(total);
+
+    if (!n) { rows.innerHTML = `<div class="empty">Nothing pending across ${total} tokens.</div>`; note.textContent = ""; return; }
+
+    const tokName = (a) => { const t = tokens.find((x) => x.addr.toLowerCase() === a.toLowerCase()); return t ? t.sym : a.slice(0, 10) + "…"; };
+    rows.innerHTML = `<table class="dvt" style="width:100%;border-collapse:collapse">
+      <tr style="text-align:left;opacity:.6;font-size:12px">
+        <th style="padding:6px 4px">TOKEN</th><th>CREATOR</th><th>CREATOR FEES</th><th>PROTOCOL FEES</th></tr>
+      ${dvPending.map((r) => `<tr style="border-top:1px solid rgba(255,255,255,.06)">
+        <td style="padding:8px 4px"><a href="/token/${r.token}" onclick="event.preventDefault();navTo('/token/${r.token}')">$${esc(tokName(r.token))}</a></td>
+        <td style="opacity:.7">${esc(short(r.creator))}${r.creator.toLowerCase() === me ? " (you)" : ""}</td>
+        <td>$${nf(Number(ethers.formatUnits(r.creatorQuote, 6)), 4)}</td>
+        <td>$${nf(Number(ethers.formatUnits(r.protocolQuote, 6)), 4)}</td></tr>`).join("")}
+    </table>`;
+    note.innerHTML = `Claiming pays each token's creator and the protocol recipient directly. `
+      + `You only pay gas; nothing routes to the caller. `
+      + `<b>${dvPending.length}</b> token(s) have fees waiting.`;
+  } catch (e) {
+    rows.innerHTML = `<div class="empty">Scan failed: ${esc(e.shortMessage || e.message)}</div>`;
+    note.textContent = "";
+  }
+}
+
+async function devClaimAll() {
+  if (!signer) return toast("Connect a wallet first", "err");
+  const claimer = NET.mintd.claimer;
+  if (!claimer) return toast("FeeClaimAll is not deployed on this chain", "err");
+  if (!dvPending.length) return toast("Nothing pending. Rescan first.", "err");
+  const btn = $("dvClaimBtn");
+  btn.disabled = true;
+  try {
+    const c = new ethers.Contract(claimer, CLAIMER_ABI, signer);
+    // Batched: a claim touches a Uniswap position plus up to six transfers, so
+    // the whole list in one transaction runs past the block gas limit.
+    const list = dvPending.map((r) => r.token);
+    let done = 0;
+    for (let i = 0; i < list.length; i += 15) {
+      const part = list.slice(i, i + 15);
+      btn.textContent = `Claiming ${i + 1}-${i + part.length} of ${list.length}…`;
+      const tx = await c.claimAll(padAddr(), part);
+      await tx.wait();
+      done += part.length;
+    }
+    toast(`Claimed fees for ${done} token(s)`, "ok");
+    devLoad(true);
+  } catch (e) {
+    toast(e.shortMessage || e.message, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Claim all";
+  }
 }
 
 /* ------------------------------------------------------------ market data */
@@ -2626,7 +2885,7 @@ async function loadAllInner() {
     // original pad uses the legacy launches() ABI (no `quote` field).
     const jobs = [];
     for (const pa of allPads()) {
-      const abi = sameAddr(pa, OLD_PAD) ? PAD_ABI_OLD : PAD_ABI;
+      const abi = (NET.mintd.legacyPadAbi && sameAddr(pa, OLD_PAD)) ? PAD_ABI_OLD : PAD_ABI;
       const pc = new ethers.Contract(pa, abi, rp);
       try {
         const cnt = Number(await retryRead(() => pc.tokenCount()));
