@@ -1,0 +1,42 @@
+# Netlify config for mintd.money.
+#
+# This is the SECOND site built from this repo. mintd.fun is configured by the
+# netlify.toml at the repo root and publishes `frontend/`. This one is reached
+# by setting the Netlify site's base directory to `money`, which makes Netlify
+# read this file instead of the root one and treat paths as relative to here.
+#
+# Both sites rebuild on every push to main. That is harmless, and it keeps the
+# contracts, docs and deploy records in one place rather than duplicated.
+[build]
+  publish = "."
+  command = ""
+
+# Clean URLs, same reasoning as the root config: the host must answer /vaults
+# and /docs with the app rather than a 404, and status 200 rather than 301 so
+# the URL stays as the visitor typed it.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# The HTML carries live contract addresses, so a cached copy could point
+# somebody at the wrong contract. Always revalidate.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/*.png"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+# This site will hold user funds. Ask browsers to keep it on HTTPS and refuse
+# to be framed, which is the cheapest defence against a wallet-drainer iframe.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
