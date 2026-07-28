@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="mintd" />
-<meta name="description" content="Launch, trade and earn on Stable. Memecoin launchpad, MINTR reserve token, tokenized gold and yield farms." />
+<meta name="description" content="Launch, trade and earn on Stable and Arc. Memecoin launchpad, MINTR reserve token, tokenized gold and yield farms." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://rpc.stable.xyz" crossorigin />
 <link rel="dns-prefetch" href="https://api.dexscreener.com" />
@@ -1144,7 +1144,10 @@
   <!-- DISCOVER -->
   <section class="view on" id="view-discover">
     <div class="heroC">
-      <div class="badgepill"><span id="heroNet">STABLE MAINNET</span> · CREATORS KEEP <span id="heroShare">90%</span> OF FEES</div>
+      <!-- heroShare starts blank, not "90%": the share differs per chain and a
+           hardcoded default renders as a confident wrong number on Arc until
+           the real value arrives. -->
+      <div class="badgepill"><span id="heroNet">STABLE MAINNET</span> · CREATORS KEEP <span id="heroShare">–</span> OF FEES</div>
       <h1>Launch on <span id="heroChain">Stable</span> for $1.<br /><span class="g">Earn fees instantly.</span></h1>
       <p id="heroBlurb"></p>
       <div class="herobtns">
@@ -1155,7 +1158,7 @@
     </div>
 
     <div class="heroStats" style="grid-template-columns:repeat(5,1fr)">
-      <div class="hstat" id="tvlTile" title="Both sides of every pool, plus USDT0 backing MINTR and collateral locked in MGLD. Farms are not added on top: staked LP is the same liquidity as its pool.">
+      <div class="hstat" id="tvlTile" title="Both sides of every pool, plus the gas token backing MINTR and collateral locked in MGLD. Farms are not added on top: staked LP is the same liquidity as its pool.">
         <b id="stTvl" style="color:var(--green)">–</b><label>TOTAL VALUE LOCKED</label></div>
       <div class="hstat"><b id="stVolAll" style="color:var(--green2)">–</b><label>TOTAL VOLUME</label></div>
       <div class="hstat"><b id="stVol" style="color:var(--green2)">–</b><label>VOLUME 24H</label></div>
@@ -1221,7 +1224,7 @@
           <h3>Trading fees <small>1% pool fee</small></h3>
           <div class="feerow"><span>Unclaimed creator fees</span><b id="feeCreator">–<small>&nbsp;</small></b></div>
           <button class="btn" style="width:100%;margin-top:10px" id="claimBtn" onclick="claim()">Claim fees</button>
-          <div class="feenote">Creators keep 90% of every trading fee, paid straight to their wallet. Only the coin's creator can claim.</div>
+          <div class="feenote">Creators keep <b id="tShare">–</b> of every trading fee, paid straight to their wallet. Only the coin's creator can claim.</div>
         </div>
       </div>
     </div>
@@ -1301,7 +1304,7 @@
         <div class="qrow"><span>Route</span><b id="swRoute">–</b></div>
         <div class="qrow"><span>Slippage</span><b>1%</b></div>
         <button class="btn" style="width:100%;margin-top:10px" id="swBtn" onclick="doSwap()">Swap</button>
-        <div class="feenote">Routes through canonical Uniswap v3 on Stable. Pick a token or add any by address.</div>
+        <div class="feenote">Routes through Uniswap v3 on <span class="cshort">Stable</span>. Pick a token or add any by address.</div>
       </div>
     </div>
   </section>
@@ -1319,7 +1322,7 @@
         <h3 style="margin-bottom:12px">Yield calculator</h3>
         <label style="font-size:10px;color:var(--dim);font-weight:800;display:block;margin-bottom:6px">POOL</label>
         <div class="calcpools" id="calcPools"></div>
-        <label style="font-size:10px;color:var(--dim);font-weight:800;display:block;margin:12px 0 6px">INVESTED (USDT0)</label>
+        <label style="font-size:10px;color:var(--dim);font-weight:800;display:block;margin:12px 0 6px">INVESTED (<span class="qsym">USDT0</span>)</label>
         <div class="calcamt" id="calcAmtBtns">
           <button class="btn ghost" data-a="10" onclick="setCalc(10)">$10</button>
           <button class="btn ghost" data-a="100" onclick="setCalc(100)">$100</button>
@@ -1410,7 +1413,7 @@
       <div id="plList"><div class="empty">Connect wallet to see your positions.</div></div>
 
       <div style="display:flex;align-items:center;gap:10px;margin:26px 0 12px">
-        <h2>Top pools on Stable</h2>
+        <h2>Top pools on <span class="cshort">Stable</span></h2>
         <span class="live"><span class="dot"></span><span>live yield, all DEXes</span></span>
       </div>
       <div class="trade" style="padding:10px 16px">
@@ -1427,10 +1430,17 @@
       <div class="heroC" style="margin:28px auto 20px">
         <div class="badgepill">HOW IT ALL WORKS</div>
         <h1 style="font-size:42px">Docs</h1>
-        <p>Everything on mintd.fun, explained. All contracts are onchain and verifiable on stablescan.xyz. Nothing here is financial advice, and all code is unaudited: do your own research.</p>
+        <p>Everything on mintd.fun, explained. All contracts are onchain and verifiable on <span class="cexp">stablescan.xyz</span>. Nothing here is financial advice, and all code is unaudited: do your own research.</p>
       </div>
       <div class="trade docs">
-        <p class="d-toc"><b>Contents:</b> <a href="#d-start">Getting started</a> · <a href="#d-overview">Overview</a> · <a href="#d-launchpad">Launchpad</a> · <a href="#d-curve">Bonding curve &amp; graduation</a> · <a href="#d-fees">Fees</a> · <a href="#d-editing">Editing your token page</a> · <a href="#d-swap">Swap</a> · <a href="#d-pools">Pools</a> · <a href="#d-earn">Earn / farms</a> · <a href="#d-zap">Zap</a> · <a href="#d-mintr">MINTR</a> · <a href="#d-gold">Mintd Gold</a> · <a href="#d-locker">Locker</a> · <a href="#d-bridge">Bridge</a> · <a href="#d-buyback">Buyback &amp; burn</a> · <a href="#d-mintd">$MINTD</a> · <a href="#d-safety">Security</a></p>
+        <p class="d-toc"><b>Contents:</b> <a href="#d-start">Getting started</a> · <a href="#d-overview">Overview</a> · <a href="#d-launchpad">Launchpad</a> · <a href="#d-curve">Bonding curve &amp; graduation</a> · <a href="#d-fees">Fees</a><span data-chain="arc-testnet"> · <a href="#d-devbuy">Dev buy cap</a> · <a href="#d-tokenomics">Tokenomics</a></span> · <a href="#d-editing">Editing your token page</a> · <a href="#d-swap">Swap</a><span data-chain="stable"> · <a href="#d-pools">Pools</a> · <a href="#d-earn">Earn / farms</a> · <a href="#d-zap">Zap</a></span> · <a href="#d-mintr">MINTR</a><span data-chain="stable"> · <a href="#d-gold">Mintd Gold</a></span> · <a href="#d-locker">Locker</a> · <a href="#d-bridge"><span data-chain="stable">Bridge</span><span data-chain="arc-testnet">Faucet</span></a> · <a href="#d-buyback">Buyback &amp; burn</a><span data-chain="stable"> · <a href="#d-mintd">$MINTD</a></span> · <a href="#d-safety">Security</a></p>
+
+        <p data-chain="arc-testnet" style="border-left:3px solid var(--green);padding-left:12px">
+          <b>You are reading the <span class="cname">Arc Testnet</span> docs.</b> This is a test network:
+          <span class="qsym">USDC</span> here has no value, it comes free from a faucet, and the chain can be
+          reset at any time by its operators. Nothing you launch or buy here is worth money. Switch the
+          network selector to Stable for the live deployment.
+        </p>
 
         <h2 id="d-start">Getting started: how to buy</h2>
         <p>New here? This is the whole path from nothing to holding a coin, in five steps. It takes about ten minutes the first time and seconds after that.</p>
@@ -1447,16 +1457,17 @@
           <div class="gstep">
             <div class="gnum">2</div>
             <div>
-              <b>Add the Stable network</b>
-              <p>Click <b>Connect wallet</b> at the top of this site and approve the network prompt. That adds Stable (chain 988) for you. If you would rather add it by hand: RPC <span class="gmono">https://rpc.stable.xyz</span>, chain ID <span class="gmono">988</span>, currency <span class="gmono">USDT0</span>, explorer <span class="gmono">https://stablescan.xyz</span>.</p>
+              <b>Add the <span class="cshort">Stable</span> network</b>
+              <p>Click <b>Connect wallet</b> at the top of this site and approve the network prompt. That adds <span class="cname">Stable Mainnet</span> (chain <span class="cid">988</span>) for you. If you would rather add it by hand: RPC <span class="gmono crpc">https://rpc.stable.xyz</span>, chain ID <span class="gmono cid">988</span>, currency <span class="gmono qsym">USDT0</span>, explorer <span class="gmono cexp">stablescan.xyz</span>.</p>
             </div>
           </div>
 
           <div class="gstep">
             <div class="gnum">3</div>
             <div>
-              <b>Get USDT0 onto Stable</b>
-              <p>USDT0 is both the money and the gas on Stable, so you need some before anything else works. Open the <a href="/bridge" onclick="event.preventDefault();go('bridge')">Bridge</a> tab, pick whichever chain your funds are on, and follow it through. Most transfers land in seconds. Bring a little extra for gas; fees here are a fraction of a cent, so a dollar goes a very long way.</p>
+              <b>Get <span class="qsym">USDT0</span> onto <span class="cshort">Stable</span></b>
+              <p data-chain="stable">USDT0 is both the money and the gas on Stable, so you need some before anything else works. Open the <a href="/bridge" onclick="event.preventDefault();go('bridge')">Bridge</a> tab, pick whichever chain your funds are on, and follow it through. Most transfers land in seconds. Bring a little extra for gas; fees here are a fraction of a cent, so a dollar goes a very long way.</p>
+              <p data-chain="arc-testnet">USDC is both the money and the gas on Arc, so you need some before anything else works. It is free on testnet: open <a href="https://faucet.circle.com" target="_blank" rel="noopener">faucet.circle.com</a>, paste your address and claim. The faucet gives 20 USDC per address every two hours, which is plenty, since gas costs a fraction of a cent and launching a token costs 1 USDC. There is no bridge to a testnet and you should never send real funds here.</p>
             </div>
           </div>
 
@@ -1472,33 +1483,61 @@
             <div class="gnum">5</div>
             <div>
               <b>Buy it</b>
-              <p>On the token page, enter a USDT0 amount and hit <b>Buy</b>. Your wallet will ask you to confirm, and the tokens arrive in the same transaction. Selling is the same flow on the Sell tab. There is no approval step for buying with USDT0 and no minimum size.</p>
+              <p>On the token page, enter a <span class="qsym">USDT0</span> amount and hit <b>Buy</b>. Your wallet will ask you to confirm, and the tokens arrive in the same transaction. Selling is the same flow on the Sell tab. There is no approval step for buying with <span class="qsym">USDT0</span> and no minimum size.</p>
             </div>
           </div>
         </div>
 
         <p><b>A few things worth knowing before your first buy.</b> Every coin here trades on a bonding curve, so the price moves as people buy and sell, and a large order moves it more than a small one. Check the quote before confirming. Liquidity is thin on brand new coins, which means a big buy can fill several percent worse than the displayed price. Nothing on this site is reversible, and no one can undo a transaction for you.</p>
 
-        <p><b>Something not working?</b> If the site says wrong network, switch your wallet to Stable. If a transaction fails with a gas error, you need a little more USDT0 in your wallet. If balances look stale, hard refresh the page. If your wallet will not connect on mobile, open mintd.fun from inside your wallet's own browser rather than Safari or Chrome.</p>
+        <p><b>Something not working?</b> If the site says wrong network, switch your wallet to <span class="cshort">Stable</span>. If a transaction fails with a gas error, you need a little more <span class="qsym">USDT0</span> in your wallet. If balances look stale, hard refresh the page. If your wallet will not connect on mobile, open mintd.fun from inside your wallet's own browser rather than Safari or Chrome.</p>
 
         <h2 id="d-overview">Overview</h2>
-        <p>mintd.fun is a full DeFi platform on Stablechain (chain 988), where the native gas token is USDT0. It combines a memecoin launchpad, a swap aggregator, MintSwap (our own Uniswap V2 fork), yield farms, a zap tool, the MINTR reserve token, and an onchain MINTD buyback-and-burn. The platform token is $MINTD.</p>
+        <p data-chain="stable">mintd.fun is a full DeFi platform on Stablechain (chain 988), where the native gas token is USDT0. It combines a memecoin launchpad, a swap aggregator, MintSwap (our own Uniswap V2 fork), yield farms, a zap tool, the MINTR reserve token, and an onchain MINTD buyback-and-burn. The platform token is $MINTD.</p>
+        <p data-chain="arc-testnet">mintd on Arc is a memecoin launchpad on <span class="cname">Arc Testnet</span> (chain <span class="cid">5042002</span>), where the native gas token is USDC. Arc had no DEX when we arrived, so we deployed one: a full Uniswap V3 stack plus MintSwap, our own Uniswap V2 fork. On top of that sit the launchpad, the MINTR reserve token, the token locker and the Furnace. The gold engine, the farms and the $MINTD token are Stable-only for now, so those tabs are hidden here rather than shown broken.</p>
 
         <h2 id="d-launchpad">Launchpad</h2>
-        <p>Launching a token costs a small creation fee (currently 1 USDT0). Your token is a fixed 1,000,000,000 supply, immutable ERC-20 with no owner, taxes, blacklist, buy limits, or same-block restrictions. The entire supply goes straight into a single-sided token/USDT0 Uniswap V3 position (1% fee tier) in the launch transaction, so trading is live from block one. The liquidity position NFT is owned by the launchpad contract, which has no code path to withdraw liquidity: it is locked forever, verifiable onchain. You can add an image, banner and socials, all stored onchain in the token's metadata. An optional "dev buy" lets you buy the first tokens in the same launch transaction.</p>
+        <p>Launching a token costs a small creation fee (currently <b id="dFee">1</b> <span class="qsym">USDT0</span>). Your token is a fixed 1,000,000,000 supply, immutable ERC-20 with no owner, taxes, blacklist, buy limits, or same-block restrictions. The entire supply goes straight into a single-sided token/<span class="qsym">USDT0</span> Uniswap V3 position (1% fee tier) in the launch transaction, so trading is live from block one. The liquidity position NFT is owned by the launchpad contract, which has no code path to withdraw liquidity: it is locked forever, verifiable onchain. You can add an image, banner and socials, all stored onchain in the token's metadata. An optional "dev buy" lets you buy the first tokens in the same launch transaction.</p>
+        <p data-chain="arc-testnet">Every launch here starts at the same valuation: 1,000,000,000 tokens at $0.000003 each, a <b>$3,000 starting market cap</b>, fixed in dollars rather than floating with a volatile gas token. Nobody gets a cheaper entry than anybody else.</p>
 
         <h2 id="d-curve">Bonding curve &amp; graduation</h2>
-        <p>Because the whole supply sits in a one-sided Uniswap V3 range, each token trades on a constant-product bonding curve from its first block: buying raises the price along the curve, selling lowers it. There is no separate "curve then migrate" step, the curve <em>is</em> the locked DEX pool. A token shows "graduated" once its pool holds 7,000 USDT0, which is a cosmetic milestone, the liquidity never migrates or unlocks.</p>
+        <p>Because the whole supply sits in a one-sided Uniswap V3 range, each token trades on a constant-product bonding curve from its first block: buying raises the price along the curve, selling lowers it. There is no separate "curve then migrate" step, the curve <em>is</em> the locked DEX pool. A token shows "graduated" once its pool holds 7,000 <span class="qsym">USDT0</span>, which is a cosmetic milestone, the liquidity never migrates or unlocks.</p>
 
         <h2 id="d-fees">Fees</h2>
-        <p>Every trade on a launched token pays the Uniswap 1% pool fee. That fee accrues to the locked position and is split: creators claim 90%, the platform takes 10%. Anyone can trigger a claim, which pays both shares straight to their wallets. 100% of the $MINTD token-side fees are burned. There is a flat creation fee per launch and a small platform fee on some other actions.</p>
+        <p data-chain="stable">Every trade on a launched token pays the Uniswap 1% pool fee. That fee accrues to the locked position and is split: creators claim 90%, the platform takes 10%. Anyone can trigger a claim, which pays both shares straight to their wallets. 100% of the $MINTD token-side fees are burned. There is a flat creation fee per launch and a small platform fee on some other actions.</p>
+        <div data-chain="arc-testnet">
+          <p>Every trade on a launched token pays the Uniswap 1% pool fee. That fee accrues to the locked position and is split three ways, on chain, by the launchpad itself:</p>
+          <table style="width:100%;border-collapse:collapse;margin:10px 0">
+            <tr style="text-align:left;font-size:12px;opacity:.6"><th style="padding:6px 4px">DESTINATION</th><th>SHARE OF THE POOL FEE</th><th>SHARE OF TRADE VOLUME</th></tr>
+            <tr style="border-top:1px solid rgba(255,255,255,.08)"><td style="padding:8px 4px">Creator</td><td><b>80%</b></td><td>0.80%</td></tr>
+            <tr style="border-top:1px solid rgba(255,255,255,.08)"><td style="padding:8px 4px">Buyback and burn</td><td><b>16%</b></td><td>0.16%</td></tr>
+            <tr style="border-top:1px solid rgba(255,255,255,.08)"><td style="padding:8px 4px">Operations</td><td><b>4%</b></td><td>0.04%</td></tr>
+          </table>
+          <p>Anyone can trigger a claim, and the shares always go to the same three places no matter who calls it. You can read the split off the contract: <span class="gmono">creatorShareBps</span> is 8000 and <span class="gmono">buybackShareBps</span> is 8000 of the remaining 20%.</p>
+        </div>
+
+        <div data-chain="arc-testnet">
+          <h2 id="d-devbuy">Dev buy cap</h2>
+          <p>A creator may buy their own token in the launch transaction, but no more than <b>5% of supply</b>. On the launch curve that works out to about <b>159.47 <span class="qsym">USDC</span></b>, and the launch page shows the exact figure before you sign. Send more than that and the launch reverts rather than being silently trimmed.</p>
+          <p>The cap is enforced on the number of tokens actually received, not on the amount spent, so it cannot drift as the price math changes.</p>
+          <p><b>What this does not do.</b> It bounds the buy the launchpad performs, and nothing more. A creator can buy more in the very next transaction, from another wallet, or from a contract in the same transaction. It is a guardrail against the default path being abused, not a promise about how much of a supply a team ends up holding. Always check holder distribution yourself.</p>
+        </div>
+
+        <div data-chain="arc-testnet">
+          <h2 id="d-tokenomics">Tokenomics</h2>
+          <p>The protocol keeps 20% of pool fees. Of that, 80% is earmarked for buying and burning a platform token, and 20% funds infrastructure and the team. That works out to 16% and 4% of every pool fee respectively, and both destinations are addresses stored in the launchpad, so the routing is verifiable rather than a promise on a web page.</p>
+          <p><b>Being straight with you about the current state:</b> there is no mintd token on Arc yet. Until one exists there is nothing for a buyback to buy, so the buyback address currently points at the same wallet as operations, and <b>100% of protocol fees fund operations today</b>. When a token launches here, the buyback share will be repointed at a contract that can only do one thing with what it receives: buy that token and send it to the dead address.</p>
+          <p>The intended end state is a buyback that runs as a time-weighted average, executing a slice at a time on a fixed schedule rather than in one block, with a permissionless trigger and no owner, no withdrawal and no pause. That contract is written but not deployed. Until it is, do not treat the buyback as live, because it is not.</p>
+        </div>
 
         <h2 id="d-editing">Editing your token page</h2>
         <p>Launch metadata is written onchain and is immutable, so it can never be edited in place. Instead, creators can publish an overlay through the meta registry contract: connect the wallet you launched with, open your token's page, and an "Edit page" button appears. You can update the bio, X, Telegram, website, and the logo and banner images. The registry checks against the launchpad that you really are that token's creator, so nobody else can touch your page. Updates cost only gas, take effect immediately, and can be changed or cleared any time. The original launch metadata stays onchain forever underneath.</p>
 
         <h2 id="d-swap">Swap</h2>
-        <p>The Swap tab routes any token on Stable through the canonical Uniswap V3 deployment. It quotes every fee tier plus two-hop routes through USDT0 and picks the best output, with 1% slippage protection. Common tokens (USDT0, WgUSDT, MINTD) are pinned; any other token can be added by contract address.</p>
+        <p data-chain="stable">The Swap tab routes any token on Stable through the canonical Uniswap V3 deployment. It quotes every fee tier plus two-hop routes through USDT0 and picks the best output, with 1% slippage protection. Common tokens (USDT0, WgUSDT, MINTD) are pinned; any other token can be added by contract address.</p>
+        <p data-chain="arc-testnet">The Swap tab routes any token on Arc through the Uniswap V3 deployment we put there. It quotes every fee tier plus two-hop routes through USDC and picks the best output, with 1% slippage protection. USDC and MINTR are pinned; any other token can be added by contract address.</p>
 
+        <div data-chain="stable">
         <h2 id="d-pools">Pools</h2>
         <p>MintSwap is our own Uniswap V2 deployment. Liquidity providers earn 0.3% of every swap through their pool, proportional to their share. Everything pool-related now lives on the Earn tab: trading-fee pools with one-click zap in, your LP positions with add and remove liquidity, and the farms below. Typing one side of a manual add auto-fills the other at the live pool ratio, so deposits cannot be rejected for being mismatched.</p>
 
@@ -1507,30 +1546,39 @@
 
         <h2 id="d-zap">Zap</h2>
         <p>Zap lets you enter a farm with USDT0 only, in one flow that also stakes the LP for you. For the USDT0/WgUSDT pool it wraps part of your USDT0 into WgUSDT at 1:1, so there is zero slippage. For other pools it routes the swap through canonical Uniswap's deep liquidity to avoid price impact, then pairs and stakes. A price-impact guard blocks any risky zap before it happens.</p>
+        </div>
 
         <h2 id="d-mintr">MINTR</h2>
-        <p>MINTR is a fully-backed reserve token. Its contract holds a USDT0 reserve and prices MINTR at reserve divided by supply (the backing per token). You buy with USDT0 (mints MINTR) and sell MINTR back (burns it, pays USDT0). Buy and sell each take a small tax that stays in the reserve while tokens are burned on sale, so the backing per token is mathematically non-decreasing, and MINTR is always fully backed 1:1. Honest note: the <em>contract price</em> only rising is not a promise of profit. Your gains come from other people's volume, it is a bonding curve (you redeem at the current backing minus tax, and mass exit shrinks the reserve), and the team can never withdraw the backing. A MintSwap MINTR/USDT0 pool also exists so arbitrage keeps the market price near the contract price; always redeem at the contract for the true value.</p>
+        <p>MINTR is a fully-backed reserve token. Its contract holds a <span class="qsym">USDT0</span> reserve and prices MINTR at reserve divided by supply (the backing per token). You buy with <span class="qsym">USDT0</span> (mints MINTR) and sell MINTR back (burns it, pays <span class="qsym">USDT0</span>). Buy and sell each take a small tax that stays in the reserve while tokens are burned on sale, so the backing per token is mathematically non-decreasing, and MINTR is always fully backed 1:1. Honest note: the <em>contract price</em> only rising is not a promise of profit. Your gains come from other people's volume, it is a bonding curve (you redeem at the current backing minus tax, and mass exit shrinks the reserve), and the team can never withdraw the backing. <span data-chain="stable">A MintSwap MINTR/USDT0 pool also exists so arbitrage keeps the market price near the contract price; always redeem at the contract for the true value.</span></p>
 
+        <div data-chain="stable">
         <h2 id="d-gold">Mintd Gold ($MGLD)</h2>
         <p>$MGLD gives you gold exposure onchain without custody, paperwork or market hours. It is a collateralized debt position: you lock USDT0 as collateral and mint $MGLD against it, priced by RedStone's onchain gold feed (XAUt/USD). Every $MGLD in existence is backed by more USDT0 than it is worth, which is what keeps the system solvent.</p>
         <p>The rules: you must stay above 150% collateral to mint, and if gold rises enough that your position falls below 130%, anyone can liquidate part of it, repaying your debt and seizing collateral at a 10% discount. A 0.5% mint fee is charged in collateral and sent to the BuybackBurner, so <b>every $MGLD minted buys and burns $MINTD</b>. Repaying debt and withdrawing collateral can never be paused, and there is no admin function anywhere that can touch your collateral. Oracle guards reject stale prices and implausible jumps, and minting pauses rather than using a bad price. There is also a small MGLD/USDT0 pool so you can buy it without opening a position, though minting has no slippage and no limit while the pool is thin.</p>
         <p>Honest note: $MGLD tracks a gold price feed. It is not redeemable for physical gold and gives you no claim on any metal. If gold rises against your position you can be liquidated and lose collateral.</p>
+        </div>
 
         <h2 id="d-locker">Locker</h2>
-        <p>The Locker lets anyone lock any token on Stable until a date they choose: teams locking supply, LPs locking LP tokens, holders proving they are not selling. Locks can be extended but never shortened, only the lock owner can withdraw and only after the unlock time, and there is no admin path to locked tokens. Every active lock is public, with total value locked and per-lock details, so anyone can verify a project's claims. A small flat fee applies per lock.</p>
+        <p>The Locker lets anyone lock any token on <span class="cshort">Stable</span> until a date they choose: teams locking supply, LPs locking LP tokens, holders proving they are not selling. Locks can be extended but never shortened, only the lock owner can withdraw and only after the unlock time, and there is no admin path to locked tokens. Every active lock is public, with total value locked and per-lock details, so anyone can verify a project's claims. A small flat fee applies per lock.</p>
         <p>Separately, Uniswap V3 liquidity positions can be locked <em>permanently</em> in a dedicated locker contract that keeps trading fees claimable by the position's beneficiary forever. The liquidity itself can never be withdrawn by anyone, including us. This is the same guarantee the launchpad gives its own pools, made available to positions created outside it.</p>
 
-        <h2 id="d-bridge">Bridge</h2>
-        <p>Everything here trades in USDT0, the gas token on Stable. The Bridge tab routes you to Relay, an intent network in Stable's ecosystem, with your source chain preselected. Solvers deliver USDT0 on Stable and settle the source side themselves, so most transfers land in seconds and Solana works natively. Ethereum, Base, Solana, Arbitrum and 80+ other chains are supported. mintd does not run a bridge and never takes custody of your funds.</p>
+        <h2 id="d-bridge"><span data-chain="stable">Bridge</span><span data-chain="arc-testnet">Faucet</span></h2>
+        <p data-chain="stable">Everything here trades in USDT0, the gas token on Stable. The Bridge tab routes you to Relay, an intent network in Stable's ecosystem, with your source chain preselected. Solvers deliver USDT0 on Stable and settle the source side themselves, so most transfers land in seconds and Solana works natively. Ethereum, Base, Solana, Arbitrum and 80+ other chains are supported. mintd does not run a bridge and never takes custody of your funds.</p>
+        <p data-chain="arc-testnet">There is no bridge to Arc Testnet, and there should not be: testnet USDC is not real money and nothing here is worth bridging for. Get it free from <a href="https://faucet.circle.com" target="_blank" rel="noopener">faucet.circle.com</a>, which hands out 20 USDC per address every two hours. That is enough for twenty launches or a great deal of trading, since gas costs a fraction of a cent. Never send funds from a mainnet to this chain.</p>
 
         <h2 id="d-buyback">Buyback &amp; burn</h2>
-        <p>MINTR's platform fee accumulates as USDT0 in a permissionless BuybackBurner contract. Anyone can trigger it: the contract market-buys $MINTD with the collected USDT0 and sends it straight to the dead address. It has no owner and no withdrawal, its only possible action is to buy and burn MINTD. This turns MINTR trading volume into real, verifiable MINTD buy pressure and supply reduction.</p>
+        <p data-chain="stable">MINTR's platform fee accumulates as USDT0 in a permissionless BuybackBurner contract. Anyone can trigger it: the contract market-buys $MINTD with the collected USDT0 and sends it straight to the dead address. It has no owner and no withdrawal, its only possible action is to buy and burn MINTD. This turns MINTR trading volume into real, verifiable MINTD buy pressure and supply reduction.</p>
+        <p data-chain="arc-testnet">The design is a contract that holds collected USDC and can do exactly one thing with it: buy the platform token and send it to the dead address. No owner, no withdrawal, no pause, and anyone can trigger it. <b>It is not running on Arc yet</b>, because there is no platform token here to buy. See Tokenomics above for what is actually happening to protocol fees today.</p>
+        <p data-chain="arc-testnet">Separately, the <a href="/burn" onclick="event.preventDefault();go('burn')">Furnace</a> is live and does work: send any token to it and it is burned to the dead address, with running totals kept in contract storage so the record survives the RPC pruning its logs.</p>
 
+        <div data-chain="stable">
         <h2 id="d-mintd">$MINTD</h2>
         <p>$MINTD is the platform token, launched through the launchpad itself as token #0 with permanently locked liquidity. Its value is tied to platform activity: 100% of its token-side trading fees are burned, and the buyback-and-burn converts platform revenue into MINTD buys and burns. The live burn counter on the homepage reads the dead-address balance directly.</p>
+        </div>
 
         <h2 id="d-safety">Security &amp; disclaimers</h2>
-        <p>All launched tokens are immutable with no owner or mint function; launchpad liquidity is locked with no withdraw path; the buyback contract has no admin; MINTR's backing can never be withdrawn by the team. That said, all of this code is <b>unaudited</b>. Locked liquidity and verified source protect against rug-pulls, not against bugs. Crypto is risky, prices go up and down, and nothing here is financial or legal advice. Verify every contract on stablescan.xyz and do your own research before using real funds.</p>
+        <p>All launched tokens are immutable with no owner or mint function; launchpad liquidity is locked with no withdraw path; the buyback contract has no admin; MINTR's backing can never be withdrawn by the team. That said, all of this code is <b>unaudited</b>. Locked liquidity and verified source protect against rug-pulls, not against bugs. Crypto is risky, prices go up and down, and nothing here is financial or legal advice. Verify every contract on <span class="cexp">stablescan.xyz</span> and do your own research before using real funds.</p>
+        <p data-chain="arc-testnet"><b>Specific to Arc:</b> this is a test network. The chain can be reset, tokens here are worth nothing, and the launchpad owner is a plain deployer key rather than a multisig. Treat everything on it as a demo. The launchpad, MINTR, the locker, the V3 position locker, the metadata registry and the Furnace are all source-verified on <span class="cexp">testnet.arcscan.app</span>; the Uniswap and WETH contracts underneath are stock builds from npm and are not verified there.</p>
       </div>
     </div>
   </section>
@@ -1542,7 +1590,7 @@
         <img class="mintr-logo" src="mintr.png" alt="MINTR" onerror="this.remove()" />
         <div class="badgepill">FULLY BACKED BY <span class="qsym">USDT0</span></div>
         <h1 style="font-size:44px">$MINTR<br /><span class="g">only goes up.</span></h1>
-        <p>MINTR is 100% backed by a USDT0 reserve. Every buy and sell pays a small tax that stays in the reserve while tokens are burned, so the backing per token can only rise. Buy and sell straight from the contract at the backing price.</p>
+        <p>MINTR is 100% backed by a <span class="qsym">USDT0</span> reserve. Every buy and sell pays a small tax that stays in the reserve while tokens are burned, so the backing per token can only rise. Buy and sell straight from the contract at the backing price.</p>
       </div>
 
       <!-- the number that matters, full precision, above everything else -->
@@ -1604,11 +1652,11 @@
         <div class="qrow"><span>Fees collected, ready to burn</span><b id="bbPending">–</b></div>
         <div class="qrow"><span>Total MINTD bought &amp; burned</span><b id="bbBurned">–</b></div>
         <button class="btn" style="width:100%;margin-top:10px" id="bbBtn" onclick="triggerBurn()">Trigger buyback &amp; burn</button>
-        <div class="feenote" style="margin-top:6px">MINTR's platform fee accumulates here as USDT0. Anyone can trigger the burn: it market-buys MINTD and sends it to the dead address forever. No admin, no withdrawal, fully onchain.</div>
+        <div class="feenote" style="margin-top:6px">MINTR's platform fee accumulates here as <span class="qsym">USDT0</span>. Anyone can trigger the burn: it market-buys MINTD and sends it to the dead address forever. No admin, no withdrawal, fully onchain.</div>
       </div>
 
       <div class="trade" style="margin-top:16px;font-size:12.5px;color:var(--dim);line-height:1.6">
-        <b style="color:var(--ink)">Honest facts.</b> The contract price (backing ÷ supply) only rises, and MINTR is always fully backed 1:1 by USDT0 you can redeem. It is not a promise of profit: your gains come from other people's trading volume, it is a bonding curve (you redeem at the current backing minus tax, and mass exit shrinks the reserve), and the team can never withdraw the backing. There is also a MintSwap MINTR/USDT0 pool where the market price can briefly deviate; arbitrage keeps it aligned. Unaudited. DYOR.
+        <b style="color:var(--ink)">Honest facts.</b> The contract price (backing ÷ supply) only rises, and MINTR is always fully backed 1:1 by <span class="qsym">USDT0</span> you can redeem. It is not a promise of profit: your gains come from other people's trading volume, it is a bonding curve (you redeem at the current backing minus tax, and mass exit shrinks the reserve), and the team can never withdraw the backing. There is also a MintSwap MINTR/<span class="qsym">USDT0</span> pool where the market price can briefly deviate; arbitrage keeps it aligned. Unaudited. DYOR.
       </div>
     </div>
   </section>
@@ -1716,13 +1764,13 @@
       <div class="heroC" style="margin:30px auto 22px">
         <div class="badgepill">PERMANENT · IRREVERSIBLE</div>
         <h1 style="font-size:44px">The <span class="g">furnace.</span></h1>
-        <p>Send any token to the dead address and it is gone for good. Supply drops, nobody can spend it, and there is no key anywhere that reverses it. Works with any ERC-20 on Stable, whether or not it launched here.</p>
+        <p>Send any token to the dead address and it is gone for good. Supply drops, nobody can spend it, and there is no key anywhere that reverses it. Works with any ERC-20 on <span class="cshort">Stable</span>, whether or not it launched here.</p>
       </div>
 
       <div class="lform" style="margin-bottom:18px">
         <div class="infield">
           <div class="inhead"><span>TOKEN ADDRESS</span></div>
-          <input id="fuAddr" placeholder="0x… any ERC-20 on Stable" oninput="fuLookup()" style="width:100%" />
+          <input id="fuAddr" placeholder="0x… any ERC-20" oninput="fuLookup()" style="width:100%" />
         </div>
         <div id="fuInfo" class="fuinfo">Paste a token address to begin.</div>
 
@@ -1753,9 +1801,9 @@
   <section class="view" id="view-bridge">
     <div class="launchC" style="max-width:620px">
       <div class="heroC" style="margin:30px auto 22px">
-        <div class="badgepill">GET USDT0 ON STABLE</div>
-        <h1 style="font-size:44px">Bridge to<br /><span class="g">Stable.</span></h1>
-        <p>Everything on mintd trades in USDT0, the gas token on Stable. Pick where your funds are now and we'll route you through Relay, which lands most transfers in seconds.</p>
+        <div class="badgepill">GET <span class="qsym">USDT0</span> ON <span class="cshort">STABLE</span></div>
+        <h1 style="font-size:44px">Bridge to<br /><span class="g"><span class="cshort">Stable</span>.</span></h1>
+        <p>Everything on mintd trades in <span class="qsym">USDT0</span>, the gas token on <span class="cshort">Stable</span>. Pick where your funds are now and we'll route you through Relay, which lands most transfers in seconds.</p>
       </div>
 
       <div class="chips" id="brChips" style="margin-bottom:16px">
@@ -1780,13 +1828,13 @@
       <div class="heroC" style="margin:30px auto 22px">
         <div class="badgepill">ONCHAIN TOKEN LOCKS</div>
         <h1 style="font-size:44px">Lock it.<br /><span class="g">Prove it.</span></h1>
-        <p>Lock any token on Stable until a date you choose. Devs lock team supply, LPs lock LP tokens, holders prove diamond hands. Locks can be extended but never shortened, and nobody, not even us, can touch them early.</p>
+        <p>Lock any token on <span class="cshort">Stable</span> until a date you choose. Devs lock team supply, LPs lock LP tokens, holders prove diamond hands. Locks can be extended but never shortened, and nobody, not even us, can touch them early.</p>
       </div>
 
       <div class="trade" id="lkCard">
         <div style="font-weight:800;font-size:14px;margin-bottom:8px"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> Create a lock</div>
         <label style="font-size:10px;color:var(--dim);font-weight:800;display:block;margin-bottom:6px">TOKEN CONTRACT</label>
-        <input id="lkToken" placeholder="0x… (any ERC-20 on Stable)" style="width:100%" oninput="lkTokenInput()" />
+        <input id="lkToken" placeholder="0x… (any ERC-20)" style="width:100%" oninput="lkTokenInput()" />
         <div class="qrow" style="margin-top:6px"><span>Token</span><b id="lkTokInfo">–</b></div>
         <div class="paylbl" style="margin-top:10px"><span>Amount</span><span><span class="bal" id="lkBal">Bal: –</span><span class="maxb" onclick="useMax('lkBal','lkAmt')">MAX</span></span></div>
         <div class="amtbox"><input id="lkAmt" type="number" min="0" step="any" placeholder="0.0" /><span id="lkSym">TOKEN</span></div>
@@ -1854,13 +1902,13 @@
   <section class="view" id="view-launch">
     <div class="launchC">
       <div class="heroC" style="margin:36px auto 34px">
-        <div class="badgepill">YOU KEEP <span id="bShare">90%</span> OF TRADING FEES</div>
+        <div class="badgepill">YOU KEEP <span id="bShare">–</span> OF TRADING FEES</div>
         <h1>Mint it. Lock it.<br /><span class="g">Get paid.</span></h1>
         <p>
-          One transaction puts your fixed 1B supply on a bonding curve inside a locked USDT0 pool on Uniswap V3, tradable instantly.
-          Markets open at <b id="lpOpenVal">3,000</b> USDT0 and graduate at <b id="lpGradVal">7,000</b> USDT0 in the pool.
+          One transaction puts your fixed 1B supply on a bonding curve inside a locked <span class="qsym">USDT0</span> pool on Uniswap V3, tradable instantly.
+          Markets open at <b id="lpOpenVal">3,000</b> <span class="qsym">USDT0</span> and graduate at <b id="lpGradVal">7,000</b> <span class="qsym">USDT0</span> in the pool.
           The position belongs to the factory contract, which has no code path to withdraw it. Verify it onchain.
-          Every trade pays a 1% fee and 90% of it is yours to claim, any time, forever.
+          Every trade pays a 1% fee and <b id="lShare">–</b> of it is yours to claim, any time, forever.
         </p>
       </div>
       <div class="lform">
@@ -1880,7 +1928,7 @@
           <div class="field"><label>BANNER URL (IF NO UPLOAD)</label><input id="fBanUrl" placeholder="https://…" /></div>
         </div>
         <div class="frow">
-          <div class="field"><label>NAME</label><input id="fName" placeholder="Stable Cat" /></div>
+          <div class="field"><label>NAME</label><input id="fName" placeholder="Doge Cat" /></div>
           <div class="field"><label>TICKER</label><input id="fTicker" placeholder="SCAT" /></div>
         </div>
         <div class="field"><label>DESCRIPTION</label><textarea id="fDesc" placeholder="What's the lore?"></textarea></div>
@@ -1974,7 +2022,7 @@
 <div class="modal" id="settings">
   <div class="mbox">
     <h3>Settings</h3>
-    <div class="field"><label>LAUNCHPAD CONTRACT (Stable Mainnet)</label><input id="setAddr" placeholder="0x…" /></div>
+    <div class="field"><label>LAUNCHPAD CONTRACT (<span class="cname">Stable Mainnet</span>)</label><input id="setAddr" placeholder="0x…" /></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn ghost" onclick="document.getElementById('settings').classList.remove('on')">Close</button>
       <button class="btn" onclick="saveSettings()">Save</button>
@@ -2099,7 +2147,9 @@ const CHAINS = {
     },
     // No gold engine and no MINTD token on Arc yet, so those pages are hidden
     // rather than shown broken.
-    features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true, screener: true },
+    // No bridge to a testnet: funds come from the faucet, and offering a
+    // bridge here invites someone to send real money to a throwaway chain.
+    features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true, screener: true, bridge: false },
     statsFile: null,   // no indexer running against Arc yet
     faucet: "https://faucet.circle.com",
     // Arc accepts batches and then rate limits them: a batch of 8 returns one
@@ -2322,7 +2372,12 @@ let tokens = [], filter = "all", sort = "mcap", pairFilter = "all", isBuy = true
 // and every filter change rebuilt all of it.
 let page = 0;
 const PAGE_SIZE = 24;
+// Placeholders so the first render has something to divide by. cfgLoaded stays
+// false until the real values arrive, because these numbers are indistinguishable
+// from real ones once printed: the 8000 here reads as a true "creators keep 80%"
+// on a chain that is actually 90/10, and did.
 let cfg = { share: 8000n, startPrice: 3000000000000n, creationFee: 0n };
+let cfgLoaded = false;
 const gradTarget = () => E(7000); // graduation badge at 7,000 USDT0 in the pool
 // $MINTD is permanently graduated. Graduation never reverses once reached.
 const FORCE_GRADUATED = [
@@ -2502,7 +2557,7 @@ async function route() {
     const addr = h.slice(6);
     if (!tokens.find((t) => t.addr.toLowerCase() === addr.toLowerCase())) await loadAll();
     renderToken(addr);
-  } else if (h === "launch") { showView("launch"); setNativeBalTag("lDevBal", 3); }
+  } else if (h === "launch") { showView("launch"); setNativeBalTag("lDevBal", 3); ensureDevCapQuote(); }
   else if (h === "mintswap") {
     showView("mintswap");
     if (!tokens.length && padAddr()) await loadAll();
@@ -2561,7 +2616,7 @@ function applyChainUi() {
   // broken: Arc has no gold engine and no MINTD, so those read as failures.
   const map = { "nav-launch": "launch", "nav-mintswap": "swap", "nav-earn": "earn",
                 "nav-mintr": "mintr", "nav-synth": "gold", "nav-locker": "locker", "nav-burn": "burn",
-                "nav-screener": "screener" };
+                "nav-screener": "screener", "nav-bridge": "bridge" };
   for (const [id, feat] of Object.entries(map)) {
     const b = $(id);
     if (b) b.style.display = NET.features[feat] === false ? "none" : "";
@@ -2573,9 +2628,7 @@ function applyChainUi() {
   const sym = NET.chain.nativeCurrency.symbol;
   const hn = $("heroNet"); if (hn) hn.textContent = NET.chain.chainName.toUpperCase();
   const hc = $("heroChain"); if (hc) hc.textContent = NET.short;
-  // The quote asset is USDT0 on Stable and USDC on Arc. Left hardcoded, the
-  // trade widget offers to spend a token that does not exist on the chain.
-  document.querySelectorAll(".qsym").forEach((e) => { e.textContent = sym; });
+  applyChainCopy();
   document.querySelectorAll(".chainpill").forEach((e) => { e.textContent = NET.short.toUpperCase(); });
   for (const id of ["paySym", "mrPaySym"]) { const e = $(id); if (e) e.textContent = sym; }
   for (const id of ["swIn", "plA"]) {
@@ -2585,14 +2638,53 @@ function applyChainUi() {
   paintHeroBlurb();
 }
 
+// Chain-specific copy, applied to the whole document rather than patched at
+// each call site. Prose that names USDT0, Stable, chain 988 or stablescan is
+// simply wrong on Arc, and there is too much of it to keep in sync by hand.
+//
+//   <span class="qsym">   quote and gas token symbol   USDT0 / USDC
+//   <span class="cname">  full chain name              Stable Mainnet / Arc Testnet
+//   <span class="cshort"> short name                   Stable / Arc
+//   <span class="cid">    chain id, decimal            988 / 5042002
+//   <span class="cexp">   explorer host                stablescan.xyz / testnet.arcscan.app
+//   <span class="crpc">   rpc url
+//
+// Whole blocks that only apply to one chain carry data-chain="stable" or
+// data-chain="arc-testnet" (comma-separated for several). Prefix with ! to
+// invert. A block for a chain you are not on is removed from the flow, not
+// just dimmed, so the docs read continuously either way.
+function applyChainCopy() {
+  const set = (cls, val) => document.querySelectorAll("." + cls).forEach((e) => { e.textContent = val; });
+  const explorer = (NET.chain.blockExplorerUrls && NET.chain.blockExplorerUrls[0]) || "";
+  let host = explorer;
+  try { host = new URL(explorer).host; } catch {}
+
+  set("qsym", NET.chain.nativeCurrency.symbol);
+  set("cname", NET.chain.chainName);
+  set("cshort", NET.short);
+  set("cid", String(parseInt(NET.chain.chainId, 16)));
+  set("cexp", host);
+  set("crpc", (NET.chain.rpcUrls && NET.chain.rpcUrls[0]) || "");
+
+  document.querySelectorAll("[data-chain]").forEach((e) => {
+    const spec = e.getAttribute("data-chain");
+    const neg = spec.startsWith("!");
+    const list = (neg ? spec.slice(1) : spec).split(",").map((s) => s.trim());
+    const hit = list.includes(CHAIN_KEY);
+    e.style.display = (neg ? !hit : hit) ? "" : "none";
+  });
+}
+
 // Split out because the creator share is read from chain after applyChainUi
 // has already run. Hardcoding 90% here printed the wrong number the moment the
-// Arc pad moved to 70/30.
+// Arc pad moved to 80/20.
 function paintHeroBlurb() {
   const hb = $("heroBlurb");
   if (!hb) return;
   const sym = NET.chain.nativeCurrency.symbol;
-  const share = cfg && cfg.share ? Number(cfg.share) / 100 : null;
+  // Only quote a percentage once it has actually been read. The placeholder
+  // would otherwise print a confident, wrong number.
+  const share = cfgLoaded && cfg && cfg.share ? Number(cfg.share) / 100 : null;
   hb.textContent =
     `Every coin trades on a bonding curve from its very first block. The curve lives inside a `
     + `permanently locked ${sym} pool on Uniswap V3, so there is no migration and no LP withdrawal, `
@@ -2615,27 +2707,43 @@ async function readQuoteCfg(p) {
 // read means "uncapped", not "broken", and must not surface as an error.
 let devCapBps = null, devCapTokens = null, devCapQuote = null;
 async function readDevCap() {
+  // Two separate reads, each retried on its own. A v1 pad genuinely has no cap
+  // and MAX_DEV_BUY_BPS reverts every time, which is a real answer, not a
+  // failure. But Arc rate-limits the boot burst, so a single attempt also
+  // fails transiently, and one bare catch cannot tell those apart: the cap
+  // silently vanished from the UI on a chain that has one. Retry first, and
+  // only then treat a failure as "no cap".
   try {
-    devCapBps = Number(await pad.MAX_DEV_BUY_BPS());
-    devCapTokens = await pad.MAX_DEV_BUY_TOKENS();
-    // The cap in quote terms is identical for every launch on a given pad,
-    // because start price and supply are fixed, so it is computed once from
-    // the curve rather than per token.
-    devCapQuote = await padDevCapQuote();
-  } catch { devCapBps = devCapTokens = devCapQuote = null; }
+    devCapBps = Number(await retryRead(() => pad.MAX_DEV_BUY_BPS()));
+    devCapTokens = await retryRead(() => pad.MAX_DEV_BUY_TOKENS());
+  } catch { devCapBps = devCapTokens = null; }
+
+  // Paint the percentage as soon as it is known. The quote-denominated figure
+  // needs three more chain reads and is fetched lazily when the launch page is
+  // actually opened, rather than competing with the boot burst for an RPC that
+  // rate-limits it.
   paintDevCap();
-  paintHeroBlurb(); // the blurb quotes the cap, and cfg only exists by now
+  paintHeroBlurb();
 }
 
-// Cost of buying the cap on a fresh launch. Derived from any existing launch's
-// liquidity, which is the same for all of them; falls back to null rather than
-// guessing if the pad has no launches yet.
+// Fills in the USDC figure on demand. Safe to call repeatedly.
+let devCapQuotePending = null;
+async function ensureDevCapQuote() {
+  if (devCapBps == null || devCapQuote != null) return;
+  if (!devCapQuotePending) devCapQuotePending = padDevCapQuote().finally(() => { devCapQuotePending = null; });
+  devCapQuote = await devCapQuotePending;
+  paintDevCap();
+}
+
+// Cost of buying the cap on a fresh launch, derived from an existing launch's
+// liquidity. Null only when the pad has no launches yet to read it from, which
+// is a legitimate state on a freshly deployed pad.
 async function padDevCapQuote() {
   try {
-    const n = Number(await pad.tokenCount());
+    const n = Number(await retryRead(() => pad.tokenCount()));
     if (!n) return null;
-    const t = await pad.allTokens(n - 1);
-    return await pad.maxDevBuyQuote(t);
+    const t = await retryRead(() => pad.allTokens(n - 1));
+    return await retryRead(() => pad.maxDevBuyQuote(t));
   } catch { return null; }
 }
 
@@ -2680,10 +2788,16 @@ function init() {
   // showing their placeholder defaults.
   retryRead(async () => [await pad.creationFee(), await pad.creatorShareBps(), ...(await readQuoteCfg(pad))]).then(([f, s, p, w]) => {
     cfg = { creationFee: f, share: s, startPrice: p };
+    cfgLoaded = true;
+    paintHeroBlurb(); // it quotes the creator share, which only just became real
     weth = new ethers.Contract(w, ERC20_ABI, rp);
     const sh = Number(s) / 100, pl = 100 - sh;
     $("heroShare").textContent = sh + "%"; $("bShare").textContent = sh + "%";
+    // Every place the creator share is quoted in prose. Each one was hardcoded
+    // to 90% and read as fact on a chain that pays 80%.
+    for (const id of ["lShare", "tShare"]) { const e = $(id); if (e) e.textContent = sh + "%"; }
     $("lFee").textContent = ethers.formatEther(f);
+    const df = $("dFee"); if (df) df.textContent = ethers.formatEther(f); // docs quotes it too
     const openV = Number(ethers.formatEther(p)) * 1e9;
     $("lpOpenVal").textContent = nf(openV, 0);
     $("lpGradVal").textContent = "7,000";
@@ -2865,11 +2979,27 @@ async function loadAll() {
 // Critical reads get retried. A transient RPC failure on tokenCount() used to
 // skip the whole pad and render "No tokens yet" on a chain with tokens, which
 // is indistinguishable from an empty launchpad.
-async function retryRead(fn, tries = 4) {
+async function retryRead(fn, tries = 6) {
   let last;
   for (let i = 0; i < tries; i++) {
     try { return await fn(); }
-    catch (e) { last = e; await new Promise((r) => setTimeout(r, 250 * 2 ** i)); }
+    catch (e) {
+      last = e;
+      // Arc answers the boot burst with HTTP 429 and keeps doing so for
+      // several seconds. That is "come back later", not a failure, but the old
+      // 4-try/3.75s ceiling gave up while the launchpad config was still
+      // unread: the creation fee stayed on its placeholder and the dev-buy cap
+      // never appeared, with nothing logged. Back off much harder when the
+      // error looks like rate limiting.
+      // A revert or an undecodable result is a permanent answer: the function
+      // does not exist on this contract, and asking again cannot change that.
+      // Retrying it burned ~16s on every Stable load probing for the dev-buy
+      // cap that only the v2 pad has, delaying everything queued behind it.
+      if (e && (e.code === "CALL_EXCEPTION" || e.code === "BAD_DATA")) throw e;
+      const msg = String((e && (e.info?.error?.message || e.message)) || e);
+      const limited = /429|rate.?limit|too many/i.test(msg);
+      await new Promise((r) => setTimeout(r, (limited ? 800 : 250) * 2 ** i));
+    }
   }
   throw last;
 }
