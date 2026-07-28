@@ -1970,6 +1970,12 @@
         <div class="hstat"><b id="hoExit" style="color:var(--red)">–</b><label>HELD THEN SOLD OUT</label></div>
       </div>
 
+      <div class="trade" id="hoTrend" style="margin-bottom:16px;display:none">
+        <div class="mkthead"><h2>How it has moved</h2><div class="spacer"></div>
+          <span class="bal" id="hoTrendNote"></span></div>
+        <div id="hoTrendBody"></div>
+      </div>
+
       <div class="trade" id="hoMine" style="margin-bottom:16px;display:none">
         <div class="mkthead"><h2>Your standing</h2><div class="spacer"></div>
           <span class="bal" id="hoAddr"></span></div>
@@ -1993,10 +1999,48 @@
       </div>
 
       <div class="trade" style="margin-top:16px">
-        <h2 style="font-size:16px;margin-bottom:8px">What this is, and what it is not</h2>
-        <p class="finenote">This is a <b>measurement, not an entitlement</b>. It records what has already happened on chain: how much $MINTD each address held, and for how long. Anyone can recompute every number in it from Stable's logs.</p>
-        <p class="finenote">There is <b>no token on Arc</b>, no supply decision has been made, and Arc mainnet is not publicly live. Nothing here promises you anything, no amount is committed, and no date is set. If that changes, it will be said plainly rather than implied by a dashboard.</p>
-        <p class="finenote">Score is the <b>lesser</b> of your time-weighted average balance and what you hold right now. Selling out zeroes it, and buying in late cannot rescue it, because both of those are ways of not being a holder. Percentages are of the tracked total, which moves as others buy and sell.</p>
+        <div class="mkthead"><h2>How this number is made</h2><div class="spacer"></div>
+          <span class="bal" id="hoMethodSrc"></span></div>
+
+        <p class="finenote">No part of this is estimated or curated. Every figure comes from Stable's own transaction logs, and the whole thing is reproducible by anyone who wants to check it.</p>
+
+        <div class="guide" style="margin-top:12px">
+          <div class="gstep"><div class="gnum">1</div><div>
+            <b>Read every transfer</b>
+            <p>An indexer walks all <span class="gmono">Transfer</span> logs for the $MINTD contract, 500 blocks at a time, from the token's first block onward. A window that fails is retried; if it cannot be read, the run aborts rather than skipping it, because a gap makes every number below quietly wrong instead of visibly broken.</p>
+          </div></div>
+
+          <div class="gstep"><div class="gnum">2</div><div>
+            <b>Prove nothing was missed</b>
+            <p>After each pass, every balance is added up and compared to the token's <span class="gmono">totalSupply</span>. They must match exactly. The indexer refuses to advance if they do not, so the board is never built on a partial read. It currently reconciles across <b id="hoMTransfers">–</b> transfers.</p>
+          </div></div>
+
+          <div class="gstep"><div class="gnum">3</div><div>
+            <b>Measure time, not just size</b>
+            <p>Rather than a snapshot, the indexer accumulates <b>balance x blocks held</b> for each address. Dividing by the tracked window gives a time-weighted average: what you held on average, across the whole period. Holding 1M for the full window scores the same as holding 2M for half of it.</p>
+          </div></div>
+
+          <div class="gstep"><div class="gnum">4</div><div>
+            <b>Take the lesser of two numbers</b>
+            <p class="gmono" style="font-size:13px;margin:4px 0 6px">score = min(time-weighted average, balance now)</p>
+            <p>Each half blocks a different way of gaming it. Without the average, buying the day before a snapshot earns as much as holding for months. Without the current balance, people who <b>already sold</b> still score: on the first run, two of the ten highest by duration held nothing at all, and <b id="hoMExit">–</b> addresses had a positive duration score with an empty wallet. Taking the smaller number closes both.</p>
+          </div></div>
+
+          <div class="gstep"><div class="gnum">5</div><div>
+            <b>Exclude what is not a holder</b>
+            <p>The liquidity pool, the launchpad, farms, lockers, the burn address and the project's own wallets are all removed. Anything holding contract code is excluded. That is deliberately blunt and would also exclude a smart-contract wallet belonging to a real person.</p>
+          </div></div>
+        </div>
+
+        <p class="finenote" style="margin-top:12px"><b>Why it starts where it does.</b> Stable's RPC keeps only about four to five days of logs and has no archive, so holding history cannot be reconstructed after the fact. Recording began at block <b id="hoMStart">–</b>, which was the token's first block and was still readable with roughly a day to spare. Nothing earlier can ever be added, by us or anyone.</p>
+
+        <p class="finenote">Updated every ten minutes. Score changes as you buy, sell, or simply keep holding, and as the tracked window lengthens.</p>
+      </div>
+
+      <div class="trade" style="margin-top:16px">
+        <h2 style="font-size:16px;margin-bottom:8px">What this is not</h2>
+        <p class="finenote">A <b>measurement, not an entitlement</b>. It records what has already happened on chain. There is <b>no token on Arc</b>, no supply decision has been made, and Arc mainnet is not publicly live. Nothing here promises you anything, no amount is committed, and no date is set. If that changes it will be said plainly, rather than implied by a dashboard.</p>
+        <p class="finenote">Percentages are shares of the tracked total, which moves as other people buy and sell. Your share can fall while your own holding is unchanged.</p>
       </div>
     </div>
   </section>
@@ -2944,17 +2988,18 @@ function hoPaint() {
   if (idx >= 0) {
     const r = ranked[idx];
     box.style.display = "";
-    $("hoAddr").textContent = short(wallet);
+    $("hoAddr").innerHTML = hoAddrLink(me);
     $("hoRank").textContent = "#" + (idx + 1);
     $("hoShare").textContent = (r.score / d.totalScore * 100).toFixed(2) + "%";
     $("hoTwab").textContent = nf(r.twab, 0);
     $("hoNow").textContent = nf(r.bal, 0);
-    $("hoWhy").innerHTML = r.bal < r.twab
+    $("hoWhy").innerHTML = (r.bal < r.twab
       ? `Your score is capped by what you hold now (${nf(r.bal, 0)}), which is below your average of ${nf(r.twab, 0)}. Holding more brings it back up.`
-      : `Your score is your time-weighted average. Holding longer raises it; you currently hold ${nf(r.bal, 0)}, at or above that average.`;
+      : `Your score is your time-weighted average. Holding longer raises it; you currently hold ${nf(r.bal, 0)}, at or above that average.`)
+      + ` You have held for ${hoHeldFor(me)}.`;
   } else if (me) {
     box.style.display = "";
-    $("hoAddr").textContent = short(wallet);
+    $("hoAddr").innerHTML = hoAddrLink(me);
     for (const id of ["hoRank", "hoShare", "hoTwab", "hoNow"]) $(id).textContent = "–";
     $("hoWhy").textContent = "This wallet has no score yet. It either never held $MINTD, sold out, or is a contract. "
       + "Buying and holding from here starts accruing immediately.";
@@ -2962,16 +3007,75 @@ function hoPaint() {
     box.style.display = "none";
   }
 
-  $("hoRows").innerHTML = `<table style="width:100%;border-collapse:collapse">
+  $("hoRows").innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:640px">
     <tr style="text-align:left;opacity:.6;font-size:12px">
-      <th style="padding:6px 4px">#</th><th>ADDRESS</th><th>SHARE</th><th>TIME-WEIGHTED AVG</th><th>HELD NOW</th></tr>
+      <th style="padding:6px 4px">#</th><th>ADDRESS</th><th>SHARE</th><th>TIME-WEIGHTED AVG</th><th>HELD NOW</th><th>HOLDING FOR</th></tr>
     ${ranked.slice(0, 100).map((r, i) => `<tr style="border-top:1px solid rgba(255,255,255,.06)${r.addr === me ? ";background:var(--green-soft)" : ""}">
       <td style="padding:8px 4px">${i + 1}</td>
-      <td style="opacity:.75">${esc(short(r.addr))}${r.addr === me ? " <b>(you)</b>" : ""}</td>
+      <td>${hoAddrLink(r.addr)}${r.addr === me ? " <b>(you)</b>" : ""}</td>
       <td><b>${(r.score / d.totalScore * 100).toFixed(2)}%</b></td>
       <td>${nf(r.twab, 0)}</td>
-      <td>${nf(r.bal, 0)}</td></tr>`).join("")}
-  </table>${ranked.length > 100 ? `<div class="finenote" style="margin-top:8px">Showing the top 100 of ${nf(ranked.length, 0)} qualifying addresses.</div>` : ""}`;
+      <td>${nf(r.bal, 0)}</td>
+      <td style="opacity:.7">${hoHeldFor(r.addr)}</td></tr>`).join("")}
+  </table></div>${ranked.length > 100 ? `<div class="finenote" style="margin-top:8px">Showing the top 100 of ${nf(ranked.length, 0)} qualifying addresses. Every one is in <a href="/holder-scores.json" target="_blank" rel="noopener">holder-scores.json</a>.</div>` : ""}`;
+
+  // ---- methodology figures, read from the same file rather than retyped
+  $("hoMTransfers").textContent = nf(d.transfers, 0);
+  $("hoMExit").textContent = nf(d.exitedWithWeight, 0);
+  $("hoMStart").textContent = nf(d.startBlock, 0);
+  $("hoMethodSrc").innerHTML = `<a href="https://github.com/mrhouse223/mintd/blob/main/scripts/holder-ledger.js" target="_blank" rel="noopener">scripts/holder-ledger.js ↗</a>`;
+  hoTrend();
+}
+
+// Link every wallet to the explorer. These are public addresses on a public
+// chain, and a standings board people cannot verify is just a claim.
+function hoAddrLink(addr) {
+  const base = (NET.chain.blockExplorerUrls && NET.chain.blockExplorerUrls[0]) || "";
+  const url = base.replace(/\/+$/, "") + "/address/" + addr;
+  return `<a class="gmono" href="${url}" target="_blank" rel="noopener" title="${esc(addr)}">${esc(short(addr))} ↗</a>`;
+}
+
+// How long this address has held, from the block it first received MINTD.
+function hoHeldFor(addr) {
+  const d = hoData;
+  if (!d || !d.firstBlock || d.firstBlock[addr] == null) return "–";
+  const blocks = d.cursorBlock - d.firstBlock[addr];
+  const days = blocks * (d.secPerBlock || 0.7) / 86400;
+  if (days >= 1) return days.toFixed(1) + "d";
+  const hrs = days * 24;
+  return hrs >= 1 ? hrs.toFixed(0) + "h" : "<1h";
+}
+
+// Aggregate trend. One row per six-hour snapshot, so it fills in over days
+// rather than appearing complete immediately.
+function hoTrend() {
+  const d = hoData, box = $("hoTrend"), body = $("hoTrendBody");
+  if (!d || !box) return;
+  const h = (d.history || []).slice();
+  box.style.display = "";
+  if (h.length < 2) {
+    $("hoTrendNote").textContent = "";
+    body.innerHTML = `<div class="finenote">Recording started ${d.days.toFixed(1)} days ago and snapshots every six hours, so there
+      ${h.length === 1 ? "is one point" : "are no points"} so far. This fills in as it runs; it is not backfilled, because
+      the logs needed to reconstruct it are pruned by then.</div>`;
+    return;
+  }
+  const first = h[0], last = h[h.length - 1];
+  const dHold = last.holding - first.holding;
+  $("hoTrendNote").textContent = `${h.length} snapshots`;
+  const max = Math.max(...h.map((x) => x.holding)) || 1;
+  body.innerHTML = `
+    <div class="heroStats" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px">
+      <div class="hstat"><b>${nf(last.holding, 0)}</b><label>ADDRESSES HOLDING</label></div>
+      <div class="hstat"><b style="color:${dHold >= 0 ? "var(--green)" : "var(--red)"}">${dHold >= 0 ? "+" : ""}${nf(dHold, 0)}</b><label>CHANGE OVER ${(((last.ts - first.ts) / 86400) || 0).toFixed(1)}D</label></div>
+      <div class="hstat"><b>${last.days.toFixed(1)}d</b><label>WINDOW LENGTH</label></div>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:2px;height:70px;margin:8px 0">
+      ${h.map((x) => `<div title="${new Date(x.ts * 1000).toISOString().slice(0, 16).replace("T", " ")} — ${x.holding} holding"
+        style="flex:1;min-width:2px;height:${Math.max(3, x.holding / max * 100)}%;background:var(--green);opacity:.55;border-radius:2px 2px 0 0"></div>`).join("")}
+    </div>
+    <div class="finenote">Addresses holding a non-zero balance, sampled every six hours since
+      ${new Date(first.ts * 1000).toISOString().slice(0, 10)}. Hover a bar for its value.</div>`;
 }
 
 /* ------------------------------------------------------------------- dev */

@@ -210,6 +210,31 @@ async function pass() {
   led.runs += 1;
   led.updatedAt = new Date().toISOString();
   led.checkedSupply = supply.toString();
+
+  // A trend has to be recorded as it happens, for the same reason the ledger
+  // does: the score at a past block cannot be recomputed once the logs behind
+  // it are pruned. Snapshot every SNAP_HOURS so the series stays small, and
+  // keep a rolling window so the file does not grow without bound.
+  const SNAP_HOURS = 6, KEEP = 120; // 30 days
+  led.history = led.history || [];
+  const nowSec = Math.floor(Date.now() / 1000);
+  const last = led.history[led.history.length - 1];
+  if (!last || nowSec - last.ts >= SNAP_HOURS * 3600) {
+    // Deliberately only counts, not totals. A sum of balance-blocks across
+    // every address includes the liquidity pool, the burn address and every
+    // contract, so it sits near total supply forever and says nothing. The
+    // count of addresses actually holding does move, and means what it says.
+    let live = 0;
+    for (const r of H.values()) if (r.bal > 0n) live++;
+    led.history.push({
+      ts: nowSec,
+      block: head,
+      days: Number(((head - led.startBlock) * SEC_PER_BLOCK / 86400).toFixed(3)),
+      addresses: H.size,
+      holding: live,
+    });
+    if (led.history.length > KEEP) led.history = led.history.slice(-KEEP);
+  }
   saveLedger(led);
 
   const span = head - led.startBlock;
@@ -381,6 +406,11 @@ caveat applied to Arc activity.
     qualifying: byScore.length,
     exitedWithWeight: exited.length,
     totalScore: Math.round(totalScore),
+    secPerBlock: SEC_PER_BLOCK,
+    history: (led.history || []).map((h) => ({ ts: h.ts, days: h.days, holding: h.holding })),
+    // When each address first received MINTD, so the page can show how long
+    // somebody has been here rather than only how much they hold.
+    firstBlock: Object.fromEntries(byScore.map((r) => [r.addr, r.firstBlock || led.startBlock])),
     // [score, timeWeightedAvg, heldNow], all whole MINTD. Only qualifying
     // addresses: a zero score is the same as absent and would triple the file.
     scores,
