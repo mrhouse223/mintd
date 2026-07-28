@@ -1843,6 +1843,10 @@ const CHAINS = {
     features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true },
     statsFile: "stats.json",
     faucet: null,
+    // Stable rejects any batch outright, so the shared provider batches only
+    // because every call here is wrapped to tolerate it. Log scanning still
+    // uses its own batchMaxCount 1 provider.
+    batchMaxCount: 20,
   },
   "arc-testnet": {
     key: "arc-testnet", label: "Arc Testnet", short: "Arc",
@@ -1876,6 +1880,11 @@ const CHAINS = {
     features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true },
     statsFile: null,   // no indexer running against Arc yet
     faucet: "https://faucet.circle.com",
+    // Arc accepts batches and then rate limits them: a batch of 8 returns one
+    // result and seven "request limit reached". Promise.all in the token
+    // loader therefore lost 7 of every 8 reads, and the per-token catch
+    // swallowed it, so a launched token simply never appeared. One per batch.
+    batchMaxCount: 1,
   },
 };
 
@@ -2334,7 +2343,8 @@ function init() {
   // staticNetwork skips the eth_chainId round-trip on every call. Batching is
   // kept small but ON: unbatched, a cold load fires 100+ separate requests and
   // the public RPC rate-limits the burst (coins fail to load).
-  rp = rp || new ethers.JsonRpcProvider(CHAIN.rpcUrls[0], parseInt(CHAIN.chainId, 16), { staticNetwork: true, batchMaxCount: 20 });
+  rp = rp || new ethers.JsonRpcProvider(CHAIN.rpcUrls[0], parseInt(CHAIN.chainId, 16),
+    { staticNetwork: true, batchMaxCount: (LC ? 20 : NET.batchMaxCount ?? 1) });
   pad = new ethers.Contract(padAddr(), PAD_ABI, rp);
   quoterR = new ethers.Contract(ADDR.quoter, QUOTER_ABI, rp);
   Promise.all([pad.creationFee(), pad.creatorShareBps(), pad.startPriceUsdt1e18(), pad.usdt0()]).then(([f, s, p, w]) => {
