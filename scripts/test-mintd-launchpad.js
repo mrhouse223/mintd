@@ -81,8 +81,10 @@ async function suite({ label, creatorBps, buybackBps, devCapBps, sameTreasury })
   const opsRecipient = sameTreasury ? treasury.address : ops.address;
 
   const padArt = build("MintdLaunchpad");
+  // Owner is now the first constructor arg. Deploy with `deployer` as owner so
+  // the existing admin tests, which act as `deployer`, keep working.
   const pad = await new ethers.ContractFactory(padArt.abi, padArt.bytecode, deployer).deploy(
-    npmAddr, routerAddr, quoteAddr, bbRecipient, opsRecipient,
+    deployer.address, npmAddr, routerAddr, quoteAddr, bbRecipient, opsRecipient,
     E(1), creatorBps, buybackBps, devCapBps, START_PRICE, ethers.ZeroAddress, 0);
   await pad.waitForDeployment();
   const padAddr = await pad.getAddress();
@@ -91,6 +93,7 @@ async function suite({ label, creatorBps, buybackBps, devCapBps, sameTreasury })
   const npmX = new ethers.Contract(npmAddr, NPM_ABI, provider);
 
   console.log("\n=== config reads back ===");
+  check((await pad.owner()) === deployer.address, "owner is the constructor arg, not necessarily msg.sender");
   check((await pad.creatorShareBps()) === creatorBps, `creatorShareBps is ${creatorBps}`);
   check((await pad.devBuyCapBps()) === devCapBps, `devBuyCapBps is ${devCapBps}`);
   check((await pad.usdt0()) === quoteAddr, "usdt0() alias returns the quote asset");
@@ -139,6 +142,16 @@ async function suite({ label, creatorBps, buybackBps, devCapBps, sameTreasury })
   check(escaped.status === 1, "a different salt steps over the poisoned address");
   const plainAfter = await launch(bob, "AFTER");
   check(!!plainAfter.token, "the default launch path still works after an attempt");
+
+  // NOTE ON THE AUTO-SALT: it mixes in blockhash(block.number-1), because
+  // prevrandao is zero on both Stable and Arc (verified directly against both
+  // RPCs) and gave the salt no entropy, which reintroduced the permanent-brick
+  // vector on the default path. The property that fixes it, that the parent
+  // hash differs every block so a retry lands on a new address, cannot be
+  // exercised here: ganache returns an identical block hash and a zero parent
+  // hash across mines, so this harness cannot model per-block entropy at all.
+  // It is verified on the real chains, not in this file. The escape hatch is
+  // covered above ("a different salt steps over the poisoned address").
 
   console.log("\n=== dev buy cap ===");
   if (devCapBps === 10000n) {

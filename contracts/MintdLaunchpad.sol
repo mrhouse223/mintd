@@ -305,6 +305,7 @@ contract MintdLaunchpad {
     }
 
     constructor(
+        address _owner,
         address _positionManager,
         address _swapRouter,
         address _quoteToken,
@@ -319,8 +320,8 @@ contract MintdLaunchpad {
         uint256 _startPriceMintr1e18
     ) {
         require(
-            _positionManager != address(0) && _swapRouter != address(0) && _quoteToken != address(0)
-                && _buybackRecipient != address(0) && _opsRecipient != address(0),
+            _owner != address(0) && _positionManager != address(0) && _swapRouter != address(0)
+                && _quoteToken != address(0) && _buybackRecipient != address(0) && _opsRecipient != address(0),
             "zero addr"
         );
         require(_creatorShareBps >= MIN_CREATOR_SHARE_BPS && _creatorShareBps <= 10_000, "bad share");
@@ -336,7 +337,13 @@ contract MintdLaunchpad {
         nativeToErc20 = 10 ** (18 - qd);
         quoteScale = 1e18 * (10 ** (18 - qd));
 
-        owner = msg.sender;
+        // Owner is a constructor argument, not msg.sender. Handing ownership
+        // over in a second transaction leaves a window between deploy and
+        // transfer where anyone else holding the deploying key can capture an
+        // immutable contract's admin permanently. The Safe cannot deploy, so
+        // that key is a hot key by necessity; passing the Safe here removes the
+        // window entirely and makes the deploying key irrelevant.
+        owner = _owner;
         buybackRecipient = _buybackRecipient;
         opsRecipient = _opsRecipient;
         creationFee = _creationFee;
@@ -728,7 +735,16 @@ contract MintdLaunchpad {
     /// front-run remains possible; the answer is to retry, landing on a
     /// different salt.
     function _autoSalt() private view returns (bytes32) {
-        return keccak256(abi.encode(msg.sender, allTokens.length, block.prevrandao));
+        // blockhash(block.number - 1), NOT block.prevrandao. Measured on Stable
+        // and Arc: prevrandao is permanently zero on both, so it added no
+        // entropy at all. That turned the default launch path back into the
+        // permanent brick the CREATE2 change exists to prevent: a griefer
+        // pre-poisons the predictable address, the launch reverts, and every
+        // retry lands on the SAME salt and reverts again until an unrelated
+        // launch bumps allTokens.length. The parent hash varies every 0.70s
+        // block, so it cannot be precomputed before the block and a retry in
+        // any later block lands on a different address.
+        return keccak256(abi.encode(msg.sender, allTokens.length, blockhash(block.number - 1)));
     }
 
     /// @dev sqrt(num/den) in Q96, avoiding the overflow of (num << 192).

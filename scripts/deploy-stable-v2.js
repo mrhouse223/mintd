@@ -17,10 +17,9 @@
 //
 // OWNERSHIP
 // The Safe cannot deploy, since its key is not on this machine, so the deploy
-// is signed by a funded key and ownership is handed to the Safe immediately
-// afterwards. Both protocol fee recipients are set to the Safe in the
-// CONSTRUCTOR, so even during that window no revenue can be mis-routed. The
-// only thing the deploying key can do before the handover is change config.
+// is signed by a funded key. Owner AND both fee recipients are set to the Safe
+// in the constructor, so the deploying key never holds admin or receives a
+// unit of revenue at any point. There is no post-deploy window to exploit.
 const fs = require("fs");
 const path = require("path");
 const { ethers } = require("ethers");
@@ -127,15 +126,20 @@ function die(m) { console.error("\n  ABORT: " + m + "\n"); process.exit(1); }
     console.log(`  creationFee ${ethers.formatEther(PARAMS.creationFee)}  creatorShareBps ${PARAMS.creatorShareBps}`);
     console.log(`  buybackShareBps ${PARAMS.buybackShareBps}  devBuyCapBps ${PARAMS.devBuyCapBps} (disabled)`);
     console.log(`  mintr ${MINTR}`);
-    console.log("would then deploy TokenMetaRegistry([oldPad, newPad]) and transfer ownership to the Safe");
+    console.log("would then deploy TokenMetaRegistry([oldPad, newPad]); owner is the Safe from birth");
     console.log("\ndry run only. re-run with --execute\n");
     return;
   }
 
   // ------------------------------------------------------------------ deploy
+  // Owner is the Safe from the constructor, so there is no post-deploy
+  // transfer window and the deploying key never holds admin. The old flow, a
+  // second transferOwnership transaction, left tens of blocks in which anyone
+  // else holding the deploying key could capture this immutable contract's
+  // admin permanently.
   const a = local("MintdLaunchpad");
   const pad = await new ethers.ContractFactory(a.abi, a.bytecode, signer).deploy(
-    NPM, ROUTER, USDT0, SAFE, SAFE,
+    SAFE, NPM, ROUTER, USDT0, SAFE, SAFE,
     PARAMS.creationFee, PARAMS.creatorShareBps, PARAMS.buybackShareBps, PARAMS.devBuyCapBps,
     PARAMS.startPriceUsdt1e18, MINTR, PARAMS.startPriceMintr1e18
   );
@@ -198,14 +202,13 @@ function die(m) { console.error("\n  ABORT: " + m + "\n"); process.exit(1); }
   want("registry pads[0]", await regC.pads(0), OLD_PAD);
   want("registry pads[1]", await regC.pads(1), padAddr);
 
-  if (bad) die(`${bad} sanity check(s) mismatched. Do NOT point the frontend at this.`);
-
-  // ------------------------------------------------------- hand to the Safe
-  console.log("\ntransferring ownership to the Safe");
-  await (await p.transferOwnership(SAFE)).wait();
+  // Owner was set to the Safe in the constructor, so there is nothing to hand
+  // over. Confirm it rather than assume it.
   const finalOwner = await p.owner();
-  console.log(`  owner now ${finalOwner}   ${finalOwner.toLowerCase() === SAFE.toLowerCase() ? "correct" : "WRONG"}`);
-  if (finalOwner.toLowerCase() !== SAFE.toLowerCase()) die("ownership did not transfer");
+  console.log(`  ${"owner".padEnd(20)}${finalOwner}   ${finalOwner.toLowerCase() === SAFE.toLowerCase() ? "the Safe, correct" : "WRONG"}`);
+  if (finalOwner.toLowerCase() !== SAFE.toLowerCase()) { bad++; }
+
+  if (bad) die(`${bad} sanity check(s) mismatched. Do NOT point the frontend at this.`);
 
   console.log(`\nrecorded in ${path.relative(ROOT, OUT)}`);
   console.log(`old pad stays live at ${OLD_PAD}; its ${liveCount} tokens are untouched`);
