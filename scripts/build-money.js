@@ -45,15 +45,19 @@ sub("wordmark",
 sub("default chain", 'return "stable";', 'return "arc-testnet";');
 sub("NET fallback", "CHAINS[CHAIN_KEY] || CHAINS.stable", "CHAINS[CHAIN_KEY] || CHAINS['arc-testnet']");
 
-// Point at the v2 launchpad and drop v1. v1 holds a test $MINTD launched while
-// the deployment was being shaken out, and surfacing it here would imply an Arc
-// MINTD exists, which it does not.
+// Point at MintdLaunchpad, the fully fixed pad, and drop the earlier ones.
+// ArcLaunchpad carried the dead-prevrandao brick vector, and the v1 pad held a
+// throwaway $MINTD from bring-up; surfacing either would imply an Arc MINTD
+// exists (it does not) or route launches through the old code. Fresh start on
+// the secure factory, so the community's first coin is genuinely token #0.
 sub("arc pad", `      pad: "0xcF22a3E32dE43787881b9a87B5424E34F3BF65E6",
       oldPad: "0xd6fdA9A0Fd4b4ee724ab0c0B958a712E5bb37E96",`,
-  `      pad: "0xcF22a3E32dE43787881b9a87B5424E34F3BF65E6",
-      // v1 deliberately absent: it holds a throwaway $MINTD from bring-up, and
-      // listing it here would imply an Arc MINTD token exists. It does not.
+  `      pad: "0xf4c529a260eAD908e433fcA805CAf923645D8D9e",
       oldPad: null,`);
+
+// Metadata registry follows the pad.
+sub("arc registry", `meta: "0x09c419226e83A91323FDC170144526D8C4a39B75",`,
+  `meta: "0xF156fc983EdD51c01C8d2d7aAE8E9f153472cF8f",`);
 
 // MINTR is deployed on Arc but is not part of this product yet.
 sub("arc features",

@@ -2188,16 +2188,14 @@ const CHAINS = {
       // v2: 80/20 creator split, 5% dev buy cap, pre-initialized pools rejected.
       // v1 (0xd6fdA9A0…) stays live and its tokens keep v1 terms; it is listed
       // as oldPad so existing launches still load.
-      pad: "0xcF22a3E32dE43787881b9a87B5424E34F3BF65E6",
-      // v1 deliberately absent: it holds a throwaway $MINTD from bring-up, and
-      // listing it here would imply an Arc MINTD token exists. It does not.
+      pad: "0xf4c529a260eAD908e433fcA805CAf923645D8D9e",
       oldPad: null,
       mintd: null,
       mintr: "0x3e1184203B9c1760654CbEFCd111ce1185Ae57be",
       synth: null, mgld: null,
       locker: "0xAcc8EA03ea4722F23aE0b40Ac707e3fAAa8F6a6A",
       v3locker: "0x8530b966C12E2d2493f712be9d5Cf39f364DD3B7",
-      meta: "0x09c419226e83A91323FDC170144526D8C4a39B75",
+      meta: "0xF156fc983EdD51c01C8d2d7aAE8E9f153472cF8f",
       mintswapFactory: "0x5481A9aBAC5747252Dda1f40A269A2D48Af2b8Db",
       mintswapRouter: "0x7de1C45839C56f8CC3252C5F394b3410393d996d",
       furnace: "0x17E5C63ab0Ff682e5C1Cb2e391870d1a57104C5F",
@@ -2462,8 +2460,10 @@ function isGraduated(addr, reachedNow) {
 }
 
 // mintd.fun launchpad on Stable Mainnet. Takes priority over the ⚙-settings
-// value so a stale saved address can't point at an old deployment.
-const DEFAULT_PAD = LC ? LC.pad : "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0";
+// value so a stale saved address can't point at an old deployment. This is the
+// v2 pad; the front-runnable v1 is reachable only as oldPad, for reading its
+// existing tokens, never for new launches.
+const DEFAULT_PAD = LC ? LC.pad : "0xCe7b02b3f0e5665f1C23E018039e9b6836c6221b";
 function padAddr() { return NET.mintd.pad || DEFAULT_PAD || localStorage.getItem(ck("padAddr")) || ""; }
 // Discover reads the current pad AND the original pad, so tokens launched on
 // either (incl. $MINTD, which lives on the original pad) all show up. Deduped.
@@ -3085,14 +3085,23 @@ async function devLoad(force) {
 
   try {
     const c = new ethers.Contract(claimer, CLAIMER_ABI, rp);
-    const total = Number(await pad.tokenCount());
     const quote = ADDR.usdt0;
     const out = [];
-    // Chunked because preview performs a real collect per token inside the
-    // eth_call; the whole list at once exceeds the node's call gas budget.
-    for (let i = 0; i < total; i += 20) {
-      const part = await c.previewRange.staticCall(padAddr(), i, 20, quote);
-      for (const r of part) out.push(r);
+    // BOTH pads. The 121 tokens on the old pad keep earning fees forever, so
+    // scanning only the new pad would silently strand every one of their fee
+    // streams. FeeClaimAll takes the launchpad as an argument, so the same
+    // contract works against either. Deduped by nothing: the two pads share no
+    // tokens.
+    const pads = [padAddr(), OLD_PAD].filter(Boolean);
+    for (const pa of pads) {
+      const padC = new ethers.Contract(pa, PAD_ABI, rp);
+      const total = Number(await retryRead(() => padC.tokenCount()));
+      // Chunked because preview performs a real collect per token inside the
+      // eth_call; the whole list at once exceeds the node's call gas budget.
+      for (let i = 0; i < total; i += 20) {
+        const part = await c.previewRange.staticCall(pa, i, 20, quote);
+        for (const r of part) out.push({ ...r, pad: pa });
+      }
     }
 
     const me = wallet.toLowerCase();
@@ -3144,16 +3153,23 @@ async function devClaimAll() {
   btn.disabled = true;
   try {
     const c = new ethers.Contract(claimer, CLAIMER_ABI, signer);
-    // Batched: a claim touches a Uniswap position plus up to six transfers, so
-    // the whole list in one transaction runs past the block gas limit.
-    const list = dvPending.map((r) => r.token);
+    // claimAll takes a single launchpad, and each token's fees live on the pad
+    // that launched it, so the pending set is grouped by pad and claimed
+    // per-pad. Sending a new-pad token to the old pad's claimFees would just
+    // revert "unknown token" and strand the batch.
+    const byPad = {};
+    for (const r of dvPending) (byPad[r.pad || padAddr()] ||= []).push(r.token);
     let done = 0;
-    for (let i = 0; i < list.length; i += 15) {
-      const part = list.slice(i, i + 15);
-      btn.textContent = `Claiming ${i + 1}-${i + part.length} of ${list.length}…`;
-      const tx = await c.claimAll(padAddr(), part);
-      await tx.wait();
-      done += part.length;
+    for (const [pa, list] of Object.entries(byPad)) {
+      // Batched: a claim touches a Uniswap position plus up to six transfers,
+      // so the whole list in one transaction runs past the block gas limit.
+      for (let i = 0; i < list.length; i += 15) {
+        const part = list.slice(i, i + 15);
+        btn.textContent = `Claiming ${done + 1}-${done + part.length} of ${dvPending.length}…`;
+        const tx = await c.claimAll(pa, part);
+        await tx.wait();
+        done += part.length;
+      }
     }
     toast(`Claimed fees for ${done} token(s)`, "ok");
     devLoad(true);

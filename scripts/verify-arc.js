@@ -36,6 +36,16 @@ const enc = (types, vals) => new ethers.AbiCoder().encode(types, vals).slice(2);
 // artifacts built with a different compiler and would each need their own
 // settings; they are listed at the end as knowingly unverified.
 const TARGETS = [
+  // The fixed launchpad now live as the primary Arc pad. Owner-first
+  // constructor, 13 args, matching scripts/deploy-arc-mintd.js exactly.
+  { name: "MintdLaunchpad", file: "MintdLaunchpad.sol", addr: C.MintdLaunchpad,
+    args: enc(
+      ["address", "address", "address", "address", "address", "address", "uint256", "uint256", "uint256", "uint256", "uint256", "address", "uint256"],
+      [REC.deployer, C.NonfungiblePositionManager, C.SwapRouter02, REC.gasToken.address,
+       REC.deployer, REC.deployer,
+       ethers.parseEther("1"), 8000n, 8000n, 500n, 3000000000000n, C.MINTR, 3000000000000n]) },
+  { name: "MintdMetaRegistry", file: "TokenMetaRegistry.sol", addr: C.MintdMetaRegistry,
+    args: enc(["address[]"], [[C.ArcLaunchpad, C.MintdLaunchpad].filter(Boolean)]) },
   { name: "ArcLaunchpad", file: "ArcLaunchpad.sol", addr: C.ArcLaunchpad,
     args: enc(
       ["address", "address", "address", "address", "address", "uint256", "uint256", "uint256", "uint256", "address", "uint256"],
