@@ -1,0 +1,55 @@
+{
+  "name": "mintd.money",
+  "short_name": "mintd.money",
+  "description": "Agentic treasury and liquidity infrastructure on Arc.",
+  "id": "/",
+  "start_url": "/?src=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07090c",
+  "theme_color": "#07090c",
+  "categories": [
+    "finance"
+  ],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Launch a token",
+      "short_name": "Launch",
+      "url": "/#launch"
+    },
+    {
+      "name": "Swap",
+      "short_name": "Swap",
+      "url": "/#mintswap"
+    },
+    {
+      "name": "Earn",
+      "short_name": "Earn",
+      "url": "/#earn"
+    },
+    {
+      "name": "Mintd Gold",
+      "short_name": "Gold",
+      "url": "/#synth"
+    }
+  ]
+}

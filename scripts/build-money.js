@@ -120,6 +120,34 @@ sub("legacy dark palette",
 
 fs.writeFileSync(OUT, s);
 
+// ------------------------------------------------------------------ assets
+// The app references these by bare filename, so they have to sit beside
+// index.html. Copied rather than symlinked: Netlify does not reliably follow
+// symlinks, and a missing icon is a 404 nobody notices until the PWA install
+// prompt looks broken.
+const ASSETS = [
+  "logo.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png",
+  "icon-maskable-512.png", "mintr.png", "mgld.png", "sw.js",
+];
+let copied = 0;
+for (const f of ASSETS) {
+  const from = path.join(ROOT, "frontend", f);
+  if (!fs.existsSync(from)) { console.log(`  skip missing asset ${f}`); continue; }
+  fs.copyFileSync(from, path.join(ROOT, "money", f));
+  copied++;
+}
+
+// The manifest carries the app name shown on a home-screen install, so it
+// cannot be copied verbatim from the launchpad.
+const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "frontend", "manifest.webmanifest"), "utf8"));
+manifest.name = "mintd.money";
+manifest.short_name = "mintd.money";
+manifest.description = "Agentic treasury and liquidity infrastructure on Arc.";
+manifest.theme_color = "#07090c";
+manifest.background_color = "#07090c";
+fs.writeFileSync(path.join(ROOT, "money", "manifest.webmanifest"), JSON.stringify(manifest, null, 2) + "\n");
+subs.push(`copied ${copied} assets and rewrote the manifest (1)`);
+
 // The landing copy lives on its own so it can be edited without regenerating,
 // and is reachable at /about.
 if (!fs.existsSync(LANDING)) {
