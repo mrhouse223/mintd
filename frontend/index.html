@@ -134,6 +134,40 @@
   .pairsw button.on { background: var(--green-soft); color: var(--green); box-shadow: 0 1px 5px rgba(30,55,80,.10); }
   .pairsw button[data-p="mintr"].on { background: rgba(59,130,246,.14); color: #2f6fe0; }
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  /* furnace */
+  .fuinfo { font-size: 12.5px; color: var(--dim); margin-top: 7px; }
+  /* Deliberately loud. This is the only action on the site with no recovery
+     path, so it should not look like the rest of the form. */
+  .fuwarn { margin-top: 14px; padding: 11px 13px; border-radius: 12px; font-size: 12.5px;
+    line-height: 1.5; color: #ffb4a2; background: rgba(255, 86, 48, .09);
+    border: 1px solid rgba(255, 86, 48, .32); }
+  .furow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 14px;
+    align-items: center; padding: 11px 0; border-top: 1px solid var(--line); }
+  .furow:first-child { border-top: 0; }
+  .fusym { font-weight: 800; font-size: 14.5px; }
+  .fuamt { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .fupct { font-weight: 800; color: var(--green); font-variant-numeric: tabular-nums; }
+  @media (max-width: 520px) {
+    .furow { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
+    .furow > div:nth-child(3) { grid-column: 2; text-align: right; }
+  }
+  /* pager */
+  .pager { display: flex; align-items: center; justify-content: center; gap: 6px;
+    flex-wrap: wrap; margin: 20px 0 4px; }
+  .pgbtn { background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 10px; padding: 8px 13px; font-size: 13.5px; font-weight: 700;
+    min-width: 40px; transition: border-color .15s, background .15s; }
+  .pgbtn:hover:not(:disabled) { border-color: var(--green); }
+  .pgbtn.on { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+  .pgbtn:disabled { opacity: .38; cursor: default; }
+  .pgdots { color: var(--dim); padding: 0 2px; }
+  /* Never wraps under the buttons on a phone: it is the only thing telling you
+     how much list is left. */
+  .pgcount { color: var(--dim); font-size: 12.5px; margin-left: 8px; white-space: nowrap; }
+  @media (max-width: 520px) {
+    .pgbtn { padding: 7px 11px; min-width: 36px; font-size: 13px; }
+    .pgcount { width: 100%; text-align: center; margin: 6px 0 0; }
+  }
   .tcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: border-color .15s; }
   .tcard:hover { border-color: var(--green); }
   /* Matches the avatar so every card's stats start at the same y, whether or
@@ -1474,6 +1508,45 @@
   </section>
 
   <!-- BRIDGE -->
+  <section class="view" id="view-furnace">
+    <div class="launchC" style="max-width:760px">
+      <div class="heroC" style="margin:30px auto 22px">
+        <div class="badgepill">PERMANENT · IRREVERSIBLE</div>
+        <h1 style="font-size:44px">The <span class="g">furnace.</span></h1>
+        <p>Send any token to the dead address and it is gone for good. Supply drops, nobody can spend it, and there is no key anywhere that reverses it. Works with any ERC-20 on Stable, whether or not it launched here.</p>
+      </div>
+
+      <div class="lform" style="margin-bottom:18px">
+        <div class="infield">
+          <div class="inhead"><span>TOKEN ADDRESS</span></div>
+          <input id="fuAddr" placeholder="0x… any ERC-20 on Stable" oninput="fuLookup()" style="width:100%" />
+        </div>
+        <div id="fuInfo" class="fuinfo">Paste a token address to begin.</div>
+
+        <div class="infield" style="margin-top:14px">
+          <div class="inhead"><span class="bal" id="fuBal">Bal: –</span><span class="maxb" onclick="fuMax()">MAX</span></div>
+          <input id="fuAmt" type="number" min="0" step="any" placeholder="0.0" oninput="fuPreview()" style="width:100%" />
+        </div>
+
+        <div id="fuWarn" class="fuwarn">
+          Burning cannot be undone. There is no admin, no recovery and no support
+          route that gets these tokens back. Check the address and the amount.
+        </div>
+
+        <button class="btn" id="fuBtn" style="width:100%;margin-top:14px" onclick="fuBurn()" disabled>Burn tokens</button>
+      </div>
+
+      <div class="chartcard">
+        <div class="t" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <span>TOTAL SUPPLY BURNED</span>
+          <button class="chip" id="fuScanBtn" onclick="fuScan()">Scan all tokens</button>
+        </div>
+        <div id="fuBurnedNote" class="fuinfo" style="margin:6px 0 10px"></div>
+        <div id="fuBurned"><div class="empty">Loading burn totals…</div></div>
+      </div>
+    </div>
+  </section>
+
   <section class="view" id="view-bridge">
     <div class="launchC" style="max-width:620px">
       <div class="heroC" style="margin:30px auto 22px">
@@ -1677,6 +1750,7 @@
         <button id="nav-locker" onclick="go('locker')"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> Locker</button>
         <button id="nav-bridge" onclick="go('bridge')"><svg class="ic" viewBox="0 0 24 24"><path d="M3 17h18M6 17V9M18 17V9M3 9c3.5 4 14.5 4 18 0"/></svg> Bridge</button>
         <button id="nav-portfolio" onclick="go('portfolio')"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="1.5"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg> Portfolio</button>
+        <button id="nav-furnace" onclick="go('furnace')"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3c1.5 3 4.5 4.2 4.5 8a4.5 4.5 0 0 1-9 0C7.5 8 9 6.5 12 3z"/><path d="M12 21c-3 0-5.5-2-5.5-4.5"/><path d="M12 21c3 0 5.5-2 5.5-4.5"/></svg> Furnace</button>
         <button id="nav-docs" onclick="go('docs')"><svg class="ic" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg> Docs</button>
         <button id="nav-install" onclick="a2hsShowNow()" style="display:none"><svg class="ic" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg> Add to Home Screen</button>
         <div class="moresocial">
@@ -1856,6 +1930,10 @@ function compressImage(file, maxW, maxH, budgetChars) {
 /* ------------------------------------------------------------------ state */
 let rp, pad, weth, signer, wallet, quoterR;
 let tokens = [], filter = "all", sort = "mcap", pairFilter = "all", isBuy = true, cur = null;
+// Discover paging. 117 tokens in one grid is a long scroll and a lot of DOM,
+// and every filter change rebuilt all of it.
+let page = 0;
+const PAGE_SIZE = 24;
 let cfg = { share: 8000n, startPrice: 3000000000000n, creationFee: 0n };
 const gradTarget = () => E(7000); // graduation badge at 7,000 USDT0 in the pool
 // $MINTD is permanently graduated. Graduation never reverses once reached.
@@ -2025,6 +2103,10 @@ async function route() {
     showView("locker");
     if (!tokens.length && padAddr()) await loadAll(); // prices for locked launchpad tokens
     lkInit();
+  } else if (h === "furnace") {
+    showView("furnace");
+    if (!tokens.length && padAddr()) await loadAll(); // supply the burn leaderboard
+    fuInit();
   } else if (h === "docs") {
     showView("docs");
   } else if (h === "portfolio") {
@@ -2217,8 +2299,20 @@ async function loadAllInner() {
 let renderTimer = 0;
 function debouncedRender() {
   clearTimeout(renderTimer);
+  // Typing narrows the list, so the old page number is meaningless.
+  page = 0;
   renderTimer = setTimeout(renderCards, 90);
 }
+// 24h PRICE change, from Dexscreener's priceChange.h24. It used to render
+// beside 24H VOL, where it read as "volume moved 44%". It describes the price,
+// so it belongs next to the market cap.
+function chgTag(chg) {
+  if (!chg) return "";
+  const up = chg >= 0;
+  return ` <span style="font-size:11px;font-weight:700;color:${up ? "var(--green)" : "var(--red)"}"
+    title="24h price change">${up ? "▲" : "▼"}${Math.abs(chg)}%</span>`;
+}
+
 function renderCards() {
   const q = $("search").value.trim().toLowerCase();
   let list = tokens.filter((t) =>
@@ -2235,7 +2329,18 @@ function renderCards() {
   const el = $("cards");
   // build off-document, attach once: one reflow instead of one per card
   const frag = document.createDocumentFragment();
-  if (!list.length) { el.innerHTML = '<div class="empty">No tokens yet. Be the first to launch.</div>'; return; }
+  if (!list.length) {
+    el.innerHTML = '<div class="empty">No tokens yet. Be the first to launch.</div>';
+    renderPager(0, 0);
+    return;
+  }
+  // Clamp rather than reset. A filter that shrinks the list below the current
+  // page would otherwise render an empty grid that looks like a broken filter.
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (page >= pages) page = pages - 1;
+  if (page < 0) page = 0;
+  const total = list.length;
+  list = list.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   // X / Telegram / website icons for a card, from the token's own metadata
   function socialLinks(t) {
     const m = t.meta || {};
@@ -2274,8 +2379,8 @@ function renderCards() {
         ${socialLinks(t)}
       </div>
       <div class="tstats">
-        <div><label>MARKET CAP</label><b>${fmtUsd(ethers.formatEther(t.mcap))}</b></div>
-        <div><label>24H VOL</label><b>${t.vol24 !== undefined ? fmtUsd(t.vol24) : `<span title="No trades recorded in the last 24h" style="color:var(--dim)">–</span>`}${t.chg24 ? ` <span style="font-size:11px;color:${t.chg24 >= 0 ? "var(--green)" : "var(--red)"}">${t.chg24 >= 0 ? "▲" : "▼"}${Math.abs(t.chg24)}%</span>` : ""}</b></div>
+        <div><label>MARKET CAP</label><b>${fmtUsd(ethers.formatEther(t.mcap))}${chgTag(t.chg24)}</b></div>
+        <div><label>24H VOL</label><b>${t.vol24 !== undefined ? fmtUsd(t.vol24) : `<span title="No trades recorded in the last 24h" style="color:var(--dim)">–</span>`}</b></div>
         <div style="display:flex;align-items:flex-end;justify-content:flex-end">
           <button class="btn claimbtn has-rewards tradenow" onclick="event.stopPropagation();openToken('${t.addr}')">Trade now</button>
         </div>
@@ -2286,10 +2391,218 @@ function renderCards() {
     frag.appendChild(c);
   }
   el.replaceChildren(frag);
+  renderPager(total, pages);
 }
 
-$("filterChips").onclick = (e) => { if (!e.target.dataset.f) return; filter = e.target.dataset.f; document.querySelectorAll("#filterChips .chip").forEach((c) => c.classList.toggle("on", c === e.target)); renderCards(); };
-$("sortChips").onclick = (e) => { if (!e.target.dataset.s) return; sort = e.target.dataset.s; document.querySelectorAll("#sortChips .chip").forEach((c) => c.classList.toggle("on", c === e.target)); renderCards(); };
+// Pager lives below the grid and is rebuilt with it, so it can never disagree
+// with what is on screen.
+function renderPager(total, pages) {
+  let el = $("cardsPager");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "cardsPager";
+    el.className = "pager";
+    $("cards").insertAdjacentElement("afterend", el);
+  }
+  if (pages <= 1) { el.innerHTML = ""; return; }
+  const from = page * PAGE_SIZE + 1;
+  const to = Math.min(total, (page + 1) * PAGE_SIZE);
+
+  // Window the numbers around the current page. 117 tokens is 5 pages today but
+  // the launchpad only grows, and a row of 40 page buttons is not navigation.
+  const nums = [];
+  const push = (n) => nums.push(n);
+  push(0);
+  for (let i = page - 1; i <= page + 1; i++) if (i > 0 && i < pages - 1) push(i);
+  if (pages > 1) push(pages - 1);
+  const uniq = [...new Set(nums)].sort((a, b) => a - b);
+
+  let html = `<button class="pgbtn" ${page === 0 ? "disabled" : ""} onclick="goPage(${page - 1})">Prev</button>`;
+  let prev = -1;
+  for (const n of uniq) {
+    if (prev >= 0 && n - prev > 1) html += `<span class="pgdots">…</span>`;
+    html += `<button class="pgbtn${n === page ? " on" : ""}" onclick="goPage(${n})">${n + 1}</button>`;
+    prev = n;
+  }
+  html += `<button class="pgbtn" ${page >= pages - 1 ? "disabled" : ""} onclick="goPage(${page + 1})">Next</button>`;
+  html += `<span class="pgcount">${from}-${to} of ${total}</span>`;
+  el.innerHTML = html;
+}
+
+function goPage(n) {
+  page = n;
+  renderCards();
+  // Land on the grid, not wherever the old page left the scroll position.
+  const c = $("cards");
+  if (c) window.scrollTo({ top: c.offsetTop - 90, behavior: "smooth" });
+}
+
+// page = 0 on every filter or sort change: staying on page 5 of a list that
+// just shrank to two pages shows an empty grid and reads as a broken filter.
+$("filterChips").onclick = (e) => { if (!e.target.dataset.f) return; filter = e.target.dataset.f; page = 0; document.querySelectorAll("#filterChips .chip").forEach((c) => c.classList.toggle("on", c === e.target)); renderCards(); };
+$("sortChips").onclick = (e) => { if (!e.target.dataset.s) return; sort = e.target.dataset.s; page = 0; document.querySelectorAll("#sortChips .chip").forEach((c) => c.classList.toggle("on", c === e.target)); renderCards(); };
+
+/* ---------------------------------------------------------------- furnace
+   Burning is a plain ERC-20 transfer to 0x…dEaD. No contract of our own sits
+   in the path, which means nothing here can ever hold, misroute or rug a
+   user's tokens: the transfer either lands at the dead address or it reverts.
+
+   The cost of that choice is attribution. A transfer to dEaD looks identical
+   whoever sent it, so this page reports each token's TOTAL burned supply,
+   read straight from balanceOf(dEaD), and does not claim the burns happened
+   here. Claiming "burned via mintd" would need a Furnace contract emitting an
+   event, which is a deploy and a security review, not a frontend change. */
+const FU_DEAD = "0x000000000000000000000000000000000000dEaD";
+const FU_ABI = [
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
+  "function totalSupply() view returns (uint256)",
+  "function balanceOf(address) view returns (uint256)",
+  "function transfer(address,uint256) returns (bool)",
+];
+const FU_SEEN = "furnaceSeen_v1"; // tokens burned from this browser, so they persist in the list
+let fuTok = null;
+
+function fuSeen() { try { return JSON.parse(localStorage.getItem(FU_SEEN) || "[]"); } catch { return []; } }
+function fuRemember(a) {
+  const s = fuSeen();
+  if (!s.includes(a.toLowerCase())) { s.push(a.toLowerCase()); try { localStorage.setItem(FU_SEEN, JSON.stringify(s)); } catch {} }
+}
+
+function fuInit() {
+  $("fuInfo").textContent = "Paste a token address to begin.";
+  $("fuBal").textContent = "Bal: –";
+  $("fuBurnedNote").textContent = "Total supply at the dead address, read live from the chain. Counts every burn of that token, not only burns made here.";
+  fuRenderBurned();
+}
+
+// Resolve whatever was pasted, and refuse anything that is not a token.
+async function fuLookup() {
+  const a = $("fuAddr").value.trim();
+  const info = $("fuInfo");
+  fuTok = null; $("fuBtn").disabled = true; $("fuBal").textContent = "";
+  if (!a) { info.textContent = "Paste a token address to begin."; return; }
+  if (!ethers.isAddress(a)) { info.textContent = "Not a valid address."; return; }
+  if (a.toLowerCase() === FU_DEAD.toLowerCase()) { info.textContent = "That is the dead address itself."; return; }
+  info.textContent = "Reading contract…";
+  try {
+    const c = new ethers.Contract(a, FU_ABI, rp);
+    const sym = await c.symbol();
+    const dec = Number(await c.decimals());
+    fuTok = { addr: ethers.getAddress(a), sym, dec };
+    info.innerHTML = `<b>${esc(sym)}</b> · ${dec} decimals · <span style="font-family:var(--mono)">${short(a)}</span>`;
+    fuBal();
+  } catch {
+    info.textContent = "No ERC-20 found at that address on Stable.";
+  }
+}
+
+async function fuBal() {
+  const el = $("fuBal");
+  if (!fuTok) { el.textContent = "Bal: –"; return; }
+  if (!wallet) { el.textContent = "Connect a wallet"; return; }
+  try {
+    const b = await new ethers.Contract(fuTok.addr, FU_ABI, rp).balanceOf(wallet);
+    fuTok.bal = b;
+    el.textContent = `Bal: ${nf(Number(ethers.formatUnits(b, fuTok.dec)), 4)} ${fuTok.sym}`;
+    fuPreview();
+  } catch { el.textContent = "Bal: –"; }
+}
+
+function fuMax() {
+  if (!fuTok || fuTok.bal === undefined) return;
+  $("fuAmt").value = ethers.formatUnits(fuTok.bal, fuTok.dec);
+  fuPreview();
+}
+
+function fuPreview() {
+  const v = Number($("fuAmt").value);
+  const ok = fuTok && wallet && v > 0 && fuTok.bal !== undefined &&
+    ethers.parseUnits(String($("fuAmt").value || "0"), fuTok.dec) <= fuTok.bal;
+  const btn = $("fuBtn");
+  btn.disabled = !ok;
+  btn.textContent = fuTok && v > 0 ? `Burn ${nf(v, 4)} ${fuTok.sym} forever` : "Burn tokens";
+}
+
+async function fuBurn() {
+  if (!fuTok) return;
+  if (!signer) return toast("Connect a wallet first", "err");
+  let amt;
+  try { amt = ethers.parseUnits($("fuAmt").value.trim(), fuTok.dec); } catch { return toast("Bad amount", "err"); }
+  if (amt <= 0n) return toast("Amount must be above zero", "err");
+  // Typed confirmation, because this is the one action on the site with no
+  // recovery path at all.
+  const typed = prompt(`This destroys ${ethers.formatUnits(amt, fuTok.dec)} ${fuTok.sym} permanently.\n\nType BURN to confirm.`);
+  if ((typed || "").trim().toUpperCase() !== "BURN") return toast("Cancelled", "");
+  const btn = $("fuBtn");
+  btn.disabled = true; btn.textContent = "Burning…";
+  try {
+    const tx = await new ethers.Contract(fuTok.addr, FU_ABI, signer).transfer(FU_DEAD, amt);
+    await tx.wait();
+    fuRemember(fuTok.addr);
+    toast(`Burned ${nf(Number(ethers.formatUnits(amt, fuTok.dec)), 4)} ${fuTok.sym}`, "ok");
+    $("fuAmt").value = "";
+    fuBal();
+    fuRenderBurned();
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+  btn.textContent = "Burn tokens"; fuPreview();
+}
+
+// Reads balanceOf(dEaD) rather than scanning Transfer logs. One call per token,
+// full history, and immune to the RPC's four day log retention.
+async function fuRenderBurned(all = false) {
+  const el = $("fuBurned");
+  const cand = [];
+  const add = (a, sym) => { if (a && !cand.find((c) => c.addr.toLowerCase() === a.toLowerCase())) cand.push({ addr: a, sym }); };
+  const plat = tokens.find((t) => t.platform);
+  if (plat) add(plat.addr, plat.symbol);
+  for (const a of fuSeen()) add(a, null);
+  if (all) for (const t of tokens) add(t.addr, t.symbol);
+  else for (const t of [...tokens].sort((a, b) => (b.mcap > a.mcap ? 1 : -1)).slice(0, 12)) add(t.addr, t.symbol);
+
+  if (!cand.length) { el.innerHTML = '<div class="empty">Nothing burned yet.</div>'; return; }
+  el.innerHTML = `<div class="empty">Reading ${cand.length} tokens…</div>`;
+
+  const rows = [];
+  for (const c of cand) {
+    try {
+      // Sequential on purpose: two concurrent reads here get batched into one
+      // JSON-RPC array and Stable rejects the whole thing (CLAUDE.md gotcha 1).
+      const t = new ethers.Contract(c.addr, FU_ABI, rp);
+      const burned = await t.balanceOf(FU_DEAD);
+      if (burned === 0n) continue;
+      const supply = await t.totalSupply();
+      const dec = Number(await t.decimals());
+      const sym = c.sym || await t.symbol();
+      const pct = supply > 0n ? (Number(ethers.formatUnits(burned, dec)) / Number(ethers.formatUnits(supply, dec)) * 100) : 0;
+      rows.push({ addr: c.addr, sym, burned: Number(ethers.formatUnits(burned, dec)), pct });
+    } catch {}
+  }
+  if (!rows.length) { el.innerHTML = '<div class="empty">No burns found for these tokens.</div>'; return; }
+  rows.sort((a, b) => b.pct - a.pct);
+  el.innerHTML = rows.map((r) => `
+    <div class="furow">
+      <div style="min-width:0">
+        <div class="fusym">${esc(r.sym)}</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--dim)">${short(r.addr)}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="fuamt">${nf(r.burned, 0)}</div>
+        <div style="font-size:11px;color:var(--dim)">burned</div>
+      </div>
+      <div style="text-align:right">
+        <div class="fupct">${r.pct.toFixed(2)}%</div>
+        <div style="font-size:11px;color:var(--dim)">of supply</div>
+      </div>
+    </div>`).join("");
+}
+
+function fuScan() {
+  const b = $("fuScanBtn");
+  b.textContent = "Scanning…"; b.disabled = true;
+  fuRenderBurned(true).finally(() => { b.textContent = "Scan all tokens"; b.disabled = false; });
+}
 
 /* ------------------------------------------ balance tags + MAX buttons */
 // Fills a balance tag next to an amount input. headroom keeps native USDT0
@@ -2725,7 +3038,14 @@ async function loadMintrLastTrade() {
     ]);
     const lp = logProvider();
     const head = await lp.getBlockNumber();
-    const SPAN = 5000, WINDOWS = 60; // up to 300k blocks, one request each
+    // 500 is the RPC's hard getLogs ceiling, so starting there means the first
+    // request succeeds. This was 5000: every window failed four times on its
+    // way down to a legal width, then took sixteen more requests to cover
+    // itself, and the loop kept going until it had two events. The second most
+    // recent mint is routinely fifty-odd windows back, so that was well over a
+    // thousand requests and several minutes. The panel read "Loading recent
+    // mints" the whole time, which looked like nothing was happening at all.
+    const SPAN = 500, WINDOWS = 80; // 40k blocks, about 8 hours at 0.70s
     let logs = [], scanned = 0, errors = 0, hitFloor = false, firstErr = null;
 
     // resume from the last mint we found instead of rescanning from head
@@ -2737,7 +3057,10 @@ async function loadMintrLastTrade() {
     // whole window. One sequential request per topic, halving the span on
     // failure so a busy stretch degrades instead of disappearing.
     async function windowLogs(from, to, topic) {
-      for (let span = to - from; span >= 250; span = Math.floor(span / 2)) {
+      // Floor is 25, not 250. The shrink exists for the RPC's separate 500
+      // RESULT cap, which a busy window can hit at any width, and stopping at
+      // 250 gave up while there were still legal widths left to try.
+      for (let span = to - from; span >= 25; span = Math.floor(span / 2)) {
         try {
           const out = [];
           for (let a = from; a <= to; a += span + 1) {
@@ -2756,10 +3079,15 @@ async function loadMintrLastTrade() {
       const from = Math.max(0, to - SPAN);
       if (to <= 0) break;
       scanned = head - from;
+      // Say how far back it has looked. A fixed "Loading" label through a
+      // multi-second backward scan is indistinguishable from a hung panel.
+      if (w && w % 8 === 0) el.textContent = `Searching mints… ${scanned.toLocaleString()} blocks back`;
       try {
-        const b = await windowLogs(from, to, boughtTopic);
-        const s = await windowLogs(from, to, soldTopic);
-        logs = b.concat(s).concat(logs);
+        // One OR'd query instead of one per topic. Same coverage, half the
+        // requests, and mints and burns arrive already interleaved.
+        // windowLogs wraps this in topics[], so an array here means "topic0 is
+        // Bought OR Sold", not a second topic position.
+        logs = (await windowLogs(from, to, [boughtTopic, soldTopic])).concat(logs);
       } catch (e) {
         errors++;
         firstErr = firstErr || (e.shortMessage || e.message || String(e));
