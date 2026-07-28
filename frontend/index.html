@@ -1950,6 +1950,57 @@
     </div>
   </section>
 
+  <!-- HOLDERS: public standing board. Reads holder-scores.json, which the
+       holder-ledger indexer regenerates. Deliberately shows SHARES, never token
+       amounts: there is no Arc token, no supply decision and no live Arc
+       mainnet, so any absolute figure here would be a promise the chain cannot
+       keep. A percentage of a tracked total is a statement about the past. -->
+  <section class="view" id="view-holders">
+    <div class="launchC" style="max-width:1000px">
+      <div class="heroC" style="margin:28px auto 20px">
+        <div class="badgepill">HOLDER STANDING</div>
+        <h1 style="font-size:40px">Who has actually held.</h1>
+        <p>Every $MINTD balance on Stable, measured continuously since launch. This scores how <b>long</b> you have held, not just what you hold today, so buying in right before a snapshot earns nothing.</p>
+      </div>
+
+      <div class="heroStats" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
+        <div class="hstat"><b id="hoDays" style="color:var(--green)">–</b><label>DAYS TRACKED</label></div>
+        <div class="hstat"><b id="hoQual" style="color:var(--green2)">–</b><label>QUALIFYING HOLDERS</label></div>
+        <div class="hstat"><b id="hoEver">–</b><label>EVER HELD</label></div>
+        <div class="hstat"><b id="hoExit" style="color:var(--red)">–</b><label>HELD THEN SOLD OUT</label></div>
+      </div>
+
+      <div class="trade" id="hoMine" style="margin-bottom:16px;display:none">
+        <div class="mkthead"><h2>Your standing</h2><div class="spacer"></div>
+          <span class="bal" id="hoAddr"></span></div>
+        <div class="heroStats" style="grid-template-columns:repeat(4,1fr)">
+          <div class="hstat"><b id="hoRank" style="color:var(--green)">–</b><label>RANK</label></div>
+          <div class="hstat"><b id="hoShare" style="color:var(--green2)">–</b><label>SHARE OF TRACKED HOLDING</label></div>
+          <div class="hstat"><b id="hoTwab">–</b><label>TIME-WEIGHTED AVG</label></div>
+          <div class="hstat"><b id="hoNow">–</b><label>HELD NOW</label></div>
+        </div>
+        <div class="finenote" id="hoWhy" style="margin-top:10px"></div>
+      </div>
+
+      <div class="trade">
+        <div class="mkthead">
+          <h2>Standings</h2>
+          <div class="spacer"></div>
+          <span class="live"><span class="dot"></span><span id="hoUpd">–</span></span>
+          <button class="chip" onclick="hoLoad(true)"><svg class="ic" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg> Refresh</button>
+        </div>
+        <div id="hoRows"><div class="empty">Loading…</div></div>
+      </div>
+
+      <div class="trade" style="margin-top:16px">
+        <h2 style="font-size:16px;margin-bottom:8px">What this is, and what it is not</h2>
+        <p class="finenote">This is a <b>measurement, not an entitlement</b>. It records what has already happened on chain: how much $MINTD each address held, and for how long. Anyone can recompute every number in it from Stable's logs.</p>
+        <p class="finenote">There is <b>no token on Arc</b>, no supply decision has been made, and Arc mainnet is not publicly live. Nothing here promises you anything, no amount is committed, and no date is set. If that changes, it will be said plainly rather than implied by a dashboard.</p>
+        <p class="finenote">Score is the <b>lesser</b> of your time-weighted average balance and what you hold right now. Selling out zeroes it, and buying in late cannot rescue it, because both of those are ways of not being a holder. Percentages are of the tracked total, which moves as others buy and sell.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- DEV: operator dashboard. Hidden from the nav unless the connected wallet
        is in DEV_ADDRS. This is visibility, NOT access control: every number on
        this page is public onchain data, and claimFees is permissionless for
@@ -2036,6 +2087,7 @@
         <button id="nav-portfolio" onclick="go('portfolio')"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="1.5"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg> Portfolio</button>
         <button id="nav-burn" onclick="go('burn')"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3c1.5 3 4.5 4.2 4.5 8a4.5 4.5 0 0 1-9 0C7.5 8 9 6.5 12 3z"/><path d="M12 21c-3 0-5.5-2-5.5-4.5"/><path d="M12 21c3 0 5.5-2 5.5-4.5"/></svg> Furnace</button>
         <button id="nav-docs" onclick="go('docs')"><svg class="ic" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg> Docs</button>
+        <button id="nav-holders" onclick="go('holders')"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg> Holders</button>
         <button id="nav-dev" onclick="go('dev')" style="display:none"><svg class="ic" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg> Dev</button>
         <button id="nav-install" onclick="a2hsShowNow()" style="display:none"><svg class="ic" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg> Add to Home Screen</button>
         <div class="moresocial">
@@ -2105,7 +2157,9 @@ const CHAINS = {
       // current source and returns 8.
       legacyPadAbi: true,
     },
-    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, screener: true },
+    // holders: the standing board only exists for MINTD on Stable, which is
+    // the only token the ledger indexes.
+    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, screener: true, holders: true },
     statsFile: "stats.json",
     faucet: null,
     // Stable rejects any batch outright, so the shared provider batches only
@@ -2609,6 +2663,9 @@ async function route() {
     fuInit();
   } else if (h === "docs") {
     showView("docs");
+  } else if (h === "holders") {
+    showView("holders");
+    hoLoad();
   } else if (h === "dev") {
     showView("dev");
     if (!tokens.length && padAddr()) await loadAll(); // symbols for the table
@@ -2631,7 +2688,7 @@ function applyChainUi() {
   // broken: Arc has no gold engine and no MINTD, so those read as failures.
   const map = { "nav-launch": "launch", "nav-mintswap": "swap", "nav-earn": "earn",
                 "nav-mintr": "mintr", "nav-synth": "gold", "nav-locker": "locker", "nav-burn": "burn",
-                "nav-screener": "screener", "nav-bridge": "bridge" };
+                "nav-screener": "screener", "nav-bridge": "bridge", "nav-holders": "holders" };
   for (const [id, feat] of Object.entries(map)) {
     const b = $(id);
     if (b) b.style.display = NET.features[feat] === false ? "none" : "";
@@ -2833,6 +2890,7 @@ async function connect() {
     toast("Connected to " + NET.label, "ok"); // was hardcoded "Stable", wrong on Arc
     devNavSync();
     if ($("view-dev").classList.contains("on")) devLoad();
+    if ($("view-holders").classList.contains("on")) hoPaint(); // fills in "your standing"
     if (cur) refreshTrade();
     if ($("view-mintswap").classList.contains("on")) swBalance();
     if ($("view-earn").classList.contains("on")) { loadFarm(); loadFeePools(); loadPools(); }
@@ -2842,6 +2900,78 @@ async function connect() {
     if ($("view-synth").classList.contains("on")) syLoad();
     if ($("view-launch").classList.contains("on")) setNativeBalTag("lDevBal", 3);
   } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+/* --------------------------------------------------------------- holders */
+// Public standing board. Reads a static JSON the indexer regenerates, so the
+// page costs no RPC and works with no wallet connected.
+let hoData = null;
+
+async function hoLoad(force) {
+  const rows = $("hoRows");
+  if (hoData && !force) { hoPaint(); return; }
+  rows.innerHTML = `<div class="empty">Loading…</div>`;
+  try {
+    // Cache-busted on an explicit refresh: the file is regenerated every ten
+    // minutes and a stale copy makes the board look frozen.
+    const r = await fetch("/holder-scores.json" + (force ? "?t=" + Date.now() : ""), { cache: force ? "reload" : "default" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    hoData = await r.json();
+    hoPaint();
+  } catch (e) {
+    rows.innerHTML = `<div class="empty">Could not load holder data: ${esc(e.message)}</div>`;
+  }
+}
+
+function hoPaint() {
+  const d = hoData;
+  if (!d) return;
+  $("hoDays").textContent = d.days.toFixed(1);
+  $("hoQual").textContent = nf(d.qualifying, 0);
+  $("hoEver").textContent = nf(d.everHeld, 0);
+  $("hoExit").textContent = nf(d.exitedWithWeight, 0);
+  const mins = Math.max(0, Math.round((Date.now() / 1000 - d.updated) / 60));
+  $("hoUpd").textContent = mins < 2 ? "just updated" : `updated ${mins}m ago`;
+
+  const ranked = Object.entries(d.scores)
+    .map(([addr, v]) => ({ addr, score: v[0], twab: v[1], bal: v[2] }))
+    .sort((a, b) => b.score - a.score);
+
+  // Your own standing, if a wallet is connected and it scored.
+  const me = wallet ? wallet.toLowerCase() : null;
+  const idx = me ? ranked.findIndex((r) => r.addr === me) : -1;
+  const box = $("hoMine");
+  if (idx >= 0) {
+    const r = ranked[idx];
+    box.style.display = "";
+    $("hoAddr").textContent = short(wallet);
+    $("hoRank").textContent = "#" + (idx + 1);
+    $("hoShare").textContent = (r.score / d.totalScore * 100).toFixed(2) + "%";
+    $("hoTwab").textContent = nf(r.twab, 0);
+    $("hoNow").textContent = nf(r.bal, 0);
+    $("hoWhy").innerHTML = r.bal < r.twab
+      ? `Your score is capped by what you hold now (${nf(r.bal, 0)}), which is below your average of ${nf(r.twab, 0)}. Holding more brings it back up.`
+      : `Your score is your time-weighted average. Holding longer raises it; you currently hold ${nf(r.bal, 0)}, at or above that average.`;
+  } else if (me) {
+    box.style.display = "";
+    $("hoAddr").textContent = short(wallet);
+    for (const id of ["hoRank", "hoShare", "hoTwab", "hoNow"]) $(id).textContent = "–";
+    $("hoWhy").textContent = "This wallet has no score yet. It either never held $MINTD, sold out, or is a contract. "
+      + "Buying and holding from here starts accruing immediately.";
+  } else {
+    box.style.display = "none";
+  }
+
+  $("hoRows").innerHTML = `<table style="width:100%;border-collapse:collapse">
+    <tr style="text-align:left;opacity:.6;font-size:12px">
+      <th style="padding:6px 4px">#</th><th>ADDRESS</th><th>SHARE</th><th>TIME-WEIGHTED AVG</th><th>HELD NOW</th></tr>
+    ${ranked.slice(0, 100).map((r, i) => `<tr style="border-top:1px solid rgba(255,255,255,.06)${r.addr === me ? ";background:var(--green-soft)" : ""}">
+      <td style="padding:8px 4px">${i + 1}</td>
+      <td style="opacity:.75">${esc(short(r.addr))}${r.addr === me ? " <b>(you)</b>" : ""}</td>
+      <td><b>${(r.score / d.totalScore * 100).toFixed(2)}%</b></td>
+      <td>${nf(r.twab, 0)}</td>
+      <td>${nf(r.bal, 0)}</td></tr>`).join("")}
+  </table>${ranked.length > 100 ? `<div class="finenote" style="margin-top:8px">Showing the top 100 of ${nf(ranked.length, 0)} qualifying addresses.</div>` : ""}`;
 }
 
 /* ------------------------------------------------------------------- dev */

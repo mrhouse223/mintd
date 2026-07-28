@@ -44,6 +44,7 @@ const SEC_PER_BLOCK = 0.70;       // measured over 100k blocks, see CLAUDE.md
 const LEDGER = path.join(ROOT, "data", "mintd-holder-ledger.json");
 const LOCK = path.join(ROOT, "holder-ledger.lock");
 const REPORT = path.join(ROOT, "docs", "mintd-holder-weights.md");
+const PUBLISHED = path.join(ROOT, "frontend", "holder-scores.json");
 
 const WATCH = process.argv.includes("--watch");
 const REPORT_ONLY = process.argv.includes("--report");
@@ -238,15 +239,25 @@ async function report() {
   // Classify only now. Anything with code is a contract, same blunt rule as
   // holders.js: it removes pools and farms correctly, and would also remove a
   // smart-contract wallet belonging to a real person.
-  console.log(`classifying ${rows.length} addresses...`);
-  let n = 0;
+  // Whether an address holds code does not change, so it is cached in the
+  // ledger. Without this the report costs ~1,300 eth_getCode calls every run,
+  // which is too slow to regenerate on the indexer's cadence.
+  led.codeCache = led.codeCache || {};
+  let looked = 0;
   for (const r of rows) {
-    if (r.addr === DEAD) { r.kind = "burned"; r.label = "dead address"; }
-    else if (MINE[r.addr]) { r.kind = "mine"; r.label = MINE[r.addr]; }
-    else if (KNOWN[r.addr]) { r.kind = "contract"; r.label = KNOWN[r.addr]; }
-    else { r.kind = (await rp.getCode(r.addr)) !== "0x" ? "contract" : "holder"; r.label = r.kind === "contract" ? "unlabelled contract" : ""; }
-    if (++n % 100 === 0) process.stdout.write(`  ${n}/${rows.length}\n`);
+    if (r.addr === DEAD) { r.kind = "burned"; r.label = "dead address"; continue; }
+    if (MINE[r.addr]) { r.kind = "mine"; r.label = MINE[r.addr]; continue; }
+    if (KNOWN[r.addr]) { r.kind = "contract"; r.label = KNOWN[r.addr]; continue; }
+    let isC = led.codeCache[r.addr];
+    if (isC === undefined) {
+      isC = (await rp.getCode(r.addr)) !== "0x" ? 1 : 0;
+      led.codeCache[r.addr] = isC;
+      if (++looked % 100 === 0) process.stdout.write(`  looked up ${looked} new addresses\n`);
+    }
+    r.kind = isC ? "contract" : "holder";
+    r.label = isC ? "unlabelled contract" : "";
   }
+  if (looked) { saveLedger(led); console.log(`  cached ${looked} new address classifications`); }
 
   const real = rows.filter((r) => r.kind === "holder");
   // Pure time-weighting rewards people who already left: an address that held
@@ -350,6 +361,30 @@ caveat applied to Arc activity.
 
   fs.mkdirSync(path.dirname(REPORT), { recursive: true });
   fs.writeFileSync(REPORT, md);
+
+  // ---------------------------------------------------- published for the site
+  // Shares only, never token amounts. There is no Arc token, no supply decision
+  // and no live Arc mainnet, so any absolute figure on the site would be a
+  // promise the chain cannot keep. A percentage of a tracked total is a
+  // statement about the past, which is true today and stays true.
+  const scores = {};
+  for (const r of byScore) scores[r.addr] = [Math.round(r.score), Math.round(r.twab), Math.round(r.bal)];
+  fs.writeFileSync(PUBLISHED, JSON.stringify({
+    updated: Math.floor(Date.now() / 1000),
+    token: led.token,
+    chainId: led.chainId,
+    startBlock: led.startBlock,
+    cursorBlock: led.cursorBlock,
+    days: Number(days.toFixed(3)),
+    transfers: led.transfers,
+    everHeld: real.length,
+    qualifying: byScore.length,
+    exitedWithWeight: exited.length,
+    totalScore: Math.round(totalScore),
+    // [score, timeWeightedAvg, heldNow], all whole MINTD. Only qualifying
+    // addresses: a zero score is the same as absent and would triple the file.
+    scores,
+  }) + "\n");
   console.log(`\n${byScore.length} qualify of ${real.length} who ever held, over ${days.toFixed(2)} days`);
   console.log(`${exited.length} had a positive time-weight but hold nothing now (score 0)\n`);
   for (const r of byScore.slice(0, 10)) {
@@ -365,10 +400,15 @@ caveat applied to Arc activity.
   process.on("SIGINT", () => { dropLock(); process.exit(0); });
   process.on("SIGTERM", () => { dropLock(); process.exit(0); });
 
-  if (!WATCH) { await pass(); return; }
+  if (!WATCH) { await pass(); await report(); return; }
   for (;;) {
-    try { await pass(); }
-    catch (e) {
+    try {
+      await pass();
+      // Regenerate the published scores too, so the site's dashboard tracks the
+      // ledger instead of whatever was committed by hand last. Cheap now that
+      // address classification is cached.
+      await report();
+    } catch (e) {
       // Loud, and the cursor stays put. Never swallow this: a run that fails
       // silently for a week loses a week of holding history that cannot be
       // rebuilt from a pruning node.
