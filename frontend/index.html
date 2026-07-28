@@ -2118,6 +2118,10 @@ const CHAINS = {
   "arc-testnet": {
     key: "arc-testnet", label: "Arc Testnet", short: "Arc",
     testnet: true,
+    // Not offered to ordinary visitors: it is a testnet whose tokens are
+    // worthless, and surfacing it next to the live chain invites someone to
+    // trade there by mistake. Operators see it once their wallet is connected.
+    gated: true,
     chain: {
       chainId: "0x4cef52", chainName: "Arc Testnet",
       nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
@@ -2194,10 +2198,21 @@ function switchChain(key) {
 function chainPill() {
   const el = $("chainPill");
   if (!el) return;
-  const opts = Object.values(CHAINS).map((c) =>
+  // A gated chain is not offered in the switcher unless an operator wallet is
+  // connected. The chain currently selected is always listed, so somebody who
+  // is already on it can still see where they are and switch away.
+  //
+  // This is DISCOVERABILITY, not access control. The Arc contracts are public,
+  // verified on arcscan, and anyone reading this file can set the localStorage
+  // key by hand. It keeps the testnet out of the way of ordinary visitors; it
+  // does not hide that the deployment exists.
+  const visible = Object.values(CHAINS).filter((c) => !c.gated || isDevWallet() || c.key === CHAIN_KEY);
+  const opts = visible.map((c) =>
     `<button class="${c.key === CHAIN_KEY ? "on" : ""}" onclick="switchChain('${c.key}')">
        ${esc(c.label)}${c.testnet ? ' <span class="tnet">TESTNET</span>' : ""}
      </button>`).join("");
+  // With nothing to switch to, the control is noise.
+  if (visible.length < 2) { el.innerHTML = ""; return; }
   el.innerHTML =
     `<button class="chainbtn" onclick="event.stopPropagation();document.getElementById('chainMenu').classList.toggle('on')">
        <span class="dot${NET.testnet ? " t" : ""}"></span>
@@ -2850,6 +2865,9 @@ let dvPending = [];   // rows with something to claim
 function devNavSync() {
   const b = $("nav-dev");
   if (b) b.style.display = isDevWallet() ? "" : "none";
+  // Gated chains appear in the switcher only once an operator wallet is
+  // connected, and connecting happens long after the pill is first drawn.
+  chainPill();
 }
 
 async function devLoad(force) {
