@@ -1058,7 +1058,7 @@
       <div class="tokid">
         <div class="avatar" id="tAvatar"></div>
         <div>
-          <div class="pillrow"><span class="pill">STABLE</span><span class="pill">UNISWAP V3 · 1%</span><span class="pill" id="tPlatPill" style="display:none;color:var(--gold);border-color:var(--gold)">&#9733; PLATFORM</span><span class="pill" id="tGradPill" style="display:none;color:var(--gold);border-color:var(--gold)">GRADUATED</span></div>
+          <div class="pillrow"><span class="pill chainpill">STABLE</span><span class="pill">UNISWAP V3 · 1%</span><span class="pill" id="tPlatPill" style="display:none;color:var(--gold);border-color:var(--gold)">&#9733; PLATFORM</span><span class="pill" id="tGradPill" style="display:none;color:var(--gold);border-color:var(--gold)">GRADUATED</span></div>
           <div class="tokname" id="tName">...</div>
           <div class="desc" id="tDesc"></div>
           <div class="links" id="tLinks"></div>
@@ -1092,7 +1092,7 @@
     <div class="bottomgrid">
       <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
         <div class="chartcard">
-          <div class="k">STABLE</div>
+          <div class="k chainpill">STABLE</div>
           <h3 style="margin-bottom:12px">Chart <a id="poolLink" target="_blank" style="float:right;font-size:12px">Open pool ↗</a></h3>
           <div id="chart"><div class="empty">No indexed swaps yet</div></div>
         </div>
@@ -1689,7 +1689,7 @@
         </p>
       </div>
       <div class="lform">
-        <h3>Token details <small>Creation fee: <b id="lFee">–</b> USDT0</small></h3>
+        <h3>Token details <small>Creation fee: <b id="lFee">–</b> <span class="qsym">USDT0</span></small></h3>
         <div class="frow">
           <div class="field"><label>LOGO</label>
             <input type="file" id="fImgFile" accept="image/*" style="display:none" onchange="pickImage(this,'logo')" />
@@ -2332,6 +2332,7 @@ function applyChainUi() {
   // The quote asset is USDT0 on Stable and USDC on Arc. Left hardcoded, the
   // trade widget offers to spend a token that does not exist on the chain.
   document.querySelectorAll(".qsym").forEach((e) => { e.textContent = sym; });
+  document.querySelectorAll(".chainpill").forEach((e) => { e.textContent = NET.short.toUpperCase(); });
   for (const id of ["paySym", "mrPaySym"]) { const e = $(id); if (e) e.textContent = sym; }
   for (const id of ["swIn", "plA"]) {
     const e = $(id);
@@ -3186,7 +3187,7 @@ async function loadMintr() {
     const tail = dot < 0 ? "" : full.slice(dot + 6);
     $("mrPrice").innerHTML = `$${esc(head)}${tail ? `<span class="mrtail">${esc(tail)}</span>` : ""}`;
     fitMrPrice(priceStr);
-    $("mrPrice2").textContent = fmtPrice(priceNum) + " USDT0";
+    $("mrPrice2").textContent = fmtPrice(priceNum) + " " + NET.chain.nativeCurrency.symbol;
     // gain since the $1.00 seed price
     const chg = (priceNum - MINTR_START_PRICE) / MINTR_START_PRICE * 100;
     $("mrPriceChg").textContent = (chg >= 0 ? "▲ +" : "▼ ") + pctStr(Math.abs(chg)) + " since launch";
@@ -3444,7 +3445,7 @@ function mrCalc() {
   const net = gross * (1 - sellTax);
   const profit = net - amt;
   $("calcMintr").textContent = nf(mintrOut, 4) + " MINTR";
-  $("calcPrice").textContent = fmtPrice(projPrice) + " USDT0";
+  $("calcPrice").textContent = fmtPrice(projPrice) + " " + NET.chain.nativeCurrency.symbol;
   $("calcVal").textContent = fmtUsd(net);
   $("calcProfit").textContent = (profit >= 0 ? "+" : "") + fmtUsd(profit) + " (" + (profit / amt * 100).toFixed(2) + "%)";
   $("calcProfit").style.color = profit >= 0 ? "var(--mintr)" : "var(--red)";
@@ -3456,7 +3457,7 @@ async function loadBuyback() {
   try {
     const bb = new ethers.Contract(BUYBACK_ADDR, BUYBACK_ABI, rp);
     const [pend, burned] = await Promise.all([bb.pending(), bb.totalMintdBurned()]);
-    $("bbPending").textContent = fmtUsd(ethers.formatUnits(pend, 6)) + " USDT0";
+    $("bbPending").textContent = fmtUsd(ethers.formatUnits(pend, 6)) + " " + NET.chain.nativeCurrency.symbol;
     $("bbBurned").textContent = nf(ethers.formatEther(burned), 0) + " MINTD";
     $("bbBtn").disabled = pend === 0n;
     $("bbBtn").textContent = pend === 0n ? "Nothing to burn yet" : "Trigger buyback & burn";
@@ -3494,8 +3495,8 @@ async function loadMintrCompare(contractPrice) {
     if (mintrRes === 0) { box.style.display = "none"; return; }
     const marketPrice = usdtRes / mintrRes;
     const dev = contractPrice > 0 ? (marketPrice - contractPrice) / contractPrice * 100 : 0;
-    $("mrCP").textContent = fmtPrice(contractPrice) + " USDT0";
-    $("mrMP").textContent = fmtPrice(marketPrice) + " USDT0";
+    $("mrCP").textContent = fmtPrice(contractPrice) + " " + NET.chain.nativeCurrency.symbol;
+    $("mrMP").textContent = fmtPrice(marketPrice) + " " + NET.chain.nativeCurrency.symbol;
     $("mrDev").textContent = (dev >= 0 ? "+" : "") + dev.toFixed(2) + "%";
     $("mrDev").style.color = Math.abs(dev) < 1 ? "var(--green)" : Math.abs(dev) < 5 ? "var(--gold)" : "var(--red)";
     box.style.display = "block";
@@ -3505,7 +3506,7 @@ function mrSetSide(b) {
   mrBuy = b;
   $("mrTabBuy").className = b ? "onb" : "";
   $("mrTabSell").className = b ? "" : "ons";
-  $("mrPaySym").textContent = b ? "USDT0" : "MINTR";
+  $("mrPaySym").textContent = b ? NET.chain.nativeCurrency.symbol : "MINTR";
   $("mrBtn").textContent = b ? "Buy MINTR" : "Sell MINTR";
   $("mrBtn").className = "btn" + (b ? "" : " sell");
   $("mrTax").textContent = b ? `${(mrFees.b / 100).toFixed(2)}% backing + ${(mrFees.p / 100).toFixed(2)}% platform` : `${(mrFees.s / 100).toFixed(2)}% backing + ${(mrFees.p / 100).toFixed(2)}% platform`;
@@ -3538,7 +3539,7 @@ async function mrQuote() {
     } else {
       const out = await m.quoteSell(E(a));
       mrQuoteRaw = out;
-      $("mrRecv").textContent = nf(ethers.formatUnits(out, 6), 4) + " USDT0";
+      $("mrRecv").textContent = nf(ethers.formatUnits(out, 6), 4) + " " + NET.chain.nativeCurrency.symbol;
     }
   } catch { $("mrRecv").textContent = "–"; mrQuoteRaw = 0n; }
 }
@@ -5246,7 +5247,7 @@ function lkInit() {
   $("lkSetup").style.display = "none"; $("lkCard").style.display = "block";
   lkPaintUnlock();
   new ethers.Contract(LOCKER_ADDR, LOCKER_ABI, rp).lockFee()
-    .then((f) => { $("lkFeeLbl").textContent = ethers.formatEther(f) + " USDT0"; })
+    .then((f) => { $("lkFeeLbl").textContent = ethers.formatEther(f) + " " + NET.chain.nativeCurrency.symbol; })
     .catch(() => { $("lkFeeLbl").textContent = "–"; });
   lkLoad();
   lkLoadAll();
@@ -5611,12 +5612,12 @@ async function renderToken(addr) {
   $("tCA").textContent = cur.addr;
   $("poolLink").href = `${CHAIN.blockExplorerUrls[0]}/address/${cur.pool}`;
   $("sMcap").textContent = fmtUsd(ethers.formatEther(cur.mcap));
-  $("sMcap2").textContent = nf(ethers.formatEther(cur.mcap), 0) + " USDT0";
+  $("sMcap2").textContent = nf(ethers.formatEther(cur.mcap), 0) + " " + NET.chain.nativeCurrency.symbol;
   $("sPrice").textContent = fmtPrice(ethers.formatEther(cur.price));
   $("sLiq").textContent = cur.tx24 !== undefined ? nf(cur.tx24, 0) : nf(tradeLogs.filter((x) => x.addr === addr).length, 0);
   $("gPct").textContent = cur.prog.toFixed(2) + "%";
   $("gBar").style.width = cur.prog + "%";
-  $("gLbl").textContent = `Target ${nf(ethers.formatEther(gradTarget()), 0)} USDT0 · Current pool ${nf(ethers.formatEther(cur.poolUsdt), 2)} USDT0 · Locked liquidity never migrates`;
+  $("gLbl").textContent = `Target ${nf(ethers.formatEther(gradTarget()), 0)} ${NET.chain.nativeCurrency.symbol} · Current pool ${nf(ethers.formatEther(cur.poolUsdt), 2)} ${NET.chain.nativeCurrency.symbol} · Locked liquidity never migrates`;
   const myTrades = tradeLogs.filter((x) => x.addr === addr);
   if (cur.vol24 !== undefined) {
     $("sVol").textContent = fmtUsd(cur.vol24);
@@ -5796,7 +5797,7 @@ function copyCA() { navigator.clipboard.writeText(cur.addr).then(() => toast("Co
 function setSide(b) {
   isBuy = b;
   $("tabBuy").className = b ? "onb" : ""; $("tabSell").className = b ? "" : "ons";
-  $("paySym").textContent = b ? "USDT0" : "$" + (cur ? cur.symbol : "");
+  $("paySym").textContent = b ? NET.chain.nativeCurrency.symbol : "$" + (cur ? cur.symbol : "");
   $("tradeBtn").textContent = b ? "Buy" : "Sell";
   $("tradeBtn").className = "btn" + (b ? "" : " sell");
   $("amt").value = "";
@@ -5810,7 +5811,7 @@ async function refreshTrade() {
   if (!wallet) { $("payBal").textContent = "Balance –"; return; }
   const bal = isBuy ? await rp.getBalance(wallet) : await new ethers.Contract(cur.addr, ERC20_ABI, rp).balanceOf(wallet);
   $("payBal").dataset.raw = bal;
-  $("payBal").textContent = "Balance " + nf(ethers.formatEther(bal), 4) + (isBuy ? " USDT0" : " $" + cur.symbol);
+  $("payBal").textContent = "Balance " + nf(ethers.formatEther(bal), 4) + (isBuy ? " " + NET.chain.nativeCurrency.symbol : " $" + cur.symbol);
 }
 
 async function updateHoldings() {
@@ -5836,7 +5837,7 @@ async function updateHoldings() {
     $("hTok").textContent = nf(ethers.formatEther(tokBal), 2);
     $("hVal").textContent = fmtUsd(ethers.formatEther(value));
     $("hPct").textContent = (Number(pctBps) / 100).toFixed(2) + "%";
-    $("hUsdt").textContent = nf(ethers.formatEther(natBal), 2) + " USDT0";
+    $("hUsdt").textContent = nf(ethers.formatEther(natBal), 2) + " " + NET.chain.nativeCurrency.symbol;
   } catch { /* leave dashes */ }
 }
 
@@ -5875,7 +5876,7 @@ async function quote() {
     quoteRaw = out; // buys: 18-dec tokens; sells: 6-dec USDT0
     $("recv").textContent = isBuy
       ? nf(ethers.formatEther(out), 2) + " $" + cur.symbol
-      : nf(ethers.formatUnits(out, 6), 6) + " USDT0";
+      : nf(ethers.formatUnits(out, 6), 6) + " " + NET.chain.nativeCurrency.symbol;
   } catch { $("recv").textContent = "–"; quoteRaw = 0n; }
 }
 
@@ -5891,7 +5892,7 @@ async function trade() {
     // approve whatever we're spending (USDT0 on buy, the token on sell)
     const spend = new ethers.Contract(isBuy ? ADDR.usdt0 : cur.addr, ERC20_ABI, signer);
     if ((await spend.allowance(wallet, ADDR.router)) < amountIn) {
-      toast("Approving " + (isBuy ? "USDT0" : "$" + cur.symbol) + "…");
+      toast("Approving " + (isBuy ? NET.chain.nativeCurrency.symbol : "$" + cur.symbol) + "…");
       await (await spend.approve(ADDR.router, ethers.MaxUint256)).wait();
     }
     let tx;
@@ -5905,9 +5906,10 @@ async function trade() {
     toast("Transaction sent…");
     await tx.wait();
     toast((isBuy ? "Bought" : "Sold") + " $" + cur.symbol + " 🎉", "ok");
+    const traded = cur.addr;
     await loadAll();
-    cur = tokens.find((t) => t.addr === cur.addr);
-    openToken(cur.addr);
+    cur = tokens.find((t) => sameAddr(t.addr, traded)) || cur;
+    openToken(traded);
   } catch (e) { toast(e.shortMessage || e.message, "err"); }
 }
 
