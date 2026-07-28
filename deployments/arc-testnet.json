@@ -1,0 +1,27 @@
+{
+  "chain": "arc-testnet",
+  "chainId": 5042002,
+  "contracts": {
+    "WETH9": "0x59C49340e0902704e6e1918BaFC14185A114Fb05",
+    "MintSwapFactory": "0x5481A9aBAC5747252Dda1f40A269A2D48Af2b8Db",
+    "MintSwapRouter": "0x7de1C45839C56f8CC3252C5F394b3410393d996d",
+    "UniswapV3Factory": "0x23bD448568E58ee5d3ceD5Ee87619c51071F3eA2",
+    "NFTDescriptor": "0x7C69FDe0b78D1BE1229770063220dC87Bc5F4f82",
+    "PositionDescriptor": "0x954578438E27fD85CC0d23950C260AcCd4d2829c",
+    "NonfungiblePositionManager": "0xe4c473Eea2dF9e6Aa3db7b97695117FF31c0Fbfc",
+    "SwapRouter02": "0xDf982D7119dD6a5Ec266aE69f6D6537C90F3680a",
+    "QuoterV2": "0xa13559d6cD9A2b36aeF70cb0742820a3fd8934FE",
+    "MINTR": "0x3e1184203B9c1760654CbEFCd111ce1185Ae57be",
+    "InstantLaunchpad": "0xd6fdA9A0Fd4b4ee724ab0c0B958a712E5bb37E96",
+    "TokenLocker": "0xAcc8EA03ea4722F23aE0b40Ac707e3fAAa8F6a6A",
+    "V3PositionLocker": "0x8530b966C12E2d2493f712be9d5Cf39f364DD3B7",
+    "TokenMetaRegistry": "0x09c419226e83A91323FDC170144526D8C4a39B75",
+    "Furnace": "0x17E5C63ab0Ff682e5C1Cb2e391870d1a57104C5F"
+  },
+  "gasToken": {
+    "address": "0x3600000000000000000000000000000000000000",
+    "symbol": "USDC",
+    "decimals": 6
+  },
+  "deployer": "0xD1E3636906Ceea0A67231dcb5a73719B02988023"
+}

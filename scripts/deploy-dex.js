@@ -35,8 +35,10 @@ const CHAINS = {
     rpc: "https://rpc.testnet.arc.network",
     chainId: 5042002,
     // Native gas token, exposed as a 6-decimal ERC-20 at a system address.
-    // Same shape as USDT0 on Stable, so CLAUDE.md gotcha 6 is in play until
-    // a funded round-trip proves otherwise.
+    // CONFIRMED dual-decimal on 2026-07-28 against a funded address: native
+    // eth_getBalance reports 18 decimals, balanceOf reports 6, and the ratio is
+    // exactly 1e12. Identical to USDT0 on Stable, so CLAUDE.md gotcha 6 applies
+    // here too. Comparing the two raw integers directly is a 1e12 error.
     gasToken: { address: "0x3600000000000000000000000000000000000000", symbol: "USDC", decimals: 6 },
     explorer: "https://testnet.arcscan.app",
     keyVar: "ARC_DEPLOYER_KEY",
