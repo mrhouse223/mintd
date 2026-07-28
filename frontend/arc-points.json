@@ -1,0 +1,37 @@
+{
+  "updated": 1785254738,
+  "chainId": 5042002,
+  "fromBlock": 54095000,
+  "toBlock": 54113271,
+  "formula": {
+    "swapPerUsd": 1,
+    "launchFlat": 50,
+    "burnFlat": 40,
+    "lockFlat": 25,
+    "mintrPerUsd": 1
+  },
+  "addresses": 2,
+  "totalPoints": 69,
+  "leaderboard": [
+    {
+      "addr": "0x0944f9aa36be35fe1aa148544b1000fdc099e770",
+      "points": 59,
+      "swapUsd": 9,
+      "launches": 1,
+      "burns": 0,
+      "locks": 0,
+      "mintrUsd": 0,
+      "days": 1
+    },
+    {
+      "addr": "0xd1e3636906ceea0a67231dcb5a73719b02988023",
+      "points": 10,
+      "swapUsd": 10,
+      "launches": 0,
+      "burns": 0,
+      "locks": 0,
+      "mintrUsd": 0,
+      "days": 1
+    }
+  ]
+}

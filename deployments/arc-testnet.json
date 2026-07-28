@@ -23,5 +23,6 @@
     "symbol": "USDC",
     "decimals": 6
   },
-  "deployer": "0xD1E3636906Ceea0A67231dcb5a73719B02988023"
+  "deployer": "0xD1E3636906Ceea0A67231dcb5a73719B02988023",
+  "fromBlock": 54095000
 }
