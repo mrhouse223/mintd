@@ -38,7 +38,12 @@ function loadEnv() {
 const ENV = loadEnv();
 
 const RPC_URL = process.env.RPC_URL || ENV.RPC_URL || "https://rpc.stable.xyz";
-const PAD = process.env.PAD || "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0";
+// Both launchpads. New launches land on the v2 pad; the 121 pre-existing
+// tokens keep trading on v1 forever, so counting only one silently drops a
+// large slice of TVL and volume. Comma-separated, override with PAD.
+const PADS = (process.env.PAD ||
+  "0xCe7b02b3f0e5665f1C23E018039e9b6836c6221b,0x75FAdB240006313294A5B502CA9268cB03Fa9AC0")
+  .split(",").map((s) => s.trim()).filter(Boolean);
 const USDT0 = process.env.USDT0 || "0x779Ded0c9e1022225f8E0630b35a9b54bE713736";
 const MINTR = process.env.MINTR || "0x8817D05f2560189F3697028f639Dbb4C68688400";
 const MINTD = process.env.MINTD || "0xE62C47074abb52A2bc87B62E47e3411A0020f020";
@@ -250,7 +255,7 @@ async function sweepLogs(rp, from, to, span, onLogs, addrs = []) {
 
 async function main() {
   const rp = new ethers.JsonRpcProvider(RPC_URL, 988, { batchMaxCount: 1, staticNetwork: true });
-  const pad = new ethers.Contract(PAD, PAD_ABI, rp);
+  const pads = PADS.map((a) => new ethers.Contract(a, PAD_ABI, rp));
 
   async function pass() {
     const cache = readCache();
@@ -258,22 +263,27 @@ async function main() {
 
     // ---------------------------------------------------------- discover pools
     const pools = {}; // addr -> { kind, usdtIs0, token }
-    const n = Number(await retry(() => pad.tokenCount(), "tokenCount"));
-    let padPools = 0, padFailed = 0;
-    for (let i = 0; i < n; i++) {
-      try {
-        const t = await pad.allTokens(i);
-        const L = await pad.launches(t);
-        if (L.pool && L.pool !== ethers.ZeroAddress) {
-          pools[L.pool.toLowerCase()] = { kind: "v3", token: t, createdAt: Number(L.createdAt) };
-          padPools++;
-        }
-      } catch { padFailed++; }
+    let totalTokens = 0, padPools = 0, padFailed = 0;
+    for (const pad of pads) {
+      const n = Number(await retry(() => pad.tokenCount(), "tokenCount"));
+      totalTokens += n;
+      for (let i = 0; i < n; i++) {
+        try {
+          const t = await pad.allTokens(i);
+          const L = await pad.launches(t);
+          if (L.pool && L.pool !== ethers.ZeroAddress) {
+            // Keyed by pool address, so a token that somehow appears on both
+            // pads is counted once, not twice.
+            pools[L.pool.toLowerCase()] = { kind: "v3", token: t, createdAt: Number(L.createdAt) };
+            padPools++;
+          }
+        } catch { padFailed++; }
+      }
     }
     // Loud, because a wrong ABI silently yields zero pools and the only visible
     // symptom is a volume figure that is quietly far too low.
-    console.log(`  launchpad: ${n} tokens, ${padPools} with pools, ${padFailed} unreadable`);
-    if (n > 0 && padPools === 0) throw new Error("launchpad returned no pools, ABI is probably wrong");
+    console.log(`  launchpads: ${totalTokens} tokens across ${pads.length}, ${padPools} with pools, ${padFailed} unreadable`);
+    if (totalTokens > 0 && padPools === 0) throw new Error("launchpads returned no pools, ABI is probably wrong");
     // MintSwap V2 pairs for the protocol's own tokens, plus any extras
     const fac = new ethers.Contract(FACTORY, ["function getPair(address,address) view returns (address)"], rp);
     for (const t of [MINTR, MINTD, process.env.MGLD || "0x872a3C280B846759187c9E57F62d1Ed8407b135C"]) {

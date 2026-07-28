@@ -1,0 +1,9 @@
+{
+  "chain": "stable",
+  "chainId": 988,
+  "contracts": {
+    "InstantLaunchpad": "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0",
+    "MintdLaunchpad": "0xCe7b02b3f0e5665f1C23E018039e9b6836c6221b",
+    "TokenMetaRegistry": "0x3286434ef8D5a829E5A737485A4DE91526e65174"
+  }
+}

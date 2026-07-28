@@ -2180,7 +2180,13 @@ const CHAINS = {
       usdt0: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",    // gas token as a 6-dec ERC-20
     },
     mintd: {
-      pad: "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0",
+      // v2, deployed 2026-07-28. Fixes the launch-price front-run: a stranger
+      // could pre-create a token's pool at any price and take the whole supply
+      // for ~$50. New launches go here. The old pad stays as oldPad so its 121
+      // existing tokens still load, with liquidity locked forever exactly as
+      // before. Same 90/10 terms, verified on chain against the old pad at
+      // deploy time.
+      pad: "0xCe7b02b3f0e5665f1C23E018039e9b6836c6221b",
       oldPad: "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0",
       mintd: "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       mintr: "0x8817D05f2560189F3697028f639Dbb4C68688400",
@@ -2188,7 +2194,10 @@ const CHAINS = {
       mgld: "0x872a3C280B846759187c9E57F62d1Ed8407b135C",
       locker: "0x1833D9442021AFDa97a573d9cdA65e2aa3449160",
       v3locker: "0x55233aef2ecEE21a73a4655d9527D44eF13ba0d2",
-      meta: "0x95B93c48522d0D53Bd2419bbC5Dc7e36E130E2BB",
+      // v2 registry listing [oldPad, newPad], since the old one is
+      // constructor-locked to the old pad only. New-pad creators edit here;
+      // the 3 tokens that ever set overlays are still readable on the old one.
+      meta: "0x3286434ef8D5a829E5A737485A4DE91526e65174",
       mintswapFactory: "0x65E12569E20E8706A4a60fCAB13e9069B78F9f8E",
       mintswapRouter: "0xb9274bEdaDcf31136F54A9501232e642a35C6Eb7",
       furnace: null,
@@ -2507,8 +2516,10 @@ function isGraduated(addr, reachedNow) {
 }
 
 // mintd.fun launchpad on Stable Mainnet. Takes priority over the ⚙-settings
-// value so a stale saved address can't point at an old deployment.
-const DEFAULT_PAD = LC ? LC.pad : "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0";
+// value so a stale saved address can't point at an old deployment. This is the
+// v2 pad; the front-runnable v1 is reachable only as oldPad, for reading its
+// existing tokens, never for new launches.
+const DEFAULT_PAD = LC ? LC.pad : "0xCe7b02b3f0e5665f1C23E018039e9b6836c6221b";
 function padAddr() { return NET.mintd.pad || DEFAULT_PAD || localStorage.getItem(ck("padAddr")) || ""; }
 // Discover reads the current pad AND the original pad, so tokens launched on
 // either (incl. $MINTD, which lives on the original pad) all show up. Deduped.
@@ -3130,14 +3141,23 @@ async function devLoad(force) {
 
   try {
     const c = new ethers.Contract(claimer, CLAIMER_ABI, rp);
-    const total = Number(await pad.tokenCount());
     const quote = ADDR.usdt0;
     const out = [];
-    // Chunked because preview performs a real collect per token inside the
-    // eth_call; the whole list at once exceeds the node's call gas budget.
-    for (let i = 0; i < total; i += 20) {
-      const part = await c.previewRange.staticCall(padAddr(), i, 20, quote);
-      for (const r of part) out.push(r);
+    // BOTH pads. The 121 tokens on the old pad keep earning fees forever, so
+    // scanning only the new pad would silently strand every one of their fee
+    // streams. FeeClaimAll takes the launchpad as an argument, so the same
+    // contract works against either. Deduped by nothing: the two pads share no
+    // tokens.
+    const pads = [padAddr(), OLD_PAD].filter(Boolean);
+    for (const pa of pads) {
+      const padC = new ethers.Contract(pa, PAD_ABI, rp);
+      const total = Number(await retryRead(() => padC.tokenCount()));
+      // Chunked because preview performs a real collect per token inside the
+      // eth_call; the whole list at once exceeds the node's call gas budget.
+      for (let i = 0; i < total; i += 20) {
+        const part = await c.previewRange.staticCall(pa, i, 20, quote);
+        for (const r of part) out.push({ ...r, pad: pa });
+      }
     }
 
     const me = wallet.toLowerCase();
@@ -3189,16 +3209,23 @@ async function devClaimAll() {
   btn.disabled = true;
   try {
     const c = new ethers.Contract(claimer, CLAIMER_ABI, signer);
-    // Batched: a claim touches a Uniswap position plus up to six transfers, so
-    // the whole list in one transaction runs past the block gas limit.
-    const list = dvPending.map((r) => r.token);
+    // claimAll takes a single launchpad, and each token's fees live on the pad
+    // that launched it, so the pending set is grouped by pad and claimed
+    // per-pad. Sending a new-pad token to the old pad's claimFees would just
+    // revert "unknown token" and strand the batch.
+    const byPad = {};
+    for (const r of dvPending) (byPad[r.pad || padAddr()] ||= []).push(r.token);
     let done = 0;
-    for (let i = 0; i < list.length; i += 15) {
-      const part = list.slice(i, i + 15);
-      btn.textContent = `Claiming ${i + 1}-${i + part.length} of ${list.length}…`;
-      const tx = await c.claimAll(padAddr(), part);
-      await tx.wait();
-      done += part.length;
+    for (const [pa, list] of Object.entries(byPad)) {
+      // Batched: a claim touches a Uniswap position plus up to six transfers,
+      // so the whole list in one transaction runs past the block gas limit.
+      for (let i = 0; i < list.length; i += 15) {
+        const part = list.slice(i, i + 15);
+        btn.textContent = `Claiming ${done + 1}-${done + part.length} of ${dvPending.length}…`;
+        const tx = await c.claimAll(pa, part);
+        await tx.wait();
+        done += part.length;
+      }
     }
     toast(`Claimed fees for ${done} token(s)`, "ok");
     devLoad(true);
