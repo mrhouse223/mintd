@@ -161,6 +161,30 @@
   .pairsw button.on { background: var(--green-soft); color: var(--green); box-shadow: 0 1px 5px rgba(30,55,80,.10); }
   .pairsw button[data-p="mintr"].on { background: rgba(59,130,246,.14); color: #2f6fe0; }
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  /* in-house chart + trade list */
+  .chartmeta { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  .chartmeta b { font-size: 22px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .chartmeta span { font-size: 12.5px; font-weight: 700; }
+  .chartspan { margin-left: auto; color: var(--dim); font-weight: 600 !important; }
+  .tradehead, .traderow2 { display: grid; align-items: center; gap: 10px;
+    grid-template-columns: 74px 58px minmax(0,1fr) minmax(0,1fr) 120px; }
+  .tradehead { font-size: 10px; letter-spacing: .1em; color: var(--dim); font-weight: 800;
+    padding: 12px 2px 6px; border-bottom: 1px solid var(--line); margin-top: 10px; }
+  .traderow2 { padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .traderow2:last-child { border-bottom: 0; }
+  .tago { color: var(--dim); font-size: 11.5px; white-space: nowrap; }
+  .tnum { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tbadge { font-size: 9.5px; font-weight: 800; letter-spacing: .05em; padding: 2px 6px;
+    border-radius: 5px; }
+  .tbadge.buy { color: var(--green); background: var(--green-soft); }
+  .tbadge.sell { color: var(--red); background: rgba(255,86,48,.13); }
+  .tlink a { font-family: var(--mono); font-size: 11px; color: var(--green); }
+  .tlink a:hover { text-decoration: underline; }
+  @media (max-width: 560px) {
+    /* price column goes; time, side, value and the link are what matter */
+    .tradehead, .traderow2 { grid-template-columns: 64px 52px minmax(0,1fr) 92px; }
+    .tradehead span:nth-child(4), .traderow2 span:nth-child(4) { display: none; }
+  }
   /* mintscreener */
   .schead, .scrow { display: grid; align-items: center; gap: 12px;
     grid-template-columns: 28px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 62px 150px; }
@@ -1128,6 +1152,11 @@
           <div class="k chainpill">STABLE</div>
           <h3 style="margin-bottom:12px">Chart <a id="poolLink" target="_blank" style="float:right;font-size:12px">Open pool ↗</a></h3>
           <div id="chart"><div class="empty">No indexed swaps yet</div></div>
+          <div class="tradehead" id="tradeHead" style="display:none">
+            <span>TIME</span><span>TYPE</span><span class="tnum">VALUE</span>
+            <span class="tnum">PRICE</span><span class="tnum">TXN</span>
+          </div>
+          <div id="tradeList"></div>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
@@ -1900,6 +1929,8 @@ const CHAINS = {
     // because every call here is wrapped to tolerate it. Log scanning still
     // uses its own batchMaxCount 1 provider.
     batchMaxCount: 20,
+    // Hard cap: anything wider returns "maximum [from, to] blocks distance: 500".
+    logSpan: 500,
   },
   "arc-testnet": {
     key: "arc-testnet", label: "Arc Testnet", short: "Arc",
@@ -1938,6 +1969,8 @@ const CHAINS = {
     // loader therefore lost 7 of every 8 reads, and the per-token catch
     // swallowed it, so a launched token simply never appeared. One per batch.
     batchMaxCount: 1,
+    // Arc is far more permissive here; 5000 is comfortable.
+    logSpan: 5000,
   },
 };
 
@@ -4908,7 +4941,8 @@ async function loadDexStats() {
         $("sVol").textContent = fmtUsd(c.vol24);
         $("sVol2").textContent = `${c.tx24} trades · ${c.chg24 >= 0 ? "+" : ""}${c.chg24}% 24h`;
         $("sLiq").textContent = nf(c.tx24, 0);
-        if (!$("chart").querySelector("iframe")) renderChartArea();
+        // (was: swap in the Dexscreener iframe once indexed. The chart is
+        // in-house now, and calling renderChartArea() with no trades blanked it.)
       }
     }
   } catch { /* stats are best-effort; onchain log fallback already shown */ }
@@ -4956,7 +4990,8 @@ async function loadTrades() {
     const latest = await rp.getBlockNumber();
     // first run scans the last 5,000 blocks; every run after only scans the
     // handful of NEW blocks since, instead of re-reading the same history
-    const from = lastTradeBlock ? Math.max(lastTradeBlock + 1, latest - 5000) : Math.max(0, latest - 5000);
+    const SPAN = NET.logSpan || 500;
+    const from = lastTradeBlock ? Math.max(lastTradeBlock + 1, latest - SPAN) : Math.max(0, latest - SPAN);
     if (from > latest) return;
     // always include $MINTD even if it sits outside the newest-40 window
     const pools = tokens.slice(0, 40);
@@ -4971,7 +5006,7 @@ async function loadTrades() {
         const usdtΔ6 = t.tokenIs0 ? ev.args.amount1 : ev.args.amount0; // pool's USDT0 delta (6 dec)
         const isBuyT = usdtΔ6 > 0n;
         if (ev.args.recipient) set.add(ev.args.recipient.toLowerCase());
-        fresh.push({ sym: t.symbol, addr: t.addr, isBuy: isBuyT, usdt: (usdtΔ6 < 0n ? -usdtΔ6 : usdtΔ6) * D6, block: lg.blockNumber, sqrtP: ev.args.sqrtPriceX96, tokenIs0: t.tokenIs0 });
+        fresh.push({ sym: t.symbol, addr: t.addr, isBuy: isBuyT, usdt: (usdtΔ6 < 0n ? -usdtΔ6 : usdtΔ6) * D6, block: lg.blockNumber, sqrtP: ev.args.sqrtPriceX96, tokenIs0: t.tokenIs0, tx: lg.transactionHash });
       }
       t.traders = set.size;
     }));
@@ -4987,7 +5022,7 @@ async function loadTrades() {
         const usdtIn = usdtIs0 ? ev.args.amount0In : ev.args.amount1In;   // USDT0 spent = a buy
         const tokOut = usdtIs0 ? ev.args.amount1Out : ev.args.amount0Out;
         if (usdtIn > 0n && tokOut > 0n) {
-          fresh.push({ sym: p.sym, addr: p.addr, isBuy: true, usdt: usdtIn * D6, block: lg.blockNumber, sqrtP: 0n, tokenIs0: false });
+          fresh.push({ sym: p.sym, addr: p.addr, isBuy: true, usdt: usdtIn * D6, block: lg.blockNumber, sqrtP: 0n, tokenIs0: false, tx: lg.transactionHash });
         }
       }
     }));
@@ -5775,6 +5810,7 @@ async function renderToken(addr) {
     loadDexStats(); // fetch real 24h numbers for this page
   }
   renderChartArea(myTrades);
+  loadTokenTrades(cur);   // deeper history, repaints when it lands
   loadFees();
   setSide(true);
   refreshTrade();
@@ -5782,26 +5818,141 @@ async function renderToken(addr) {
 
 // Embed the Dexscreener chart once the pair is indexed; until then fall back
 // to the onchain sparkline (fresh launches take a few minutes to index).
+// In-house chart and trade list, on every chain.
+//
+// This used to embed Dexscreener when the pair was indexed. That works on
+// Stable and shows an empty box on Arc, which Dexscreener does not index at
+// all. Drawing from the pool's own Swap events means the chart and the trades
+// exist wherever the pool does, and every row links to the transaction on
+// whichever explorer this chain uses.
+const chartCache = {};   // token addr -> best trade list seen
 function renderChartArea(fallbackTrades) {
-  if (cur && cur.vol24 !== undefined) {
-    const theme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-    // trades=1 embeds Dexscreener's transactions panel below the chart
-    $("chart").innerHTML = `<iframe src="https://dexscreener.com/stable/${cur.pool}?embed=1&theme=${theme}&trades=1&info=0" style="width:100%;height:720px;border:0;border-radius:12px" loading="lazy"></iframe>`;
-  } else {
-    drawChart(fallbackTrades || []);
+  const key = cur ? cur.addr.toLowerCase() : "";
+  let list = fallbackTrades || [];
+  if (key) {
+    const prev = chartCache[key] || [];
+    if (list.length < prev.length) list = prev;   // never redraw with less
+    else chartCache[key] = list;
   }
+  drawChart(list);
+  drawTrades(list);
+}
+
+// Deep scan for the open token only.
+//
+// The ticker scan reads one window across every pool, which is cheap but
+// covers under an hour. A chart needs more, and paging every pool that far
+// back would be hundreds of requests. So the page walks backwards over this
+// one pool until it has enough points or runs out of budget.
+let tokenTradeScan = 0;
+async function loadTokenTrades(t) {
+  const scanId = ++tokenTradeScan;
+  const SPAN = NET.logSpan || 500;
+  const WINDOWS = Math.max(4, Math.round(30000 / SPAN)); // ~30k blocks either way
+  try {
+    const head = await rp.getBlockNumber();
+    const found = [];
+    for (let w = 0; w < WINDOWS && found.length < 60; w++) {
+      if (scanId !== tokenTradeScan) return; // navigated away, drop this scan
+      const to = head - w * SPAN;
+      const from = Math.max(0, to - SPAN + 1);
+      if (to <= 0) break;
+      let logs;
+      // sequential, never Promise.all: one pool, and both chains punish bursts
+      try { logs = await rp.getLogs({ address: t.pool, topics: [SWAP_TOPIC], fromBlock: from, toBlock: to }); }
+      catch { continue; }
+      for (const lg of logs) {
+        const ev = swapIface.parseLog(lg);
+        const d6 = t.tokenIs0 ? ev.args.amount1 : ev.args.amount0;
+        found.push({
+          sym: t.symbol, addr: t.addr, isBuy: d6 > 0n,
+          usdt: (d6 < 0n ? -d6 : d6) * D6, block: lg.blockNumber,
+          sqrtP: ev.args.sqrtPriceX96, tokenIs0: t.tokenIs0, tx: lg.transactionHash,
+        });
+      }
+      // Paint as it goes. Stable's 500-block cap means 60 sequential requests,
+      // roughly half a minute, and an empty chart for that whole time reads as
+      // broken. The chart appears at the first pair of points and deepens.
+      if (logs.length && found.length >= 2 && cur && sameAddr(cur.addr, t.addr)) {
+        const partial = [...found].sort((a, b) => b.block - a.block);
+        renderChartArea(partial);
+        $("sVol2").textContent = found.length + " indexed swaps";
+      }
+    }
+    if (scanId !== tokenTradeScan || !cur || !sameAddr(cur.addr, t.addr)) return;
+    if (!found.length) return;
+    found.sort((a, b) => b.block - a.block);
+    renderChartArea(found);
+    $("sVol2").textContent = found.length + " indexed swaps";
+  } catch { /* keep whatever the cached view already drew */ }
 }
 
 function drawChart(list) {
-  if (!list.length) { $("chart").innerHTML = '<div class="empty">No indexed swaps yet</div>'; return; }
-  const pts = [...list].reverse().map((x) => Number(ethers.formatEther(priceFromSqrt(x.sqrtP, x.tokenIs0))));
-  const min = Math.min(...pts), max = Math.max(...pts), span = max - min || max * 0.1 || 1;
-  const W = 560, H = 180;
-  const xy = pts.map((p, i) => `${(i / Math.max(1, pts.length - 1)) * W},${H - 12 - ((p - min) / span) * (H - 24)}`);
-  $("chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px">
-    <polyline points="${xy.join(" ")}" fill="none" stroke="var(--green2)" stroke-width="2.5" stroke-linejoin="round" />
-    <text x="4" y="12" font-size="10" fill="var(--dim)">${fmtPrice(max)}</text>
-    <text x="4" y="${H - 2}" font-size="10" fill="var(--dim)">${fmtPrice(min)}</text></svg>`;
+  const el = $("chart");
+  const pts = [...list].reverse()
+    .filter((x) => x.sqrtP && BigInt(x.sqrtP) > 0n)
+    .map((x) => Number(ethers.formatEther(priceFromSqrt(BigInt(x.sqrtP), x.tokenIs0))))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (pts.length < 2) {
+    el.innerHTML = `<div class="empty">${pts.length ? "Only one swap so far, not enough for a chart" : "No swaps indexed yet"}</div>`;
+    return;
+  }
+  const W = 720, H = 240, PAD = 26;
+  const min = Math.min(...pts), max = Math.max(...pts);
+  const span = max - min || max * 0.05 || 1;
+  const x = (i) => PAD + (i / (pts.length - 1)) * (W - PAD * 2);
+  const y = (p) => H - PAD - ((p - min) / span) * (H - PAD * 2);
+  const line = pts.map((p, i) => `${x(i)},${y(p)}`).join(" ");
+  // area sits under the same points, closed along the baseline
+  const area = `${PAD},${H - PAD} ${line} ${W - PAD},${H - PAD}`;
+  const up = pts[pts.length - 1] >= pts[0];
+  const col = up ? "var(--green2)" : "var(--red)";
+  const last = pts[pts.length - 1];
+  const chg = ((last - pts[0]) / pts[0]) * 100;
+  el.innerHTML = `
+    <div class="chartmeta">
+      <b>${fmtPrice(last)}</b>
+      <span style="color:${up ? "var(--green)" : "var(--red)"}">${up ? "▲" : "▼"}${Math.abs(chg).toFixed(2)}%</span>
+      <span class="chartspan">${pts.length} swaps indexed</span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:${H}px">
+      <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${up ? "var(--green2)" : "var(--red)"}" stop-opacity=".28"/>
+        <stop offset="100%" stop-color="${up ? "var(--green2)" : "var(--red)"}" stop-opacity="0"/>
+      </linearGradient></defs>
+      <line x1="${PAD}" y1="${H - PAD}" x2="${W - PAD}" y2="${H - PAD}" stroke="var(--line)" stroke-width="1"/>
+      <polygon points="${area}" fill="url(#cg)"/>
+      <polyline points="${line}" fill="none" stroke="${col}" stroke-width="2"
+        stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <circle cx="${x(pts.length - 1)}" cy="${y(last)}" r="3.5" fill="${col}"/>
+      <text x="4" y="14" font-size="11" fill="var(--dim)">${fmtPrice(max)}</text>
+      <text x="4" y="${H - 6}" font-size="11" fill="var(--dim)">${fmtPrice(min)}</text>
+    </svg>`;
+}
+
+// Recent swaps, newest first, each linking to the transaction on this chain's
+// explorer. Older cached entries predate tx capture and simply render without
+// a link rather than a dead one.
+function drawTrades(list) {
+  const el = $("tradeList"), head = $("tradeHead");
+  if (!el) return;
+  if (!list.length) { el.innerHTML = ""; if (head) head.style.display = "none"; return; }
+  if (head) head.style.display = "";
+  const base = (CHAIN.blockExplorerUrls && CHAIN.blockExplorerUrls[0]) || "";
+  el.innerHTML = list.slice(0, 40).map((t) => {
+    const price = t.sqrtP && BigInt(t.sqrtP) > 0n
+      ? fmtPrice(Number(ethers.formatEther(priceFromSqrt(BigInt(t.sqrtP), t.tokenIs0)))) : "–";
+    const link = t.tx && base
+      ? `<a href="${base}/tx/${t.tx}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${t.tx.slice(0, 6)}…${t.tx.slice(-4)} ↗</a>`
+      : `<span class="scnone">–</span>`;
+    return `<div class="traderow2">
+      <span class="tago">${esc(tradeAgo(t.block) || "")}</span>
+      <span><span class="tbadge ${t.isBuy ? "buy" : "sell"}">${t.isBuy ? "BUY" : "SELL"}</span></span>
+      <span class="tnum">${fmtUsd(ethers.formatEther(BigInt(t.usdt)))}</span>
+      <span class="tnum">${price}</span>
+      <span class="tnum tlink">${link}</span>
+    </div>`;
+  }).join("");
 }
 
 // Externally-launched tokens: their V3 position NFT lives in the launcher's
