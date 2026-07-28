@@ -1078,7 +1078,7 @@
 
     <div class="statrow">
       <div class="stat"><label>MARKET CAP</label><b id="sMcap">–</b><small id="sMcap2">&nbsp;</small></div>
-      <div class="stat"><label>PRICE</label><b id="sPrice">–</b><small>USDT0 per token</small></div>
+      <div class="stat"><label>PRICE</label><b id="sPrice">–</b><small><span class="qsym">USDT0</span> per token</small></div>
       <div class="stat"><label>24H VOLUME</label><b id="sVol">–</b><small id="sVol2">&nbsp;</small></div>
       <div class="stat"><label>TRADES</label><b id="sLiq">–</b><small>24h · LP permanently locked</small></div>
     </div>
@@ -1118,7 +1118,7 @@
           <div class="qrow"><span id="hSymLbl">Tokens</span><b id="hTok">–</b></div>
           <div class="qrow"><span>Value</span><b id="hVal">–</b></div>
           <div class="qrow"><span>Share of supply</span><b id="hPct">–</b></div>
-          <div class="qrow"><span>USDT0 balance</span><b id="hUsdt">–</b></div>
+          <div class="qrow"><span><span class="qsym">USDT0</span> balance</span><b id="hUsdt">–</b></div>
         </div>
         <button class="btn ghost" style="width:100%;margin-top:10px" id="hConnect" onclick="connect()">Connect wallet to view</button>
       </div>
@@ -1385,7 +1385,7 @@
     <div class="launchC" style="max-width:560px">
       <div class="heroC" style="margin:30px auto 22px">
         <img class="mintr-logo" src="mintr.png" alt="MINTR" onerror="this.remove()" />
-        <div class="badgepill">FULLY BACKED BY USDT0</div>
+        <div class="badgepill">FULLY BACKED BY <span class="qsym">USDT0</span></div>
         <h1 style="font-size:44px">$MINTR<br /><span class="g">only goes up.</span></h1>
         <p>MINTR is 100% backed by a USDT0 reserve. Every buy and sell pays a small tax that stays in the reserve while tokens are burned, so the backing per token can only rise. Buy and sell straight from the contract at the backing price.</p>
       </div>
@@ -1432,7 +1432,7 @@
       <div class="trade" id="mrCalcCard" style="margin-top:16px">
         <div style="font-weight:800;font-size:13px;margin-bottom:8px"><svg class="ic" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l3.5-4 3 2.5L20 8"/></svg> Growth calculator</div>
         <div class="paylbl"><span>You invest</span></div>
-        <div class="amtbox"><input id="calcAmt" type="number" min="0" step="any" placeholder="100" oninput="mrCalc()" /><span>USDT0</span></div>
+        <div class="amtbox"><input id="calcAmt" type="number" min="0" step="any" placeholder="100" oninput="mrCalc()" /><span class="qsym">USDT0</span></div>
         <div class="paylbl" style="margin-top:8px"><span>Days held</span></div>
         <div class="amtbox"><input id="calcDays" type="number" min="0" step="1" value="30" oninput="mrCalc()" /><span>DAYS</span></div>
         <div class="paylbl" style="margin-top:8px"><span>Assumed daily backing growth</span></div>
@@ -2329,6 +2329,14 @@ function applyChainUi() {
   const sym = NET.chain.nativeCurrency.symbol;
   const hn = $("heroNet"); if (hn) hn.textContent = NET.chain.chainName.toUpperCase();
   const hc = $("heroChain"); if (hc) hc.textContent = NET.short;
+  // The quote asset is USDT0 on Stable and USDC on Arc. Left hardcoded, the
+  // trade widget offers to spend a token that does not exist on the chain.
+  document.querySelectorAll(".qsym").forEach((e) => { e.textContent = sym; });
+  for (const id of ["paySym", "mrPaySym"]) { const e = $(id); if (e) e.textContent = sym; }
+  for (const id of ["swIn", "plA"]) {
+    const e = $(id);
+    if (e && /USDT0/.test(e.textContent)) e.textContent = sym + " \u25BE";
+  }
   const hb = $("heroBlurb");
   if (hb) hb.textContent =
     `Every coin trades on a bonding curve from its very first block. The curve lives inside a `
@@ -2393,14 +2401,19 @@ function tokBaseStore(pa, i, base) {
   try { localStorage.setItem(`tokbase:${pa.toLowerCase()}:${i}`, JSON.stringify(base)); } catch { /* storage full: still works, just uncached */ }
 }
 let loadingAll = false;
+let loadAllPromise = null;
 async function loadAll() {
   if (!pad) init();
   if (!pad) return toast("Set the launchpad contract address in ⚙ first", "err");
-  if (loadingAll) return; // never stack overlapping refreshes
+  // Return the in-flight load rather than nothing. `await loadAll()` has to
+  // mean "tokens are ready" or callers race it: boot fires one load, route()
+  // awaits a second, the guard returned undefined immediately, and
+  // loadPortfolio ran against an empty list and reported no holdings. On
+  // Stable the cached token list hid it. On a chain with no cache it did not.
+  if (loadingAll) return loadAllPromise;
   loadingAll = true;
-  try {
-    await loadAllInner();
-  } finally { loadingAll = false; }
+  loadAllPromise = loadAllInner().finally(() => { loadingAll = false; });
+  return loadAllPromise;
 }
 async function loadAllInner() {
   try {
@@ -2880,7 +2893,8 @@ const TOKEN_LOGOS = {
 function tokLogo(addr) { return TOKEN_LOGOS[addr.toLowerCase()] || ""; }
 function swBaseList() {
   // pinned first: the platform assets people reach for most
-  const pinned = [{ addr: ADDR.usdt0, sym: "USDT0", name: "Tether USD", dec: 6 }];
+  const nc = NET.chain.nativeCurrency;
+  const pinned = [{ addr: ADDR.usdt0, sym: nc.symbol, name: nc.name, dec: 6 }];
   if (MINTSWAP.wgusdt) pinned.push({ addr: MINTSWAP.wgusdt, sym: "WgUSDT", name: "Wrapped gUSDT", dec: 18 });
   const plat = tokens.find((t) => t.platform);
   if (plat) pinned.push({ addr: plat.addr, sym: plat.symbol, name: plat.name, dec: 18, logo: "logo.png" });
@@ -3643,7 +3657,15 @@ async function loadPortfolio() {
 
 /* ------------------------------------------------------ MintSwap farms */
 // Fill in after running deploy-mintswap.js + deploy-farm.js (once per farm)
-const MINTSWAP = (LC && LC.mintswap) || {
+// Per chain. Arc has the router and factory this repo deployed, but no
+// WgUSDT, no zaps and no farms, and pinning a token that does not exist there
+// offers people a swap that cannot be routed.
+const MINTSWAP = (LC && LC.mintswap) || (CHAIN_KEY === "arc-testnet" ? {
+  router: NET.mintd.mintswapRouter,
+  factory: NET.mintd.mintswapFactory,
+  wgusdt: null, zap: null, wrapzap: null, zapv3: null,
+  farms: [], feePools: [],
+} : {
   router: "0xb9274bEdaDcf31136F54A9501232e642a35C6Eb7",   // MintSwap V2 router
   factory: "0x65E12569E20E8706A4a60fCAB13e9069B78F9f8E",  // MintSwap V2 factory
   wgusdt: "0x817997Ca8394E26CCE3dE3A076a4889b27DbF9dE",
@@ -3660,7 +3682,7 @@ const MINTSWAP = (LC && LC.mintswap) || {
     { name: "MINTR / USDT0", a: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736", b: "0x8817D05f2560189F3697028f639Dbb4C68688400", symA: "USDT0", symB: "MINTR", decA: 6, decB: 18 },
     { name: "MINTD / MINTR", a: "0xE62C47074abb52A2bc87B62E47e3411A0020f020", b: "0x8817D05f2560189F3697028f639Dbb4C68688400", symA: "MINTD", symB: "MINTR", decA: 18, decB: 18 },
   ],
-};
+});
 const FARM_ABI = [
   "function totalSupply() view returns (uint256)",
   "function balanceOf(address) view returns (uint256)",
@@ -4332,7 +4354,7 @@ async function loadPools() {
 async function loadTopPools() {
   const el = $("plTopList");
   try {
-    const qs = ["WgUSDT", "USDT0"];
+    const qs = [MINTSWAP.wgusdt ? "WgUSDT" : null, NET.chain.nativeCurrency.symbol].filter(Boolean);
     const seen = {};
     const pools = [];
     for (const q of qs) {
