@@ -101,6 +101,11 @@ interface INonfungiblePositionManager {
     function positions(uint256) external view returns (
         uint96, address, address, address, uint24, int24 tickLower, int24 tickUpper,
         uint128 liquidity, uint256, uint256, uint128, uint128);
+    function factory() external view returns (address);
+}
+
+interface IUniswapV3Factory {
+    function getPool(address, address, uint24) external view returns (address);
 }
 
 interface ISwapRouter02 {
@@ -216,6 +221,13 @@ contract AgentVault {
     IUniswapV3Pool public immutable pool;
     IERC20 public immutable token0;
     IERC20 public immutable token1;
+    /// @notice Which leg the vault denominates itself in. Uniswap orders tokens
+    /// by address, so whether token1 is the stable leg or the volatile one is a
+    /// coin flip. Valuing in the volatile leg makes the loss breaker track price
+    /// instead of loss: an ordinary 2x would read as a ~29% drop and halt the
+    /// agent, and a round trip would ratchet the high-water mark somewhere the
+    /// vault can never reach again.
+    bool public immutable valueInToken0;
     uint24 public immutable fee;
     int24 public immutable tickSpacing;
     INonfungiblePositionManager public immutable npm;
@@ -240,11 +252,20 @@ contract AgentVault {
 
     // ----------------------------------------------------------------- state
     uint256 public positionId;
-    /// @notice Vault value in token1 terms at TWAP, as of the last checkpoint.
+    /// @notice Vault value in numeraire terms at TWAP, as of the last checkpoint.
     uint256 public valueCheckpoint;
+    /// @notice The TWAP tick the checkpoint was taken at. A value measured at a
+    /// very different price is not comparable, and the breaker compares the two
+    /// sides of an action at the SAME twap, so a moved TWAP is invisible to it
+    /// by construction. Halting instead is the correct failure mode.
+    int24 public checkpointTick;
 
-    struct Proposal { int24 lower; int24 upper; uint64 readyAt; bool approved; bool open; }
+    struct Proposal { int24 lower; int24 upper; uint64 readyAt; bool approved; bool open; uint256 nonce; }
     Proposal public proposal;
+    /// @notice Increments on every propose. An approval names the nonce it is
+    /// approving, so an agent cannot swap a different proposal underneath a
+    /// pending owner transaction.
+    uint256 public proposalNonce;
 
     uint256 private unlocked = 1;
     modifier lock() { require(unlocked == 1, "reentrancy"); unlocked = 0; _; unlocked = 1; }
@@ -266,7 +287,8 @@ contract AgentVault {
         address _pool,
         address _npm,
         address _router,
-        address _agent
+        address _agent,
+        address _numeraire
     ) {
         require(_owner != address(0) && _pool != address(0) && _npm != address(0) && _router != address(0), "zero");
         owner = _owner;
@@ -278,6 +300,28 @@ contract AgentVault {
         npm = INonfungiblePositionManager(_npm);
         router = ISwapRouter02(_router);
         agent = _agent;
+
+        require(
+            _numeraire == address(token0) || _numeraire == address(token1),
+            "numeraire not in pool"
+        );
+        valueInToken0 = _numeraire == address(token0);
+
+        // The pool must be the canonical one the router and NPM will actually
+        // trade through, resolved from the factory rather than taken on trust.
+        //
+        // Without this, a contract that reports a real pool's tokens and fee
+        // but serves an attacker-controlled observe() makes the vault derive
+        // its minimum output from a fake TWAP while trading in the real pool.
+        // Every other protection reads off that TWAP, so the whole thing
+        // becomes drainable. Unreachable today because vaults are deployed by
+        // hand, and load-bearing the moment a factory lets a user pass a pool
+        // address, which is the next thing this needs.
+        address fac = INonfungiblePositionManager(_npm).factory();
+        require(
+            IUniswapV3Factory(fac).getPool(address(token0), address(token1), fee) == _pool,
+            "pool not canonical"
+        );
 
         // Conservative defaults. An owner who never touches these is still safe:
         // PROPOSE_ONLY means the agent cannot move anything without a human.
@@ -298,10 +342,30 @@ contract AgentVault {
     // ------------------------------------------------------------ owner only
 
     function deposit(uint256 amount0, uint256 amount1) external onlyOwner lock {
+        require(amount0 > 0 || amount1 > 0, "nothing");
         if (amount0 > 0) require(token0.transferFrom(msg.sender, address(this), amount0), "t0");
         if (amount1 > 0) require(token1.transferFrom(msg.sender, address(this), amount1), "t1");
         emit Deposited(amount0, amount1);
-        _checkpoint();
+
+        // Deliberately NOT _checkpoint(), which sets the checkpoint in both
+        // directions. Routing a downward reset through deposit would undo the
+        // loss breaker: an agent grinds the vault to just above its floor, the
+        // owner tops up, the checkpoint re-baselines lower, and the grind
+        // resumes against the new total. Ratchet upward only, so the only way
+        // to lower a checkpoint stays the explicit, documented resetCheckpoint.
+        //
+        // Unguarded on purpose: if the pool cannot yet produce a TWAP this
+        // reverts, which is the right outcome. A deposit that silently leaves
+        // the breaker unarmed is how the first agent action gets to run with no
+        // loss protection at all.
+        //
+        // Computed internally rather than via this.valueNow(). An external
+        // self-call would be identical in effect, but it makes gas estimation
+        // unreliable for anything calling deposit, which showed up immediately
+        // as spurious estimateGas failures in the tests.
+        int24 tw = _twapTick();
+        uint256 v = _valueAt(TickMath.getSqrtRatioAtTick(tw));
+        if (v > valueCheckpoint) { valueCheckpoint = v; checkpointTick = tw; }
     }
 
     /// @notice Pull everything back to the owner. Always available, needs no
@@ -313,13 +377,27 @@ contract AgentVault {
         if (b0 > 0) require(token0.transfer(owner, b0), "w0");
         if (b1 > 0) require(token1.transfer(owner, b1), "w1");
         valueCheckpoint = 0;
+        // A proposal left standing here would execute against the next deposit,
+        // staged before the owner ever made it.
+        _clearProposal();
         emit Withdrawn(b0, b1);
     }
 
-    function setAgent(address a) external onlyOwner { emit AgentChanged(agent, a); agent = a; }
-    function revokeAgent() external onlyOwner { emit AgentChanged(agent, address(0)); agent = address(0); }
-
-    function setMode(Mode m) external onlyOwner { emit ModeChanged(mode, m); mode = m; }
+    // Each of these clears any pending proposal. Without that, an agent can
+    // stage a proposal under a permissive mode, let it mature, and execute it
+    // the instant the owner tightens the rules: propose under AUTONOMOUS, wait
+    // past readyAt, and the moment the owner switches to TIMELOCKED the staged
+    // action is immediately executable with zero review. The owner's first act
+    // of taking control would otherwise be the one thing that releases it.
+    function setAgent(address a) external onlyOwner {
+        emit AgentChanged(agent, a); agent = a; _clearProposal();
+    }
+    function revokeAgent() external onlyOwner {
+        emit AgentChanged(agent, address(0)); agent = address(0); _clearProposal();
+    }
+    function setMode(Mode m) external onlyOwner {
+        emit ModeChanged(mode, m); mode = m; _clearProposal();
+    }
 
     function setPolicy(
         int24 _maxTickDrift,
@@ -336,6 +414,9 @@ contract AgentVault {
         require(_maxSlippageBps <= 500, "slippage");       // never worse than 5%
         require(_lossToleranceBps <= 2000, "tolerance");   // never worse than 20%
         require(_twapWindow >= 300, "twap window");        // at least 5 minutes
+        // Without a floor, TIMELOCKED with a zero window is just AUTONOMOUS
+        // wearing its name, and the mode stops meaning what it says.
+        require(_reviewWindow >= 300, "review window");
         maxTickDrift = _maxTickDrift;
         maxSlippageBps = _maxSlippageBps;
         lossToleranceBps = _lossToleranceBps;
@@ -344,14 +425,38 @@ contract AgentVault {
         cooldown = _cooldown;
     }
 
-    /// @notice Accept a pending proposal in PROPOSE_ONLY mode.
-    function approve() external onlyOwner { require(proposal.open, "none"); proposal.approved = true; }
+    /// @notice Accept a specific pending proposal, named by its nonce.
+    ///
+    /// The nonce is not ceremony. With an unbound `approve()` the agent watches
+    /// for the owner's transaction in the mempool, front-runs it with a
+    /// different `propose`, and the owner's approval lands on a proposal they
+    /// never saw. In TIMELOCKED that is worse still, because `approved` is the
+    /// owner's fast-track past the review window, so the substituted proposal
+    /// executes immediately with no review at all.
+    function approve(uint256 nonce) external onlyOwner {
+        require(proposal.open, "none");
+        require(proposal.nonce == nonce, "stale approval");
+        proposal.approved = true;
+    }
 
-    function veto() external onlyOwner { delete proposal; emit Vetoed(); }
+    /// @dev Unconditional on purpose. Cancelling is always the conservative
+    /// direction, so binding a nonce here would only create a way for a veto to
+    /// fail when the owner wanted something gone.
+    function veto() external onlyOwner { _clearProposal(); emit Vetoed(); }
 
-    /// @notice Re-arm the agent after the loss breaker halted it. Deliberately
-    /// manual: an automatic reset would let a slow drain continue forever.
-    function resetCheckpoint() external onlyOwner { _checkpoint(); }
+    /// @notice Re-arm the agent after the loss breaker halted it, or after the
+    /// TWAP has moved far enough that the old checkpoint is not comparable.
+    /// Deliberately manual: an automatic reset would let a slow drain continue
+    /// forever.
+    ///
+    /// Reverts if no TWAP is available. Swallowing that would leave the breaker
+    /// disarmed while reporting success, which is the one outcome an owner
+    /// calling this must never get.
+    function resetCheckpoint() external onlyOwner {
+        int24 tw = _twapTick();
+        valueCheckpoint = _valueAt(TickMath.getSqrtRatioAtTick(tw));
+        checkpointTick = tw;
+    }
 
     // ------------------------------------------------------------ agent path
 
@@ -359,10 +464,11 @@ contract AgentVault {
     function propose(int24 lower, int24 upper) external onlyAgent {
         require(mode != Mode.PAUSED, "paused");
         _validRange(lower, upper);
+        proposalNonce++;
         proposal = Proposal({
             lower: lower, upper: upper,
             readyAt: uint64(block.timestamp + reviewWindow),
-            approved: false, open: true
+            approved: false, open: true, nonce: proposalNonce
         });
         emit Proposed(lower, upper, proposal.readyAt);
     }
@@ -389,7 +495,28 @@ contract AgentVault {
         // executes it after moving the market.
         _validRange(p.lower, p.upper);
 
-        uint160 twap = _twapSqrtPrice();
+        require(valueCheckpoint > 0, "unarmed");
+
+        int24 tw = _twapTick();
+        (, int24 spotTick,,,,,) = pool.slot0();
+        // Single-block manipulation barely moves a 30-minute TWAP, so a large
+        // spot/TWAP gap means the price is being pushed right now. Minting at
+        // spot with no minimums, which is what the position manager does, then
+        // skims the convexity gap: on a +1800 tick push that is ~2.25% of the
+        // vault in one transaction, and it is invisible to the loss breaker
+        // because the breaker measures both sides at the unmoved TWAP.
+        int24 gap = spotTick > tw ? spotTick - tw : tw - spotTick;
+        require(gap <= maxTickDrift, "spot far from TWAP");
+
+        // And if the TWAP itself has walked away from where the checkpoint was
+        // taken, the checkpoint is not a comparable number. The breaker cannot
+        // see a manipulated TWAP on its own: `before` and `after` are both
+        // measured at it, so the theft nets to zero and the checkpoint then
+        // ratchets UP to the inflated figure. Halt and make the owner re-arm.
+        int24 cpGap = tw > checkpointTick ? tw - checkpointTick : checkpointTick - tw;
+        require(cpGap <= maxTickDrift, "TWAP moved since checkpoint");
+
+        uint160 twap = TickMath.getSqrtRatioAtTick(tw);
         uint256 before = _valueAt(twap);
 
         if (positionId != 0) _closePosition();
@@ -400,8 +527,8 @@ contract AgentVault {
         _enforceLoss(nowValue);
 
         lastAction = block.timestamp;
-        delete proposal;
-        valueCheckpoint = nowValue > valueCheckpoint ? nowValue : valueCheckpoint;
+        _clearProposal();
+        if (nowValue > valueCheckpoint) { valueCheckpoint = nowValue; checkpointTick = tw; }
         emit Rebalanced(p.lower, p.upper, before, nowValue);
     }
 
@@ -420,15 +547,48 @@ contract AgentVault {
 
     // -------------------------------------------------------------- internal
 
+    /// @dev Cancels the pending proposal without `delete`, which would clear six
+    /// storage slots at once.
+    ///
+    /// NOTE FOR CALLERS, and it applies beyond this function: several entry
+    /// points here are under-reported by `eth_estimateGas`. Cancelling a live
+    /// proposal clears storage, and a refund makes the estimate the NET figure
+    /// while the EVM needs the GROSS; `deposit` and `execute` read the pool
+    /// through external calls, which estimators also handle poorly. Measured on
+    /// setMode: 32,450 estimated against 30,249 actual with nothing pending,
+    /// and short with a proposal live.
+    ///
+    /// Wallets add a buffer as a matter of course. A frontend or script calling
+    /// deposit, execute, setMode, setAgent, revokeAgent, veto or withdrawAll
+    /// directly must set an explicit gas limit rather than trusting a bare
+    /// estimate. This is a tooling limitation, not a fault in these functions:
+    /// every one of them succeeds when given the gas it actually needs.
+    ///
+    /// Every consumer gates on `open`, so clearing the two flags is equivalent
+    /// to a full delete.
+    function _clearProposal() internal {
+        proposal.open = false;
+        proposal.approved = false;
+    }
+
+
     function _validRange(int24 lower, int24 upper) internal view {
         require(lower < upper, "range");
         require(lower % tickSpacing == 0 && upper % tickSpacing == 0, "spacing");
         require(lower >= TickMath.MIN_TICK && upper <= TickMath.MAX_TICK, "bounds");
         int24 t = _twapTick();
-        // The range must straddle, or sit close to, the TWAP. An agent cannot
-        // park the position somewhere it will never earn, nor use an extreme
-        // range as a roundabout way of dumping into a swap.
         require(lower >= t - maxTickDrift && upper <= t + maxTickDrift, "outside TWAP band");
+        // The range must CONTAIN the TWAP, not merely sit near it. Bounding the
+        // band alone let a one-sided range through, and _rebalanceToRatio then
+        // correctly computes a target of zero for one leg and swaps the ENTIRE
+        // balance of it. Proposing the mirror range next time swaps it all back.
+        // The agent still cannot pick the price, but it picks the notional that
+        // crosses the spread, which is the multiplier on every per-swap loss.
+        //
+        // An earlier comment here claimed this was already enforced. It was not,
+        // and the grind test never caught it because that test only ever
+        // proposed straddling ranges, exactly like the honest keeper does.
+        require(lower <= t && upper >= t, "must straddle TWAP");
     }
 
     function _twapTick() internal view returns (int24) {
@@ -457,7 +617,7 @@ contract AgentVault {
                 sqrtP, TickMath.getSqrtRatioAtTick(lo), TickMath.getSqrtRatioAtTick(hi), L);
             amt0 += p0; amt1 += p1;
         }
-        return amt1 + _quote0In1(amt0, sqrtP);
+        return valueInToken0 ? amt0 + _quote1In0(amt1, sqrtP) : amt1 + _quote0In1(amt0, sqrtP);
     }
 
     function _quote0In1(uint256 amount0, uint160 sqrtP) internal pure returns (uint256) {
@@ -472,13 +632,6 @@ contract AgentVault {
             emit Halted(nowValue, valueCheckpoint);
             revert("loss breaker");
         }
-    }
-
-    function _checkpoint() internal {
-        // Only meaningful once the pool can produce a TWAP. Before that the
-        // vault simply has no checkpoint and the breaker cannot arm, which is
-        // why agent actions requiring a TWAP revert until it exists.
-        try this.valueNow() returns (uint256 v) { valueCheckpoint = v; } catch {}
     }
 
     /// @notice Current vault value in token1 terms at TWAP. External so that
