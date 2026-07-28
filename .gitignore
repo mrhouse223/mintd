@@ -17,3 +17,6 @@ build/
 # runtime lock, never committed
 stats-indexer.lock
 holder-ledger.lock
+
+# Local Netlify folder
+.netlify
