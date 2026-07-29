@@ -20,3 +20,7 @@ holder-ledger.lock
 
 # Local Netlify folder
 .netlify
+
+# Keeper's vault-discovery cache. Rebuilt from the factory registry on demand,
+# so losing it costs one page of reads, unlike stats-cache.json.
+data/agent-vaults-*.json

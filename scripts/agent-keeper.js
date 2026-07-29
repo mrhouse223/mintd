@@ -1,11 +1,31 @@
 // Keeper for AgentVault. Watches vaults and proposes rebalances.
 //
+//   FACTORY=0x42D5... PRIVATE_KEY=0x... node scripts/agent-keeper.js
 //   VAULTS=0xabc,0xdef PRIVATE_KEY=0x... node scripts/agent-keeper.js
 //
+//   FACTORY     AgentVaultFactory to discover vaults from. Optional; VAULTS
+//               still works on its own and the two can be combined
+//   VAULTS      comma-separated vaults to watch regardless of discovery
 //   RPC_URL     chain rpc, default Arc testnet
 //   POLL_MS     poll interval, default 60000
+//   PAGE        vaults per registry page, default 200
+//   RECHECK_EVERY  polls between re-checking vaults that are not ours, default 10
 //   MIN_GAIN_BPS  minimum modelled improvement before proposing, default 50
 //   DRY         set to 1 to log decisions without sending anything
+//
+// DISCOVERY, AND WHY IT FILTERS
+// Vault creation is permissionless, so the factory's list is spammable by
+// design: anyone can create a vault naming anyone as its agent. This process
+// therefore acts only on vaults whose `agent()` is this keeper's own address.
+// Without that filter a stranger could enlist us into polling, and paying gas
+// for, an unbounded number of vaults we have no authority over anyway. Being
+// dropped as agent later is equally normal, so the check is re-run rather than
+// cached forever.
+//
+// Discovery reads the factory's registry, not VaultCreated logs. The registry
+// is on-chain state and so survives log pruning, which on Stable removes
+// history after about four days; an event-based keeper restarting after that
+// would find nothing and manage no vaults, looking exactly like a quiet day.
 //
 // WHAT THIS PROCESS CAN AND CANNOT DO
 // It can decide *when* to propose a rebalance and what range to suggest. It
@@ -21,11 +41,21 @@
 // asset rather than the balance, but a keeper that also holds money is a
 // strictly worse target for no benefit.
 const { ethers } = require("ethers");
+const fs = require("fs");
+const path = require("path");
 
 const RPC_URL = process.env.RPC_URL || "https://rpc.testnet.arc.network";
 const POLL_MS = Number(process.env.POLL_MS || "60000");
 const MIN_GAIN_BPS = BigInt(process.env.MIN_GAIN_BPS || "50");
 const DRY = process.env.DRY === "1";
+const FACTORY = (process.env.FACTORY || "").trim();
+const RECHECK_EVERY = Number(process.env.RECHECK_EVERY || "10");
+const PAGE = Number(process.env.PAGE || "200");
+
+const FACTORY_ABI = [
+  "function vaultCount() view returns (uint256)",
+  "function allVaultsSlice(uint256 start, uint256 count) view returns (address[])",
+];
 
 const VAULT_ABI = [
   "function owner() view returns (address)",
@@ -60,6 +90,59 @@ const alignDown = (t, s) => {
   const q = Math.floor(t / s) * s;
   return q;
 };
+
+const cacheFile = (chainId) =>
+  path.join(__dirname, "..", "data", `agent-vaults-${chainId}.json`);
+
+/// Purely an optimisation, unlike the indexer caches elsewhere in this repo.
+/// The factory's registry is the durable record and can always rebuild this
+/// from scratch, so losing the file costs one extra page of reads and nothing
+/// else. It exists to avoid re-paging the whole registry every restart.
+function loadCache(chainId) {
+  try { return JSON.parse(fs.readFileSync(cacheFile(chainId), "utf8")); }
+  catch { return { factory: FACTORY, registryCount: 0, vaults: {} }; }
+}
+function saveCache(chainId, c) {
+  const f = cacheFile(chainId);
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, JSON.stringify(c, null, 2) + "\n");
+}
+
+/// Find every vault this factory has created.
+///
+/// Reads the factory's registry rather than scanning VaultCreated logs, and the
+/// difference matters more than it looks. The registry is on-chain state, so it
+/// is immune to log pruning: Stable drops logs after roughly four days, and an
+/// event-based keeper restarting after that would find nothing and silently
+/// manage no vaults, which is indistinguishable from having nothing to do. It
+/// also sidesteps both getLogs caps entirely (gotcha 2), because paging is
+/// bounded by an argument we choose rather than by the node's result limit.
+///
+/// The list is append-only, so a changed `vaultCount` means new entries at the
+/// tail and the whole check costs one call when nothing has happened.
+async function discover(provider, cache) {
+  if (!FACTORY) return 0;
+  const f = new ethers.Contract(FACTORY, FACTORY_ABI, provider);
+  const count = Number(await f.vaultCount());
+  const seen = Number(cache.registryCount || 0);
+  if (count === seen) return 0;
+  // A count that went DOWN cannot happen against one factory, so it means this
+  // cache belongs to a different deployment. Re-read from the start.
+  const from = count < seen ? 0 : seen;
+
+  let added = 0;
+  for (let i = from; i < count; i += PAGE) {
+    // Sequential: ethers batches everything pending in the same tick and both
+    // chains reject batched JSON-RPC (gotcha 1).
+    const page = await f.allVaultsSlice(i, PAGE);
+    for (const v of page) {
+      const a = ethers.getAddress(v);
+      if (!cache.vaults[a]) { cache.vaults[a] = { mine: null }; added++; }
+    }
+  }
+  cache.registryCount = count;
+  return added;
+}
 
 /// Width of the range we aim for, as a multiple of tick spacing. Deliberately
 /// simple: a wider range earns less fee per unit but needs rebalancing far less
@@ -139,8 +222,9 @@ async function decide(v, pool, npm) {
 
 async function main() {
   const pk = process.env.PRIVATE_KEY;
-  const list = (process.env.VAULTS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (!pk || !list.length) throw new Error("Set VAULTS and PRIVATE_KEY env vars");
+  const manual = (process.env.VAULTS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!pk) throw new Error("Set PRIVATE_KEY");
+  if (!manual.length && !FACTORY) throw new Error("Set FACTORY or VAULTS (or both)");
 
   // batchMaxCount 1 per CLAUDE.md gotcha 1. Both Stable and Arc mishandle
   // batched JSON-RPC, and ethers batches anything pending in the same tick
@@ -149,17 +233,53 @@ async function main() {
   const net = await provider.getNetwork();
   const wallet = new ethers.Wallet(pk.startsWith("0x") ? pk : "0x" + pk, provider);
 
-  log(`agent-keeper on chain ${net.chainId}`);
+  const chainId = String(net.chainId);
+  log(`agent-keeper on chain ${chainId}`);
   log(`keeper ${wallet.address}${DRY ? "   DRY RUN, nothing will be sent" : ""}`);
-  log(`watching ${list.length} vault(s), poll ${POLL_MS}ms, min gain ${MIN_GAIN_BPS}bps`);
+  log(`poll ${POLL_MS}ms, min gain ${MIN_GAIN_BPS}bps`);
 
   const bal = await provider.getBalance(wallet.address);
   log(`gas balance ${ethers.formatEther(bal)}`);
   if (bal === 0n) log("WARNING: keeper has no gas, every action will fail");
 
+  const cache = loadCache(chainId);
+  // A cache written against a different factory describes vaults this keeper
+  // has no business with. Start clean rather than silently mixing the two.
+  if (FACTORY && cache.factory && cache.factory.toLowerCase() !== FACTORY.toLowerCase()) {
+    log(`factory changed, discarding cache for ${cache.factory}`);
+    cache.factory = FACTORY; cache.registryCount = 0; cache.vaults = {};
+  }
+  if (FACTORY) { cache.factory = FACTORY; log(`discovering from factory ${FACTORY}`); }
+  for (const m of manual) if (!cache.vaults[m]) cache.vaults[m] = { mine: null, block: 0, manual: true };
+
+  let polls = 0;
   let fails = 0;
   async function loop() {
     try {
+      polls++;
+      if (FACTORY) {
+        const added = await discover(provider, cache);
+        if (added) log(`discovered ${added} new vault(s), ${Object.keys(cache.vaults).length} known`);
+      }
+
+      // Resolve which vaults are actually ours. An owner can point a vault at
+      // this keeper long after creating it, so vaults that were not ours get
+      // re-checked periodically rather than written off for good.
+      for (const [addr, meta] of Object.entries(cache.vaults)) {
+        if (meta.mine === true) continue;
+        if (meta.mine === false && polls % RECHECK_EVERY !== 1) continue;
+        try {
+          const agent = await new ethers.Contract(addr, VAULT_ABI, provider).agent();
+          const mine = agent.toLowerCase() === wallet.address.toLowerCase();
+          if (mine !== meta.mine) log(`${addr.slice(0, 10)}  ${mine ? "is now ours" : "is not ours"}`);
+          meta.mine = mine;
+        } catch { meta.mine = false; }
+      }
+      saveCache(chainId, cache);
+
+      const list = Object.entries(cache.vaults).filter(([, m]) => m.mine).map(([a]) => a);
+      if (!list.length) log(`nothing to do: 0 of ${Object.keys(cache.vaults).length} known vault(s) name us as agent`);
+
       for (const addr of list) {
         const v = new ethers.Contract(addr, VAULT_ABI, wallet);
         let d;
