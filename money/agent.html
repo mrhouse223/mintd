@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Agent vaults — mintd.money</title>
+<title>Agent vaults – mintd.money</title>
 <link rel="icon" href="logo.svg" />
 <style>
   /* Palette lifted from frontend/index.html so this page belongs to the same
@@ -115,7 +115,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 // with full precision rather than rounding to a fixed 2dp: these are financial
 // figures and a rebalance that costs 0.000437 must not display as 0.00.
 function fmtUnits(raw, dec, maxFrac) {
-  if (raw === null || raw === undefined) return "—";
+  if (raw === null || raw === undefined) return "–";
   const neg = String(raw).startsWith("-");
   const s = String(raw).replace("-", "").padStart(dec + 1, "0");
   const whole = s.slice(0, s.length - dec) || "0";
@@ -130,7 +130,7 @@ function fmtUnits(raw, dec, maxFrac) {
 /// nothing about the price the position actually covers.
 function priceAt(tick, d0, d1) {
   const p = Math.pow(1.0001, tick) * Math.pow(10, d0 - d1);
-  if (!isFinite(p) || p === 0) return "—";
+  if (!isFinite(p) || p === 0) return "–";
   if (p >= 1000) return p.toLocaleString(undefined, { maximumFractionDigits: 0 });
   if (p >= 1) return p.toFixed(3);
   return p.toPrecision(4);
@@ -178,7 +178,7 @@ function chart(pts, dec, sym) {
   const Y = (v) => PT + (1 - (v - y0) / (y1 - y0 || 1)) * (H - PT - PB);
   const d = pts.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p.v).toFixed(1)}`).join(" ");
   const area = `${d} L${X(pts.length - 1).toFixed(1)},${H - PB} L${X(0).toFixed(1)},${H - PB} Z`;
-  const dots = pts.map((p, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="3.5" fill="var(--accent)" stroke="var(--panel)" stroke-width="2"><title>${fmtUnits(p.v, dec)} ${esc(sym)} — ${esc(p.label)}</title></circle>`).join("");
+  const dots = pts.map((p, i) => `<circle cx="${X(i).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="3.5" fill="var(--accent)" stroke="var(--panel)" stroke-width="2"><title>${fmtUnits(p.v, dec)} ${esc(sym)} – ${esc(p.label)}</title></circle>`).join("");
   const tags = pts.map((p, i) => {
     if (pts.length > 8 && i % 2) return "";
     const anchor = i === 0 ? "start" : i === pts.length - 1 ? "end" : "middle";
@@ -260,7 +260,7 @@ function rows(v) {
       <td class="num">${when(e.time)}</td>
       <td class="evt ${cls}">${esc(name)}</td>
       <td>${detail}</td>
-      <td class="num">${change || '<span class="muted">—</span>'}</td>
+      <td class="num">${change || '<span class="muted">–</span>'}</td>
       <td class="num">${tx}</td>
     </tr>`);
   }
