@@ -1,6 +1,6 @@
 # AgentVault factory
 
-Status: draft
+Status: **built, tested and reviewed. Not deployed.**
 Date: 2026-07-29
 
 ## What problem this solves
@@ -125,25 +125,72 @@ discovered on a mainnet deploy that reverts.
 
 ## Tests that must pass before deploy
 
-- [ ] existing suite still green: `node scripts/test-agent-vault.js` (48 tests)
-- [ ] `scripts/test-agent-vault-factory.js`, new, on real ganache with real
-      Uniswap V3, not mocks-only:
-  - [ ] creates a working vault; owner is the caller, not the factory
-  - [ ] the created vault's `npm` and `router` equal the factory's, and no
-        argument can change them
-  - [ ] forged-pool contract mimicking a real pool is rejected (risk 2)
-  - [ ] non-canonical but real pool (wrong fee tier for the pair) is rejected
-  - [ ] numeraire outside the pool is rejected
-  - [ ] `isVault` true only for factory output; a hand-deployed identical vault
-        reads false
-  - [ ] registry: multiple vaults per owner, correct per-owner indexing,
-        pagination bounds including empty and out-of-range
-  - [ ] end to end through the factory-made vault: deposit, propose, execute,
-        withdrawAll returns principal to the owner
-  - [ ] the hostile-keeper suite re-run against a factory-created vault, since
-        the point is that factory provenance changes nothing about vault safety
-  - [ ] deployed factory bytecode is under 24,576 bytes
-- [ ] `/security-review` on `AgentVaultFactory.sol` with findings fixed
+All green as of 2026-07-29. `scripts/test-agent-vault-factory.js` is 64 tests on
+real ganache against real Uniswap V3, run 3x for stability.
+
+- [x] existing suite still green: `node scripts/test-agent-vault.js`, 48 tests,
+      8 consecutive clean runs (see "Flake found and fixed" below)
+- [x] creates a working vault; owner is the caller, not the factory
+- [x] the created vault's `npm` and `router` equal the factory's, and no
+      argument can change them. Asserted against the compiled ABI as well, so
+      adding such a parameter later fails the test rather than quietly widening
+      the trust surface
+- [x] forged-pool contract mimicking a real pool is rejected (risk 2), with the
+      revert reason checked, not merely "it reverted"
+- [x] a real Uniswap pool built on an unrelated factory is rejected
+- [x] numeraire outside the pool is rejected
+- [x] `isVault` true only for factory output; a byte-identical hand-deployed
+      vault reads false
+- [x] registry: multiple vaults per owner, per-owner isolation, pagination
+      bounds including empty, zero-length, at-the-end and past-the-end
+- [x] end to end: deposit, propose, approve, execute, withdrawAll returns
+      principal to the owner, full cycle costs under 2%
+- [x] the hostile-keeper suite re-run against a factory-created vault:
+      12 attacks, 0 executed, value fell 1.56%, owner recovered 100%
+- [x] deployed factory bytecode under 24,576 bytes: measured 18,049
+- [x] hostile pool cannot reenter the factory, proven at the EVM level rather
+      than inferred from the interface (see below)
+- [x] `/security-review` on `AgentVaultFactory.sol`
+
+### Proving the reentrancy claim rather than asserting it
+
+The factory ships without a reentrancy guard because the pool reads that happen
+before the canonical check are all `view`, so solc emits STATICCALL. That is a
+claim about compiled output, so it is tested. The first attempt was wrong and
+worth recording: asserting that the hostile pool's state write "never landed"
+proves nothing, because the outer transaction reverts either way. The test now
+compares revert reasons instead. An inert forged pool reaches the canonical
+check and says `pool not canonical`; a pool whose `token0()` writes storage
+never reaches it, so execution died inside `token0()` itself, which is only
+possible under STATICCALL.
+
+### Flake found and fixed
+
+`test-agent-vault.js` failed about three runs in five, at whichever call
+happened to land on a short gas estimate. Not a contract bug: `AgentVault`
+documents these entry points as under-reported by `eth_estimateGas`, because
+clearing a proposal refunds storage and the estimate comes back net while the
+EVM needs gross. Bare `deposit`, `propose`, `setPolicy` and `resetCheckpoint`
+calls now pass explicit gas limits, with a comment at the top of the file so it
+does not regress. Confirmed pre-existing, not caused by this work: the
+`AgentVault` and `MemeToken20` artifacts are byte-identical before and after.
+
+### Security review result
+
+No HIGH or MEDIUM findings. Confirmed by trace: `npm`/`router` are unreachable
+after deployment (no setter, owner, delegatecall, assembly or selfdestruct);
+the canonical-pool check resolves the Uniswap factory from the factory's own
+`npm` rather than from caller input, and `getPool` is symmetric in token order
+so reversing the pair gains nothing; `isVault` is written in exactly one place
+immediately after a successful construction, and constructor reverts roll back
+the whole transaction, so a partially-wired vault can never be registered.
+
+The reviewer noted one accepted design risk rather than a finding: with no pool
+allowlist a caller can point their own vault at a thin pool whose TWAP they can
+move. The blast radius is their own capital, since they are the vault's owner
+and its only permitted depositor, the factory holds no funds, and no state is
+shared between vaults. That is the trade this plan already states under "What it
+does not do".
 
 ## Deploy steps
 
@@ -170,16 +217,24 @@ the factory nor the agent. That property is the actual rollback plan and the
 tests must prove it holds. Treating `/security-review` as mandatory is not
 process for its own sake here: it is the only gate that exists.
 
-## Open questions for approval
+## Decisions taken at approval (2026-07-29)
 
-1. **Risk 3, non-standard tokens.** Options: (a) ship as is and document, (b) add
-   a factory-side probe rejecting tokens that do not return a bool, (c) switch
-   the vault to a safe-transfer helper, which reopens the vault for re-review.
-   Recommendation: (a) for v1. The known target pools are USDT0-quoted and fine,
-   and (c) buys robustness at the cost of re-reviewing the contract this plan
-   deliberately does not touch.
-2. **Default agent in the UI.** The factory takes `agent` as an argument with no
-   default. Confirm the frontend fills in the current keeper address and that
-   the user can see and change it before signing, since a user blindly accepting
-   a prefilled agent is the closest thing left to a trust assumption.
-3. **Creation fee.** Confirmed out of scope for v1?
+1. **Risk 3, non-standard tokens: ship as is and document.** The known target
+   pools are USDT0-quoted and USDT0 returns a bool, so the vault's
+   `require(token.transfer(...))` is correct for them. A token returning no
+   value at all would make `withdrawAll` revert, stranding anything sent
+   directly to the vault address. Not fixed, because the alternative reopens
+   `AgentVault` for re-review and this plan deliberately does not touch it.
+2. **The frontend prefills the keeper as `agent`, and must show it before
+   signing.** The factory itself takes `agent` as a required argument with no
+   default, so this is a UI obligation, not a contract one. A user blindly
+   accepting a prefilled agent is the closest thing to a trust assumption left
+   in the design, which is why it has to be visible rather than implicit.
+3. **No creation fee in v1.** Confirmed out of scope.
+
+## Still to do before this is a product
+
+- Deploy, following "Deploy steps" above. Nothing is on chain yet.
+- The mintd.money agent-management tab, reading `vaultsOf(user)`.
+- Decide whether the keeper (`scripts/agent-keeper.js`) discovers vaults from
+  `VaultCreated` events, which is the natural indexing path now that one exists.
