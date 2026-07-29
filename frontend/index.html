@@ -1872,7 +1872,7 @@
   </section>
 
   <section class="view" id="view-bridge">
-    <div class="launchC" style="max-width:620px">
+    <div class="launchC" style="max-width:620px" id="brStable">
       <div class="heroC" style="margin:30px auto 22px">
         <div class="badgepill">GET <span class="qsym">USDT0</span> ON <span class="cshort">STABLE</span></div>
         <h1 style="font-size:44px">Bridge to<br /><span class="g"><span class="cshort">Stable</span>.</span></h1>
@@ -1893,6 +1893,56 @@
         <b style="color:var(--ink)">Stay safe.</b> mintd does not run a bridge and never takes custody of your funds. Every link here goes to relay.link or Stable's own hub, both listed in Stable's official ecosystem. Always check the URL in your address bar before approving anything, and never bridge to an address someone DMs you.
       </div>
     </div>
+
+    <!-- ARC: a real bridge, not a link-out. USDC moves over Circle's CCTP; the
+         only thing of ours in the path is an immutable fee router on Base that
+         takes the platform fee in the SAME transaction as the burn, so the fee
+         cannot be charged for a bridge that did not happen. -->
+    <div class="launchC" style="max-width:640px;display:none" id="brArc">
+      <div class="heroC" style="margin:30px auto 22px">
+        <div class="badgepill">BASE <span style="opacity:.6">&rarr;</span> ARC</div>
+        <h1 style="font-size:42px">Bring USDC<br /><span class="g">to Arc.</span></h1>
+        <p>Native USDC over Circle's own CCTP. Nothing is wrapped and nobody takes custody: your USDC is burned on Base and minted to <b>your</b> address on Arc, and the destination is fixed inside Circle's signed message before it leaves.</p>
+      </div>
+
+      <div class="trade">
+        <div class="paylbl" style="display:flex;justify-content:space-between">
+          <span>You send, on Base</span>
+          <span class="bal" id="brBal">–</span>
+        </div>
+        <div class="amtbox" style="margin-bottom:12px">
+          <input id="brAmt" placeholder="0.0" inputmode="decimal" oninput="brQuote()" style="font-size:26px" />
+          <span class="qsym">USDC</span>
+        </div>
+
+        <div class="feecard" id="brQuoteBox" style="margin-bottom:12px">
+          <div class="feerow"><span>Platform fee</span><b id="brFee">–</b></div>
+          <div class="feerow"><span>You receive on Arc</span><b id="brGet">–</b></div>
+          <div class="feerow"><span>Arc gas to claim</span><b>paid by mintd</b></div>
+        </div>
+
+        <button class="btn" id="brGo" onclick="brBridge()" style="width:100%">Connect wallet</button>
+        <div class="finenote" id="brNote" style="margin-top:10px"></div>
+      </div>
+
+      <div class="trade" id="brStatus" style="margin-top:16px;display:none">
+        <div class="mkthead"><h2>Transfer status</h2><div class="spacer"></div>
+          <span class="live"><span class="dot"></span><span id="brStage">–</span></span></div>
+        <div id="brStatusBody"></div>
+      </div>
+
+      <div class="trade" style="margin-top:16px;font-size:12.5px;color:var(--dim);line-height:1.6">
+        <b style="color:var(--ink)">What you are trusting.</b> Circle moves the money; we do not.
+        The fee is enforced by an immutable contract on Base with no owner and no
+        setter, so it can never be raised or redirected, and the figure above comes
+        from that contract rather than from this page.
+        Delivery on Arc needs one transaction that costs Arc gas you do not have
+        yet, so our relayer submits it and pays for it. If we ever stop,
+        <b>anyone can submit it instead, including you</b>: the transfer is not
+        ours to hold and the recipient cannot be changed by whoever sends it.
+      </div>
+    </div>
+
   </section>
 
   <!-- LOCKER -->
@@ -2382,6 +2432,18 @@ const CHAINS = {
       // which is what makes the page survive a community-sized vault list on a
       // chain that rate limits bursts.
       agentLens: "0x2adb4D409349637Fd53f2d9453C5Bae919519B72",
+      // Base -> Arc USDC over Circle CCTP. `router` is our immutable fee router
+      // on Base and is null until it is deployed; the UI reports that instead of
+      // offering a broken button. Every other value here was read off chain:
+      // CCTP domains from localDomain(), not from a doc.
+      arcBridge: {
+        router: null,
+        baseChainId: 8453,
+        baseRpc: "https://mainnet.base.org",
+        baseUsdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        baseDomain: 6,
+        arcDomain: 26,
+      },
       // The community testing venue. A dedicated pair because Arc MINTD is
       // fixed supply and USDC comes from a rate-limited faucet, which left the
       // real pool holding 24 USDC: too thin for one honest tester, since a
@@ -2843,7 +2905,7 @@ async function route() {
     syLoad();
   } else if (h === "bridge") {
     showView("bridge");
-    brPaint();
+    brRender();
   } else if (h === "locker") {
     showView("locker");
     if (!tokens.length && padAddr()) await loadAll(); // prices for locked launchpad tokens
@@ -3106,6 +3168,7 @@ async function connect() {
     // only fetched for the connected wallet, so a repaint alone would leave the
     // controls missing on the vaults that just became theirs.
     if ($("view-agent").classList.contains("on")) agLoad(true);
+    if ($("view-bridge").classList.contains("on")) brRender();
     if (cur) refreshTrade();
     if ($("view-mintswap").classList.contains("on")) swBalance();
     if ($("view-earn").classList.contains("on")) { loadFarm(); loadFeePools(); loadPools(); }
@@ -3196,6 +3259,125 @@ function hoPaint() {
   $("hoMStart").textContent = nf(d.startBlock, 0);
   $("hoMethodSrc").innerHTML = `<a href="https://github.com/mrhouse223/mintd/blob/main/scripts/holder-ledger.js" target="_blank" rel="noopener">scripts/holder-ledger.js ↗</a>`;
   hoTrend();
+}
+
+// ============================================================ BASE -> ARC BRIDGE
+const BR_ROUTER_ABI = [
+  "function quote(uint256) view returns (uint256 fee, uint256 bridged)",
+  "function feeBps() view returns (uint256)",
+  "function bridgeTo(uint256,address) returns (uint256)",
+];
+const BR_USDC_ABI = [
+  "function balanceOf(address) view returns (uint256)",
+  "function allowance(address,address) view returns (uint256)",
+  "function approve(address,uint256) returns (bool)",
+  "function decimals() view returns (uint8)",
+];
+
+function brCfg() { return NET.mintd && NET.mintd.arcBridge; }
+
+/// Read-only provider for Base. The app's `rp` points at the chain the user is
+/// browsing, and the quote has to come from the router on Base regardless.
+let brBaseRp = null;
+function brBase() {
+  const c = brCfg();
+  if (!brBaseRp) brBaseRp = new ethers.JsonRpcProvider(c.baseRpc, c.baseChainId, { batchMaxCount: 1 });
+  return brBaseRp;
+}
+
+/// The quote comes from the contract, never from arithmetic here. A fee this page
+/// computed itself could drift from the one that is actually charged, and the
+/// number a user sees before signing has to be the number they pay.
+async function brQuote() {
+  const c = brCfg(); if (!c) return;
+  const raw = ($("brAmt").value || "").trim();
+  const set = (fee, get, note) => { $("brFee").textContent = fee; $("brGet").textContent = get; if (note !== undefined) $("brNote").innerHTML = note; };
+  if (!c.router) return set("–", "–", "The bridge contract is not deployed yet.");
+  if (!raw) return set("–", "–", "");
+  let amount;
+  try { amount = ethers.parseUnits(raw, 6); } catch { return set("–", "–", "Enter a number."); }
+  if (amount <= 0n) return set("–", "–", "");
+  try {
+    const q = await new ethers.Contract(c.router, BR_ROUTER_ABI, brBase()).quote(amount);
+    set(nf(ethers.formatUnits(q.fee, 6), 6) + " USDC", nf(ethers.formatUnits(q.bridged, 6), 6) + " USDC", "");
+  } catch (e) { set("–", "–", "Could not read the quote: " + esc(e.shortMessage || e.message)); }
+}
+
+async function brBalance() {
+  const c = brCfg(); if (!c || !wallet) return;
+  try {
+    const b = await new ethers.Contract(c.baseUsdc, BR_USDC_ABI, brBase()).balanceOf(wallet);
+    $("brBal").textContent = nf(ethers.formatUnits(b, 6), 4) + " USDC on Base";
+  } catch { $("brBal").textContent = "balance unavailable"; }
+}
+
+/// Chooses which bridge page this chain gets, then defers to the existing
+/// link-out renderer when there is no real bridge here.
+///
+/// Deliberately NOT called brPaint: that name already belongs to the Stable
+/// link-out renderer, and a second definition of it silently replaced the first,
+/// leaving Stable's bridge page with an empty card. Named distinctly so the two
+/// cannot collide again.
+function brRender() {
+  const c = brCfg();
+  const arc = $("brArc"), stable = $("brStable");
+  if (!arc || !stable) return;
+  const on = !!c;
+  arc.style.display = on ? "" : "none";
+  stable.style.display = on ? "none" : "";
+  // The link-out page keeps its own renderer, which fills #brCard.
+  if (!on) return brPaint();
+  const btn = $("brGo");
+  if (!c.router) { btn.textContent = "Not live yet"; btn.disabled = true; $("brNote").textContent = "The bridge contract is not deployed yet."; return; }
+  btn.disabled = false;
+  btn.textContent = wallet ? "Bridge to Arc" : "Connect wallet";
+  brBalance(); brQuote();
+}
+
+async function brBridge() {
+  const c = brCfg(); if (!c) return;
+  if (!c.router) return toast("The bridge contract is not deployed yet", "err");
+  if (!signer) return connect();
+  let amount;
+  try { amount = ethers.parseUnits(($("brAmt").value || "").trim(), 6); } catch { return toast("Enter an amount", "err"); }
+  if (amount <= 0n) return toast("Enter an amount", "err");
+
+  // The burn happens on Base, so the wallet has to be there. Asking mid-flow is
+  // better than a confusing revert from the wrong chain.
+  try {
+    await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x" + c.baseChainId.toString(16) }] });
+  } catch { return toast("Switch your wallet to Base to send the transfer", "err"); }
+
+  const bp = new ethers.BrowserProvider(window.ethereum);
+  const sg = await bp.getSigner();
+  const usdc = new ethers.Contract(c.baseUsdc, BR_USDC_ABI, sg);
+  try {
+    if ((await usdc.balanceOf(wallet)) < amount) return toast("Not enough USDC on Base", "err");
+    if ((await usdc.allowance(wallet, c.router)) < amount) {
+      toast("Approving USDC…");
+      await (await usdc.approve(c.router, amount)).wait();
+    }
+    toast("Sending to Arc…");
+    const r = new ethers.Contract(c.router, BR_ROUTER_ABI, sg);
+    const tx = await r.bridgeTo(amount, wallet, { gasLimit: 350000 });
+    const rec = await tx.wait();
+    toast("Sent. Circle is attesting it now.", "ok");
+    brShowStatus(rec.hash);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+/// Honest about the wait. CCTP standard transfers need Base finality before
+/// Circle will attest, which is minutes, not seconds. Claiming otherwise would
+/// have people refreshing and assuming it broke.
+function brShowStatus(hash) {
+  $("brStatus").style.display = "";
+  $("brStage").textContent = "burned on Base";
+  $("brStatusBody").innerHTML = `
+    <div class="finenote" style="margin:0">
+      <div>Base transaction <a href="https://basescan.org/tx/${esc(hash)}" target="_blank" rel="noopener">${esc(hash.slice(0, 14))}…</a></div>
+      <div style="margin-top:8px">Circle attests the transfer once Base finalises it, which usually takes several minutes. Our relayer then submits the Arc side and pays that gas, so there is nothing further for you to sign.</div>
+      <div style="margin-top:8px">You can close this page. The transfer is held by Circle, not by us, and the recipient is already fixed to your address.</div>
+    </div>`;
 }
 
 // ============================================================ AGENT VAULTS
