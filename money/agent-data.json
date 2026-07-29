@@ -2,7 +2,7 @@
   "chainId": 5042002,
   "factory": "0x42D58A7dFB4235F25F8ef6Bf84753B4F9A6531be",
   "fromBlock": 54176000,
-  "lastScanned": 54184293,
+  "lastScanned": 54185488,
   "vaults": {
     "0x144646c41d3a94c1124365baEe2De4a06Ca07d93": {
       "events": [
@@ -95,5 +95,5 @@
       }
     }
   },
-  "updated": 1785291411
+  "updated": 1785291969
 }
