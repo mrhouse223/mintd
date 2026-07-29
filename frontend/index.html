@@ -1971,6 +1971,16 @@
         <div class="hstat"><b id="agCost">–</b><label>COST OF TRADING</label></div>
       </div>
 
+      <div class="trade" id="agCreate" style="margin-bottom:16px">
+        <div class="mkthead"><h2>Run your own agent</h2><div class="spacer"></div>
+          <span class="bal" id="agTestPair">–</span></div>
+        <p class="finenote" style="margin:0 0 12px">
+          Testnet only. Both tokens are worthless and freely mintable, which is the point:
+          the pool is deep enough that what you are testing is the agent, not the pool.
+        </p>
+        <div id="agCreateBody"><div class="empty">Connect a wallet to create a vault.</div></div>
+      </div>
+
       <div class="trade">
         <div class="mkthead">
           <h2>Vaults</h2>
@@ -2296,6 +2306,19 @@ const CHAINS = {
       // manager and router every vault it creates will approve tokens to are
       // fixed at its construction, which is what makes isVault() worth reading.
       agentFactory: "0x42D58A7dFB4235F25F8ef6Bf84753B4F9A6531be",
+      // The community testing venue. A dedicated pair because Arc MINTD is
+      // fixed supply and USDC comes from a rate-limited faucet, which left the
+      // real pool holding 24 USDC: too thin for one honest tester, since a
+      // one-sided 5 USDC vault would swap ~2.5 against 24 and revert.
+      // 0.30% tier so AgentVault's default 100bps slippage actually fills; on
+      // the 1% MINTD pool the fee alone consumes the whole allowance.
+      agentTest: {
+        pool: "0x8a1a16D2652Ca79c57a0A6ac6Fa1Df64AC54a70B",
+        tokens: ["0x3520cc582507fF49a7E24907779f39b948CabbA5",   // tETH, 18dec, token0
+                 "0x7257dACd2F485A10Af65E26D78653d4ba8D236D5"],  // tUSD, 6dec, token1
+        numeraire: "0x7257dACd2F485A10Af65E26D78653d4ba8D236D5", // value the vault in tUSD
+        keeper: "0xfe93602C1d76834b6370833B9ce7C86939B5D97f",
+      },
     },
     // No gold engine and no MINTD token on Arc yet, so those pages are hidden
     // rather than shown broken.
@@ -2999,6 +3022,10 @@ async function connect() {
     devNavSync();
     if ($("view-dev").classList.contains("on")) devLoad();
     if ($("view-holders").classList.contains("on")) hoPaint(); // fills in "your standing"
+    // Reload rather than repaint: the owner's policy and pending proposal are
+    // only fetched for the connected wallet, so a repaint alone would leave the
+    // controls missing on the vaults that just became theirs.
+    if ($("view-agent").classList.contains("on")) agLoad(true);
     if (cur) refreshTrade();
     if ($("view-mintswap").classList.contains("on")) swBalance();
     if ($("view-earn").classList.contains("on")) { loadFarm(); loadFeePools(); loadPools(); }
@@ -3108,6 +3135,13 @@ const AGENT_VAULT_ABI = [
   "function token0() view returns (address)",
   "function token1() view returns (address)",
   "function valueInToken0() view returns (bool)",
+  "function maxTickDrift() view returns (int24)",
+  "function maxSlippageBps() view returns (uint256)",
+  "function lossToleranceBps() view returns (uint256)",
+  "function reviewWindow() view returns (uint256)",
+  "function twapWindow() view returns (uint32)",
+  "function cooldown() view returns (uint256)",
+  "function proposal() view returns (int24 lower, int24 upper, uint64 readyAt, bool approved, bool open, uint256 nonce)",
 ];
 const AGENT_POOL_ABI = [
   "function slot0() view returns (uint160,int24,uint16,uint16,uint16,uint8,bool)",
@@ -3175,6 +3209,21 @@ async function agReadVault(a) {
     rec.lower = Number(p[5]); rec.upper = Number(p[6]); rec.liq = p[7].toString();
     rec.inRange = rec.tick >= rec.lower && rec.tick < rec.upper;
   }
+  // Policy and pending proposal are read only for the connected owner. Six more
+  // sequential calls per vault is real latency on a chain that rate limits, and
+  // nobody but the owner can act on any of it.
+  if (wallet && rec.owner && wallet.toLowerCase() === rec.owner.toLowerCase()) {
+    rec.maxTickDrift = Number(await v.maxTickDrift());
+    rec.maxSlippageBps = Number(await v.maxSlippageBps());
+    rec.lossToleranceBps = Number(await v.lossToleranceBps());
+    rec.reviewWindow = Number(await v.reviewWindow());
+    rec.twapWindow = Number(await v.twapWindow());
+    rec.cooldown = Number(await v.cooldown());
+    const pr = await v.proposal();
+    rec.proposalOpen = pr.open;
+    rec.proposalLower = Number(pr.lower);
+    rec.proposalUpper = Number(pr.upper);
+  }
   return rec;
 }
 
@@ -3185,6 +3234,10 @@ async function agLoad(force) {
     return;
   }
   if (agVaults && !force) { agPaint(); return; }
+  // Rendered up front, not after the vault reads. Creating a vault does not
+  // depend on the list, and on a chain that rate limits the reads can take
+  // twenty seconds, during which the whole panel would sit blank for no reason.
+  agRenderCreate();
   box.innerHTML = `<div class="empty">Reading the factory…</div>`;
   try {
     // Live from the chain, one call at a time. Arc accepts batches and then
@@ -3269,6 +3322,273 @@ function agExplorer(path) {
   return base.replace(/\/+$/, "") + path;
 }
 
+// ---------------------------------------------------------- owner actions
+//
+// EVERY write here passes an explicit gasLimit. AgentVault documents deposit,
+// execute, setMode, setAgent, revokeAgent, veto and withdrawAll as under-
+// reported by eth_estimateGas: clearing a proposal refunds storage, so the
+// estimate comes back NET while the EVM charges GROSS, and reads through the
+// pool estimate badly for their own reasons. A wallet adds its own buffer, but
+// a bare estimate from here runs out of gas and reverts with no reason string.
+// This is CLAUDE.md gotcha 8, arriving in the frontend.
+const AG_GAS = { deposit: 1_500_000, withdraw: 3_000_000, policy: 500_000, mode: 500_000, approve: 500_000, create: 6_000_000, faucet: 300_000 };
+
+const AGENT_FACTORY_WRITE_ABI = ["function createVault(address,address,address) returns (address)"];
+const AGENT_VAULT_WRITE_ABI = [
+  "function deposit(uint256,uint256)",
+  "function withdrawAll()",
+  "function setMode(uint8)",
+  "function setPolicy(int24,uint256,uint256,uint256,uint32,uint256)",
+  "function approve(uint256)",
+  "function veto()",
+  "function proposalNonce() view returns (uint256)",
+];
+const TEST_TOKEN_ABI = [
+  "function faucet()",
+  "function faucetReadyIn(address) view returns (uint256)",
+  "function balanceOf(address) view returns (uint256)",
+  "function allowance(address,address) view returns (uint256)",
+  "function approve(address,uint256) returns (bool)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
+];
+
+function agTest() { return NET.mintd && NET.mintd.agentTest; }
+const agIsMine = (v) => wallet && v.owner && wallet.toLowerCase() === v.owner.toLowerCase();
+
+async function agFaucet() {
+  const t = agTest();
+  if (!signer) return toast("Connect a wallet first", "err");
+  try {
+    for (const a of t.tokens) {
+      const c = new ethers.Contract(a, TEST_TOKEN_ABI, signer);
+      const wait = await c.faucetReadyIn(wallet);
+      if (wait > 0n) { toast(`${await c.symbol()} faucet ready in ${Math.ceil(Number(wait) / 60)}m`, "err"); continue; }
+      toast(`Minting ${await c.symbol()}…`);
+      await (await c.faucet({ gasLimit: AG_GAS.faucet })).wait();
+    }
+    toast("Test tokens minted", "ok");
+    agRenderCreate();
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function agCreateVault() {
+  const t = agTest();
+  if (!signer) return toast("Connect a wallet first", "err");
+  const agent = ($("agAgentAddr").value || "").trim();
+  if (!ethers.isAddress(agent)) return toast("Agent must be a valid address", "err");
+  try {
+    toast("Creating your vault…");
+    const f = new ethers.Contract(agFactory(), AGENT_FACTORY_WRITE_ABI, signer);
+    await (await f.createVault(t.pool, agent, t.numeraire, { gasLimit: AG_GAS.create })).wait();
+    toast("Vault created", "ok");
+    await agLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function agDeposit(vaultAddr) {
+  const v = (agVaults || []).find((x) => x.address === vaultAddr);
+  if (!v || !signer) return;
+  const s = (id) => ($(id).value || "").trim();
+  const a0 = s("agD0-" + vaultAddr), a1 = s("agD1-" + vaultAddr);
+  let r0, r1;
+  try {
+    r0 = a0 ? ethers.parseUnits(a0, v.t0.dec) : 0n;
+    r1 = a1 ? ethers.parseUnits(a1, v.t1.dec) : 0n;
+  } catch { return toast("Amounts must be numbers", "err"); }
+  if (r0 === 0n && r1 === 0n) return toast("Enter an amount", "err");
+  try {
+    // One-sided is fine: the contract requires only that one leg is non-zero,
+    // and the first rebalance swaps to whatever ratio the range needs.
+    for (const [tok, amt] of [[v.t0, r0], [v.t1, r1]]) {
+      if (amt === 0n) continue;
+      const c = new ethers.Contract(tok.addr, TEST_TOKEN_ABI, signer);
+      if ((await c.balanceOf(wallet)) < amt) return toast(`Not enough ${tok.sym}`, "err");
+      if ((await c.allowance(wallet, vaultAddr)) < amt) {
+        toast(`Approving ${tok.sym}…`);
+        await (await c.approve(vaultAddr, ethers.MaxUint256, { gasLimit: 200000 })).wait();
+      }
+    }
+    toast("Depositing…");
+    const vc = new ethers.Contract(vaultAddr, AGENT_VAULT_WRITE_ABI, signer);
+    await (await vc.deposit(r0, r1, { gasLimit: AG_GAS.deposit })).wait();
+    toast("Deposited", "ok");
+    await agLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function agWithdraw(vaultAddr) {
+  if (!signer) return;
+  try {
+    toast("Withdrawing everything…");
+    const vc = new ethers.Contract(vaultAddr, AGENT_VAULT_WRITE_ABI, signer);
+    await (await vc.withdrawAll({ gasLimit: AG_GAS.withdraw })).wait();
+    toast("Withdrawn to your wallet", "ok");
+    await agLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function agSetMode(vaultAddr) {
+  if (!signer) return;
+  try {
+    const m = Number($("agMode-" + vaultAddr).value);
+    const vc = new ethers.Contract(vaultAddr, AGENT_VAULT_WRITE_ABI, signer);
+    await (await vc.setMode(m, { gasLimit: AG_GAS.mode })).wait();
+    toast("Mode set to " + AGENT_MODES[m], "ok");
+    await agLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function agSetPolicy(vaultAddr) {
+  const v = (agVaults || []).find((x) => x.address === vaultAddr);
+  if (!v || !signer) return;
+  const n = (id) => Number(($(id + "-" + vaultAddr).value || "").trim());
+  const drift = n("agPDrift"), slip = n("agPSlip"), loss = n("agPLoss");
+  const review = n("agPReview"), twap = n("agPTwap"), cool = n("agPCool");
+  // Checked here so a bad value is a sentence rather than an unexplained
+  // revert. The contract enforces all of these regardless; this is only ever
+  // the friendlier half of the same rule.
+  if (!(drift > 0 && drift <= 20000)) return toast("Tick drift must be between 1 and 20000", "err");
+  if (!(slip >= 0 && slip <= 500)) return toast("Slippage must be 500 bps or less", "err");
+  if (!(loss >= 0 && loss <= 2000)) return toast("Loss tolerance must be 2000 bps or less", "err");
+  if (!(review >= 300)) return toast("Review window must be at least 300 seconds", "err");
+  if (!(twap >= 300)) return toast("TWAP window must be at least 300 seconds", "err");
+  if (!(cool >= 0)) return toast("Cooldown cannot be negative", "err");
+  // The trap that made every rebalance revert on the 1% pool: the swap crosses
+  // the pool fee before any price impact, so an allowance at or under the fee
+  // can never fill and the agent looks broken rather than misconfigured.
+  const feeBps = v.fee / 100;
+  if (slip <= feeBps) {
+    return toast(`Slippage ${slip}bps is at or below this pool's ${feeBps}bps fee, so no rebalance can ever fill`, "err");
+  }
+  try {
+    const vc = new ethers.Contract(vaultAddr, AGENT_VAULT_WRITE_ABI, signer);
+    await (await vc.setPolicy(drift, slip, loss, review, twap, cool, { gasLimit: AG_GAS.policy })).wait();
+    toast("Settings saved", "ok");
+    await agLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function agApproveProposal(vaultAddr) {
+  if (!signer) return;
+  try {
+    const vc = new ethers.Contract(vaultAddr, AGENT_VAULT_WRITE_ABI, signer);
+    // Bound to the nonce: an unbound approve lets the agent swap a different
+    // proposal underneath the owner's pending transaction.
+    const nonce = await vc.proposalNonce();
+    await (await vc.approve(nonce, { gasLimit: AG_GAS.approve })).wait();
+    toast("Proposal approved", "ok");
+    await agLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function agVeto(vaultAddr) {
+  if (!signer) return;
+  try {
+    const vc = new ethers.Contract(vaultAddr, AGENT_VAULT_WRITE_ABI, signer);
+    await (await vc.veto({ gasLimit: AG_GAS.approve })).wait();
+    toast("Proposal cancelled", "ok");
+    await agLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function agRenderCreate() {
+  const t = agTest(), box = $("agCreateBody");
+  if (!box) return;
+  if (!t) { box.innerHTML = `<div class="empty">No test pool configured on ${esc(NET.short)}.</div>`; return; }
+  $("agTestPair").textContent = "tUSD / tETH · 0.30% pool";
+  if (!signer) { box.innerHTML = `<div class="empty">Connect a wallet to create a vault.</div>`; return; }
+
+  let bals = "";
+  try {
+    const parts = [];
+    for (const a of t.tokens) {
+      const c = new ethers.Contract(a, TEST_TOKEN_ABI, rp);
+      const [sym, dec] = [await c.symbol(), Number(await c.decimals())];
+      parts.push(`${agUnits(await c.balanceOf(wallet), dec, 4)} ${esc(sym)}`);
+    }
+    bals = parts.join(" · ");
+  } catch { bals = "balances unavailable"; }
+
+  const mine = (agVaults || []).filter(agIsMine).length;
+  box.innerHTML = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <button class="btn2" onclick="agFaucet()">1. Get test tokens</button>
+      <span style="opacity:.75;font-size:13px">you hold <b>${bals}</b></span>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button class="btn" onclick="agCreateVault()">2. Create a vault</button>
+      <label style="font-size:12px;opacity:.75">agent
+        <input id="agAgentAddr" value="${esc(t.keeper)}" spellcheck="false"
+               style="width:340px;margin-left:6px;font-family:var(--mono);font-size:12px" /></label>
+    </div>
+    <div class="finenote" style="margin-top:8px">
+      The agent is prefilled with the mintd keeper and is shown before you sign, because an agent you
+      never look at is the last trust assumption in this design. It can only propose timing, and you
+      can change or revoke it at any moment. You own the vault; nothing here can withdraw from it but you.
+      ${mine ? `<br>You have <b>${mine}</b> vault${mine === 1 ? "" : "s"} below.` : ""}
+    </div>`;
+}
+
+function agOwnerPanel(v) {
+  if (!agIsMine(v)) return "";
+  const a = v.address;
+  const num = (id, val, hint) =>
+    `<label style="font-size:11px;opacity:.7;display:block">${hint}
+       <input id="${id}-${a}" value="${val}" style="width:100%;font-family:var(--mono);font-size:13px;margin-top:3px" /></label>`;
+  const pend = v.proposalOpen;
+  return `<div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <span class="badgepill" style="color:var(--green);border-color:var(--green)">YOUR VAULT</span>
+      <div class="spacer"></div>
+      <!-- Always rendered, in every mode, never behind a menu. A deposit that
+           cannot be withdrawn is the only failure here that would truly matter,
+           and withdrawAll needs no agent and works even when PAUSED. -->
+      <button class="btn2" onclick="agWithdraw('${a}')">Withdraw everything</button>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:14px">
+      <label style="font-size:11px;opacity:.7">${esc(v.t0.sym)}
+        <input id="agD0-${a}" placeholder="0" style="width:120px;display:block;margin-top:3px" /></label>
+      <label style="font-size:11px;opacity:.7">${esc(v.t1.sym)}
+        <input id="agD1-${a}" placeholder="0" style="width:120px;display:block;margin-top:3px" /></label>
+      <button class="btn" onclick="agDeposit('${a}')">Deposit</button>
+      <span class="finenote" style="margin:0">One side is enough; the first rebalance swaps to the ratio the range needs.</span>
+    </div>
+
+    ${pend ? `<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <span class="badgepill" style="color:var(--gold);border-color:var(--gold)">PROPOSAL PENDING</span>
+      <span style="font-size:12px;opacity:.8">ticks ${v.proposalLower} to ${v.proposalUpper}</span>
+      <button class="btn2" onclick="agApproveProposal('${a}')">Approve</button>
+      <button class="btn2" onclick="agVeto('${a}')">Veto</button>
+    </div>` : ""}
+
+    <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:12px">
+      <label style="font-size:11px;opacity:.7">mode
+        <select id="agMode-${a}" style="display:block;margin-top:3px">
+          ${AGENT_MODES.map((m, i) => `<option value="${i}"${i === v.mode ? " selected" : ""}>${esc(m)}</option>`).join("")}
+        </select></label>
+      <button class="btn2" onclick="agSetMode('${a}')">Set mode</button>
+      <span class="finenote" style="margin:0">Propose only asks you to approve each move. Autonomous lets it act inside the bounds below.</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+      ${num("agPDrift", v.maxTickDrift, "tick drift (1 to 20000)")}
+      ${num("agPSlip", v.maxSlippageBps, `slippage bps (max 500, pool fee ${v.fee / 100})`)}
+      ${num("agPLoss", v.lossToleranceBps, "loss tolerance bps (max 2000)")}
+      ${num("agPReview", v.reviewWindow, "review window s (min 300)")}
+      ${num("agPTwap", v.twapWindow, "TWAP window s (min 300)")}
+      ${num("agPCool", v.cooldown, "cooldown s")}
+    </div>
+    <div style="margin-top:10px"><button class="btn2" onclick="agSetPolicy('${a}')">Save settings</button></div>
+    <div class="finenote" style="margin-top:8px">
+      Every bound above is enforced by the contract, not by this page. Slippage must stay above the
+      pool's ${v.fee / 100} bps fee or no rebalance can fill, because the swap crosses the fee before
+      any price impact.
+    </div>
+  </div>`;
+}
+
 function agPaint() {
   const list = agVaults || [];
   $("agVaults").textContent = list.length;
@@ -3302,11 +3622,13 @@ function agPaint() {
     Could not read vault <a href="${agExplorer("/address/" + f.address)}" target="_blank" rel="noopener">${esc(f.address.slice(0, 10))}…</a>: ${esc(f.err)}. It exists on chain; this is a read failure, not an empty vault.
   </div>`).join("");
 
+  agRenderCreate();
   if (!list.length) {
     $("agRows").innerHTML = errs || `<div class="empty">No vaults yet. The factory is live at <a href="${agExplorer("/address/" + agFactory())}" target="_blank" rel="noopener">${esc(agFactory().slice(0, 10))}…</a> and creating one is a single transaction.</div>`;
     return;
   }
   $("agRows").innerHTML = list.map(agCard).join("") + errs;
+  agRenderCreate();
 }
 
 function agCard(v) {
@@ -3397,6 +3719,7 @@ function agCard(v) {
       <span>rebalances <b>${rebs.length}</b></span>
       <span>loss breaker ${v.checkpoint === "0" ? "<b>unarmed</b>" : "<b>" + agUnits(v.checkpoint, dec, 6) + " " + esc(sym) + "</b>"}</span>
     </div>
+    ${agOwnerPanel(v)}
     ${rows ? `<div style="overflow-x:auto;margin-top:14px"><table style="width:100%;font-size:12.5px;border-collapse:collapse;min-width:600px">
       <tr style="opacity:.6;text-align:left"><th style="padding:6px 4px">WHEN</th><th>ACTION</th><th>DETAIL</th><th>VALUE CHANGE</th><th>TX</th></tr>
       ${rows}</table></div>`

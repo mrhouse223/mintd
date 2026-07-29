@@ -30,6 +30,7 @@ for (const rel of [
   "contracts/Furnace.sol",
   "contracts/test/MockFeeToken.sol",
   "contracts/test/MockFakePool.sol",
+  "contracts/test/TestToken.sol",
   // ArcLaunchpad redeclares MemeToken20 verbatim from InstantLaunchpad, and
   // artifacts are keyed by contract NAME, so build/MemeToken20.json is written
   // twice and the last one wins. The two are NOT interchangeable even though
