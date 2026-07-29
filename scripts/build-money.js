@@ -78,6 +78,13 @@ sub("x account",
   subs.push("added the Discord link (1)");
 }
 
+// --------------------------------------------------------------- launch page
+// "Mint" is the one word left on the launch page that reads as the old brand.
+// Arc-only, so mintd.fun keeps its own heading.
+sub("launch headline",
+  '<h1>Mint it. Lock it.<br /><span class="g">Get paid.</span></h1>',
+  '<h1>Launch it. Lock it.<br /><span class="g">Get paid.</span></h1>');
+
 // ---------------------------------------------------------------- hero copy
 sub("hero headline",
   '<h1>Launch on <span id="heroChain">Stable</span> for $1.<br /><span class="g">Earn fees instantly.</span></h1>',
