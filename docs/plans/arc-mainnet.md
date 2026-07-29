@@ -1,6 +1,6 @@
-# Arc mainnet: launchpad, agent vaults, and a USDC bridge
+# arcswap.vip: Arc mainnet launchpad, agent vaults, and a USDC bridge
 
-Status: draft
+Status: draft. Bridge contract built, reviewed and tested; nothing deployed.
 Date: 2026-07-29
 
 ## What problem this solves
@@ -32,6 +32,39 @@ copied from another chain's deployment. Every address above was discovered from
 live chain state, and the one still marked UNCONFIRMED must be confirmed before
 it is wired to anything, because a wrong router is the single worst thing to get
 wrong: `AgentVault._swap` approves the router and hands it the balance.
+
+## The two sites, confirmed
+
+| Site | Chain | Contents |
+|---|---|---|
+| mintd.fun | Stable (988) | launchpad + DeFi stack, unchanged |
+| **arcswap.vip** (was mintd.money) | **Arc mainnet (5042)** | $ARCS as token #0, agent vaults, Base to Arc bridge |
+
+`arcswap.vip` is registered at Porkbun and currently parked on
+`207.207.210.x`, the same parking IPs that broke the mintd.money certificate.
+DNS has to point at Netlify, and the apex plus `www` both need to resolve there
+before a certificate will issue. See the mintd.money entry in STATE.md; that
+failure took weeks to diagnose and the cause was never Netlify.
+
+## Token terms on arcswap
+
+- **80/20 creator/protocol** on pool fees.
+- **Nothing hardcoded about burning or buyback.** Confirmed against the
+  contract: `MintdLaunchpad` needs no change for this. `creatorShareBps` is
+  settable within a floor of 5,000, so 8,000 is legal; the protocol remainder is
+  split between two plain addresses by `buybackShareBps`, and the field named
+  "buyback" is only a label on a transfer. Setting `buybackShareBps` to 0, or
+  pointing both recipients at the same treasury, gives a clean two-way split
+  with no burn and no buyback anywhere in the path. The contract's own comment
+  at line 537 documents this as the intended way to run a simple split.
+- $3,000 starting market cap, quoted in **USDC** rather than USDT0.
+- Graduation and dev-buy cap as per the existing Arc terms.
+
+**This makes ownership load-bearing.** `setFeeRecipients` and the share setter
+are `onlyOwner`, so whoever owns the launchpad can redirect the protocol 20% at
+any time. The creator share is floored at 50% by `MIN_CREATOR_SHARE_BPS`, so a
+compromised owner cannot rug creators below that, but it can take the whole
+protocol cut. A hot key in `.env` is a poor holder of that power.
 
 ## What it does not do
 
