@@ -1,12 +1,20 @@
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="mintd.money">
-  <!-- mintd.money mark: two overlapping M / mountain strokes, white on the
-       brand green. Rebuilt as vector so it stays sharp at any size and needs
-       no raster asset. -->
-  <rect width="512" height="512" rx="112" fill="#22c98a"/>
-  <g fill="none" stroke="#ffffff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
-    <!-- back stroke, shifted left -->
-    <path d="M 150 372 L 214 168 L 256 300 L 298 168 L 362 372"/>
-    <!-- front stroke, shifted right, overlaps the center to form the tall apex -->
-    <path d="M 214 372 L 278 168 L 320 300 L 362 168 L 426 372" opacity="0.96"/>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="arcswap">
+  <!-- arcswap mark: the "as" monogram from the supplied logo. Monoline with
+       round caps: a single-story 'a', bowl plus right stem, flowing into an 's'.
+       Vector so it stays sharp at any size and needs no raster asset.
+       Painted in the brand blue on a transparent ground so it sits correctly on
+       both the white and the dark theme. -->
+  <title>arcswap</title>
+  <!-- Stroke 54 rather than 62. At 62 the s's two counters closed up entirely
+       and the letter read as a blob; the bowl radii here cannot carry that
+       weight. The a is unaffected, its bowl being far larger. -->
+  <g fill="none" stroke="#1a73e8" stroke-width="54" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="164" cy="300" r="88"/>
+    <path d="M252 212 L252 388"/>
+    <path d="M446 232
+             C446 194 392 178 358 200
+             C324 222 330 264 372 280
+             C414 296 426 340 394 364
+             C358 390 306 372 298 336"/>
   </g>
 </svg>

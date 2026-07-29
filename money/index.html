@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>mintd.money | Launch. Lock. Trade.</title>
+<title>arcswap.vip | Launch. Lock. Trade.</title>
 <link rel="icon" type="image/svg+xml" href="/logo.svg" />
 <link rel="manifest" href="/manifest.webmanifest" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="mintd" />
-<meta name="description" content="Agentic treasury and liquidity infrastructure on Arc. Launch, trade and manage positions with agents that cannot choose a price." />
+<meta name="description" content="Bring USDC from Base to Arc, launch tokens, and run liquidity agents that cannot choose a price. arcswap.vip on Arc mainnet." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://rpc.stable.xyz" crossorigin />
 <link rel="dns-prefetch" href="https://api.dexscreener.com" />
@@ -26,18 +26,18 @@
 <style>
   /* crisp mint finance: cool neutral surfaces, one confident mint accent,
      gold reserved for value milestones */
-  /* palette sampled from the $USDT1 art: mint #5bccae, sea green #54ac94,
+  /* palette sampled from the $USDT1 art: mint #4d94f0, sea green #54ac94,
      deep green #408e78, near-black ink #1e1f24 */
   :root {
-    --bg: #07090c; --panel: #0d1116; --panel2: #131920; --line: #1b222b;
-    --ink: #e8edf2; --dim: #8b98a8; --green: #4ade80; --green2: #22c55e;
-    --green-soft: rgba(74,222,128,.1); --gold: #f0a500; --gold-soft: rgba(240,165,0,.1);
-    --red: #f05252; --radius: 8px; --mono: "SF Mono", ui-monospace, Menlo, monospace;
+    --bg: #ffffff; --panel: #ffffff; --panel2: #f4f7fc; --line: #e2e9f3;
+    --ink: #0b1220; --dim: #5c6b80; --green: #1a73e8; --green2: #0f5ed6;
+    --green-soft: #e8f1fe; --gold: #b8891f; --gold-soft: #f8f0dc;
+    --red: #e0483d; --radius: 14px; --mono: "SF Mono", ui-monospace, Menlo, monospace;
   }
   [data-theme="dark"] {
-    --bg: #07090c; --panel: #0d1116; --panel2: #131920; --line: #1b222b;
-    --ink: #e8edf2; --dim: #8b98a8; --green: #4ade80; --green2: #22c55e;
-    --green-soft: rgba(74,222,128,.1); --gold: #f0a500; --gold-soft: rgba(240,165,0,.1);
+    --bg: #0a0e14; --panel: #111823; --panel2: #17202c; --line: #212c3a;
+    --ink: #eef3fa; --dim: #8a9ab0; --green: #4d94f0; --green2: #7db3f5;
+    --green-soft: #11243c; --gold: #e6bf52; --gold-soft: #2e2711;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", system-ui, -apple-system, sans-serif; min-height: 100vh; }
@@ -790,17 +790,17 @@
   /* reads. Loosely Robinhood/Cash App: confident, spacious, one accent.   */
   /* ==================================================================== */
   :root {
-    --bg: #07090c; --panel: #0d1116; --panel2: #131920; --line: #1b222b;
-    --ink: #e8edf2; --dim: #8b98a8; --green: #4ade80; --green2: #22c55e;
-    --green-soft: rgba(74,222,128,.1); --red: #f05252; --radius: 12px;
+    --bg: #ffffff; --panel: #ffffff; --panel2: #f4f7fc; --line: #e2e9f3;
+    --ink: #0b1220; --dim: #5c6b80; --green: #1a73e8; --green2: #0f5ed6;
+    --green-soft: #e8f1fe; --red: #e0483d; --radius: 14px;
     /* --green is the blue brand accent, so gains need their own colour */
     --up: #12a05f; --up-soft: rgba(18,160,95,.13);
   }
   [data-theme="dark"] {
-    --bg: #07090c; --panel: #0d1116; --panel2: #131920; --line: #1b222b;
-    --ink: #e8edf2; --dim: #8b98a8; --green: #4ade80; --green2: #22c55e;
-    --green-soft: rgba(74,222,128,.1); --red: #f05252;
-    --up: #34d399; --up-soft: rgba(52,211,153,.14);
+    --bg: #0a0e14; --panel: #111823; --panel2: #17202c; --line: #212c3a;
+    --ink: #eef3fa; --dim: #8a9ab0; --green: #4d94f0; --green2: #7db3f5;
+    --green-soft: #11243c; --red: #ff6b5e;
+    --up: #4d94f0; --up-soft: rgba(52,211,153,.14);
   }
 
   body { font-family: "Inter Tight", system-ui, -apple-system, sans-serif;
@@ -1188,7 +1188,7 @@
 <header>
   <div class="logo" onclick="go('discover')" style="display:flex;align-items:center;gap:9px">
     <img src="/logo.svg" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />
-    <span>mintd<b>.money</b><small>AGENTIC LIQUIDITY</small></span>
+    <span>arcswap<b>.vip</b><small>USDC ON ARC</small></span>
   </div>
   <nav>
     <button id="nav-discover" class="active" onclick="go('discover')">Discover</button>
@@ -1203,8 +1203,8 @@
   </nav>
   <div class="spacer"></div>
   <input class="search" id="search" placeholder="⌕  Name, ticker, or contract" oninput="mirrorSearch(this.value)" />
-  <a class="themebtn" href="https://x.com/mintddotfun" target="_blank" title="X">𝕏</a>
-  <a class="themebtn" href="https://t.me/mintddotfun" target="_blank" title="Telegram"><svg width="18" height="18" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg"><circle cx="120" cy="120" r="120" fill="#29A9EB"/><path fill="#fff" d="M53 118.5l122.7-47.3c5.7-2.1 10.7 1.4 8.8 10l-20.9 98.4c-1.5 7-5.7 8.7-11.5 5.4l-31.8-23.4-15.3 14.8c-1.7 1.7-3.1 3.1-6.4 3.1l2.3-32.3 58.9-53.2c2.6-2.3-.6-3.6-4-1.3l-72.8 45.8-31.4-9.8c-6.8-2.1-6.9-6.8 1.4-10.2z"/></svg></a>
+  <a class="themebtn" href="https://x.com/arcswapdotvip" target="_blank" title="X">𝕏</a>
+  
   <div class="chainwrap" id="chainPill"></div>
   <span id="faucetSlot"></span>
   <button class="btn" id="connectBtn" onclick="connect()">Connect wallet</button>
@@ -2304,8 +2304,8 @@
         <button id="nav-dev" onclick="go('dev')" style="display:none"><svg class="ic" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg> Dev</button>
         <button id="nav-install" onclick="a2hsShowNow()" style="display:none"><svg class="ic" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg> Add to Home Screen</button>
         <div class="moresocial">
-          <a href="https://x.com/mintddotfun" target="_blank" rel="noopener"><span style="font-weight:800">𝕏</span> Follow on X</a>
-          <a href="https://t.me/mintddotfun" target="_blank" rel="noopener"><svg viewBox="0 0 240 240" width="15" height="15" style="vertical-align:-3px"><circle cx="120" cy="120" r="120" fill="#29A9EB"/><path fill="#fff" d="M53 118.5l122.7-47.3c5.7-2.1 10.7 1.4 8.8 10l-20.9 98.4c-1.5 7-5.7 8.7-11.5 5.4l-31.8-23.4-15.3 14.8c-1.7 1.7-3.1 3.1-6.4 3.1l2.3-32.3 58.9-53.2c2.6-2.3-.6-3.6-4-1.3l-72.8 45.8-31.4-9.8c-6.8-2.1-6.9-6.8 1.4-10.2z"/></svg> Telegram</a>
+          <a href="https://x.com/arcswapdotvip" target="_blank" rel="noopener"><span style="font-weight:800">𝕏</span> Follow on X</a>
+          
         </div>
       </div>
 
@@ -2406,7 +2406,7 @@ const CHAINS = {
     // rather than shown broken.
     // No bridge to a testnet: funds come from the faucet, and offering a
     // bridge here invites someone to send real money to a throwaway chain.
-    features: { launch: true, swap: true, earn: true, mintr: false, gold: false, locker: true, burn: true, screener: true, bridge: false, holders: false, agent: true },
+    features: { launch: true, swap: true, earn: true, mintr: false, gold: false, locker: true, burn: true, screener: true, bridge: true, holders: false, agent: true, mintdStat: false },
     statsFile: null,   // no indexer running against Arc yet
     faucet: "https://faucet.circle.com",
     // Arc accepts batches and then rate limits them: a batch of 8 returns one

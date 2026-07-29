@@ -31,13 +31,40 @@ function sub(name, from, to, opts = {}) {
 }
 
 // ---------------------------------------------------------------- identity
-sub("title", "<title>mintd.fun", "<title>mintd.money");
+sub("title", "<title>mintd.fun", "<title>arcswap.vip");
 sub("meta description",
   'content="Launch, trade and earn on Stable and Arc. Memecoin launchpad, MINTR reserve token, tokenized gold and yield farms."',
-  'content="Agentic treasury and liquidity infrastructure on Arc. Launch, trade and manage positions with agents that cannot choose a price."');
+  'content="Bring USDC from Base to Arc, launch tokens, and run liquidity agents that cannot choose a price. arcswap.vip on Arc mainnet."');
 sub("wordmark",
   "<span>mintd<b>.fun</b><small>LAUNCH FOR $1</small></span>",
-  "<span>mintd<b>.money</b><small>AGENTIC LIQUIDITY</small></span>");
+  "<span>arcswap<b>.vip</b><small>USDC ON ARC</small></span>");
+
+// ------------------------------------------------------------------ socials
+// arcswap has its own X account, and no Telegram yet. The whole anchor is
+// removed rather than pointed at a placeholder, because a dead social link on a
+// site handling money reads as abandoned.
+// Two of them: the header button and the docs footer. Both move.
+sub("x account",
+  'href="https://x.com/mintddotfun"',
+  'href="https://x.com/arcswapdotvip"', { all: true });
+// There are TWO: the header button and one in the docs. Removing only the
+// header left a live Telegram link in the docs, which is exactly the dead link
+// this was meant to avoid. Loops until none remain and asserts it found some.
+{
+  let removed = 0;
+  for (;;) {
+    const at = s.indexOf('href="https://t.me/mintddotfun"');
+    if (at === -1) break;
+    const open = s.lastIndexOf("<a ", at);
+    const close = s.indexOf("</a>", at);
+    if (open === -1 || close === -1) throw new Error("build-money: malformed Telegram anchor");
+    s = s.slice(0, open) + s.slice(close + 4);
+    removed++;
+    if (removed > 8) throw new Error("build-money: runaway Telegram removal");
+  }
+  if (removed === 0) throw new Error("build-money: no Telegram anchor found");
+  subs.push(`removed ${removed} Telegram link(s) (1)`);
+}
 
 // ------------------------------------------------------------------ chains
 // Arc only. A chain switcher offering Stable would send someone to a different
@@ -62,7 +89,7 @@ sub("arc registry", `meta: "0x09c419226e83A91323FDC170144526D8C4a39B75",`,
 // MINTR is deployed on Arc but is not part of this product yet.
 sub("arc features",
   "features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true, screener: true, bridge: false, agent: false },",
-  "features: { launch: true, swap: true, earn: true, mintr: false, gold: false, locker: true, burn: true, screener: true, bridge: false, holders: false, agent: true },");
+  "features: { launch: true, swap: true, earn: true, mintr: false, gold: false, locker: true, burn: true, screener: true, bridge: true, holders: false, agent: true, mintdStat: false },");
 
 // The burn PAGE (the Furnace) works on Arc and stays. The burn STAT counts
 // MINTD sent to the dead address, and there is no MINTD on Arc, so the tile is
@@ -80,10 +107,10 @@ s = s.slice(0, stableStart) + s.slice(arcStart);
 subs.push("removed the stable chain entry (1)");
 
 // ------------------------------------------------------------------- theme
-// mintd.fun is light by default with a dark variant. This product asks people
-// to hand over funds, so it is dark-first and more restrained, matching
-// money/landing.html. Both variables blocks are replaced so the light theme is
-// not merely unused but absent.
+// arcswap is blue and white, taken from its mark, with a real dark variant so
+// the header toggle actually does something. An earlier version of this forced
+// dark by writing the SAME values into both the light and the dark block, which
+// left the toggle in the header changing nothing at all.
 // There are FOUR palette blocks in the source: an original pair and a later
 // pair from the pons-inspired restyle that overrides it. Only the later pair is
 // live. Patching the dead one changes nothing visible, which is exactly what
@@ -92,35 +119,35 @@ sub("active light palette",
   `    --bg: #ffffff; --panel: #ffffff; --panel2: #f2f5f9; --line: #e6ebf2;
     --ink: #0b1119; --dim: #6b7a8d; --green: #2f7fe0; --green2: #1f6bc9;
     --green-soft: #e8f1fd; --red: #e0483d; --radius: 14px;`,
-  `    --bg: #07090c; --panel: #0d1116; --panel2: #131920; --line: #1b222b;
-    --ink: #e8edf2; --dim: #8b98a8; --green: #4ade80; --green2: #22c55e;
-    --green-soft: rgba(74,222,128,.1); --red: #f05252; --radius: 12px;`);
+  `    --bg: #ffffff; --panel: #ffffff; --panel2: #f4f7fc; --line: #e2e9f3;
+    --ink: #0b1220; --dim: #5c6b80; --green: #1a73e8; --green2: #0f5ed6;
+    --green-soft: #e8f1fe; --red: #e0483d; --radius: 14px;`);
 
 sub("active dark palette",
   `    --bg: #0a0d12; --panel: #12171f; --panel2: #161d26; --line: #1e2732;
     --ink: #f2f5f9; --dim: #8a97a8; --green: #4d9bf0; --green2: #6fb2f5;
     --green-soft: #10233a; --red: #ff6b5e;`,
-  `    --bg: #07090c; --panel: #0d1116; --panel2: #131920; --line: #1b222b;
-    --ink: #e8edf2; --dim: #8b98a8; --green: #4ade80; --green2: #22c55e;
-    --green-soft: rgba(74,222,128,.1); --red: #f05252;`);
+  `    --bg: #0a0e14; --panel: #111823; --panel2: #17202c; --line: #212c3a;
+    --ink: #eef3fa; --dim: #8a9ab0; --green: #4d94f0; --green2: #7db3f5;
+    --green-soft: #11243c; --red: #ff6b5e;`);
 
 sub("legacy light palette",
   `    --bg: #f2f8f6; --panel: #ffffff; --panel2: #e8f2ee; --line: #d3e3dd;
     --ink: #1e1f24; --dim: #5f7a73; --green: #2f9c80; --green2: #5bccae;
     --green-soft: #dcf2ea; --gold: #b8891f; --gold-soft: #f8f0dc;
     --red: #c2453f; --radius: 6px; --mono: "SF Mono", ui-monospace, Menlo, monospace;`,
-  `    --bg: #07090c; --panel: #0d1116; --panel2: #131920; --line: #1b222b;
-    --ink: #e8edf2; --dim: #8b98a8; --green: #4ade80; --green2: #22c55e;
-    --green-soft: rgba(74,222,128,.1); --gold: #f0a500; --gold-soft: rgba(240,165,0,.1);
-    --red: #f05252; --radius: 8px; --mono: "SF Mono", ui-monospace, Menlo, monospace;`);
+  `    --bg: #ffffff; --panel: #ffffff; --panel2: #f4f7fc; --line: #e2e9f3;
+    --ink: #0b1220; --dim: #5c6b80; --green: #1a73e8; --green2: #0f5ed6;
+    --green-soft: #e8f1fe; --gold: #b8891f; --gold-soft: #f8f0dc;
+    --red: #e0483d; --radius: 14px; --mono: "SF Mono", ui-monospace, Menlo, monospace;`);
 
 sub("legacy dark palette",
   `    --bg: #0d1917; --panel: #132320; --panel2: #1a2e29; --line: #24413a;
     --ink: #e6f4ef; --dim: #7fa39a; --green: #5bccae; --green2: #7fdcc3;
     --green-soft: #14332b; --gold: #e6bf52; --gold-soft: #2e2711;`,
-  `    --bg: #07090c; --panel: #0d1116; --panel2: #131920; --line: #1b222b;
-    --ink: #e8edf2; --dim: #8b98a8; --green: #4ade80; --green2: #22c55e;
-    --green-soft: rgba(74,222,128,.1); --gold: #f0a500; --gold-soft: rgba(240,165,0,.1);`);
+  `    --bg: #0a0e14; --panel: #111823; --panel2: #17202c; --line: #212c3a;
+    --ink: #eef3fa; --dim: #8a9ab0; --green: #4d94f0; --green2: #7db3f5;
+    --green-soft: #11243c; --gold: #e6bf52; --gold-soft: #2e2711;`);
 
 // ---------------------------------------------------------------- branding
 // mintd.money has its own mark (money/logo.svg and the icon set rasterised from
@@ -133,6 +160,29 @@ sub("platform token avatar", `t.platform ? \`<img src="/logo.png" onerror="this.
   `t.platform ? \`<img src="/logo.svg" onerror="this.remove()">\``);
 sub("favicon", `<link rel="icon" type="image/png" href="/logo.png" />`,
   `<link rel="icon" type="image/svg+xml" href="/logo.svg" />`);
+
+// ------------------------------------------------------------------- colour
+// Every remaining hardcoded green becomes the mark's blue. The palette
+// variables cover most of the UI, but a handful of literals were written
+// directly into rules and gradients and would otherwise stay green on a blue
+// site. Substituted by value so a missed one is visible rather than silent.
+{
+  const GREEN_TO_BLUE = {
+    "#5bccae": "#4d94f0",
+    "#7fdcc3": "#7db3f5",
+    "#2f9c80": "#1a73e8",
+    "#34d399": "#4d94f0",
+    "#dcf2ea": "#e8f1fe",
+    "#14332b": "#11243c",
+  };
+  let n = 0;
+  for (const [from, to] of Object.entries(GREEN_TO_BLUE)) {
+    const re = new RegExp(from, "gi");
+    const hits = (s.match(re) || []).length;
+    if (hits) { s = s.replace(re, to); n += hits; }
+  }
+  subs.push(`recoloured ${n} hardcoded green literal(s) to blue (1)`);
+}
 
 fs.writeFileSync(OUT, s);
 

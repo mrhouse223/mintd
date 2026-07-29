@@ -79,6 +79,24 @@ module.exports = {
     },
     {
       ...common,
+      // Completes Base -> Arc USDC bridges. CCTP burns on Base and mints only
+      // when someone submits receiveMessage on Arc, which costs Arc gas a
+      // first-time bridger has none of, so this pays it for them. It never
+      // touches user funds: the recipient is fixed inside Circle's attested
+      // message, so this process only decides whether to submit, never where
+      // anything goes. If it stops, transfers are not lost, because
+      // destinationCaller is zero and anyone can submit them instead.
+      name: "bridge-relayer",
+      script: "scripts/bridge-relayer.js",
+      env: {
+        ROUTER: "0xEAD1eB5e6464e8EABEC893A02c83073A84c3e217", // BridgeFeeRouter on Base
+        RELAYER_KEY_VAR: "KEEPER_KEY", // gas-only, never the deployer
+        KEEPER_KEY: env.KEEPER_KEY,
+        POLL_MS: "30000",
+      },
+    },
+    {
+      ...common,
       name: "arb-keeper",
       script: "scripts/arb-keeper-multi.js",
       env: {
