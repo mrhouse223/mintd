@@ -1,0 +1,99 @@
+{
+  "chainId": 5042002,
+  "factory": "0x42D58A7dFB4235F25F8ef6Bf84753B4F9A6531be",
+  "fromBlock": 54176000,
+  "lastScanned": 54183278,
+  "vaults": {
+    "0x144646c41d3a94c1124365baEe2De4a06Ca07d93": {
+      "events": [
+        {
+          "block": 54180384,
+          "time": 1785289302,
+          "tx": "0xe03d0b77a1f59250c6e478179ae172a9990c3c0e55e0204fcf912ceca24074bd",
+          "name": "Deposited",
+          "args": [
+            "2000000",
+            "650000000000000000000000"
+          ]
+        },
+        {
+          "block": 54182095,
+          "time": 1785290182,
+          "tx": "0x7d0b45dee207c5884756a03ec64657857710c5693104ce18b5f9b15054edf4ce",
+          "name": "Proposed",
+          "args": [
+            "401400",
+            "405200",
+            "1785290482"
+          ]
+        },
+        {
+          "block": 54182523,
+          "time": 1785290403,
+          "tx": "0xcba53791cb2ef8ac13c452949b1e7c4d43a30bec0f3853676a0c74eb60128bb3",
+          "name": "ModeChanged",
+          "args": [
+            "1",
+            "3"
+          ]
+        },
+        {
+          "block": 54182584,
+          "time": 1785290434,
+          "tx": "0xbd09002558018034194d2556db8274a17925bb18f4c77bf115356c39d205df1a",
+          "name": "Proposed",
+          "args": [
+            "401400",
+            "405200",
+            "1785290734"
+          ]
+        },
+        {
+          "block": 54182600,
+          "time": 1785290442,
+          "tx": "0xe1c3e726576830a1358b5db01222b589d29b90a1c3358cd9e1fa9d091b292b74",
+          "name": "Rebalanced",
+          "args": [
+            "401400",
+            "405200",
+            "3998036",
+            "3997599"
+          ]
+        }
+      ],
+      "address": "0x144646c41d3a94c1124365baEe2De4a06Ca07d93",
+      "owner": "0xD1E3636906Ceea0A67231dcb5a73719B02988023",
+      "agent": "0xfe93602C1d76834b6370833B9ce7C86939B5D97f",
+      "pool": "0xc5E4B7E0B91C647Af191DfCd5E2196bf305D92b5",
+      "mode": "AUTONOMOUS",
+      "valueInToken0": true,
+      "positionId": "4",
+      "checkpoint": "3997599",
+      "value": "3997599",
+      "token0": {
+        "address": "0x3600000000000000000000000000000000000000",
+        "symbol": "USDC",
+        "decimals": 6
+      },
+      "token1": {
+        "address": "0xD35ED323602d282a4E6e4161E94Cb0573D3734fa",
+        "symbol": "MINTD",
+        "decimals": 18
+      },
+      "fee": 10000,
+      "tick": 403256,
+      "numeraire": {
+        "address": "0x3600000000000000000000000000000000000000",
+        "symbol": "USDC",
+        "decimals": 6
+      },
+      "position": {
+        "tickLower": 401400,
+        "tickUpper": 405200,
+        "liquidity": "12574818831368437",
+        "inRange": true
+      }
+    }
+  },
+  "updated": 1785290833
+}
