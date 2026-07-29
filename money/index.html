@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>mintd.money | Launch. Lock. Trade.</title>
-<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<link rel="icon" type="image/svg+xml" href="/logo.svg" />
 <link rel="manifest" href="/manifest.webmanifest" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <meta name="theme-color" content="#0a0d12" media="(prefers-color-scheme: dark)" />
@@ -367,7 +367,23 @@
   .tokname { font-size: 30px; font-weight: 800; }
   .tokname span { color: var(--green); font-size: 20px; }
   .desc { color: var(--dim); font-size: 13px; margin-top: 8px; max-width: 440px; line-height: 1.5; }
-  .links { display: flex; gap: 8px; margin-top: 12px; }
+  .links { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  /* Sized for a thumb, not a mouse. These were 6px/12px text links that read as
+     afterthoughts next to the buy box, which is the one thing a visitor most
+     wants after the ticker. */
+  .links .btn.ghost, .links .lnk {
+    padding: 10px 16px; font-size: 14px; font-weight: 650; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--panel);
+    display: inline-flex; align-items: center; gap: 7px; line-height: 1;
+    transition: border-color .15s ease, background .15s ease, transform .06s ease;
+  }
+  .links .btn.ghost:hover, .links .lnk:hover {
+    border-color: var(--green); background: var(--panel2); text-decoration: none;
+  }
+  .links .btn.ghost:active, .links .lnk:active { transform: translateY(1px); }
+  .links .btn.ghost:focus-visible, .links .lnk:focus-visible {
+    outline: 2px solid var(--green); outline-offset: 2px;
+  }
   .feecard { border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
   .feecard h3 { font-size: 13px; display: flex; justify-content: space-between; }
   .feecard h3 small { color: var(--dim); font-weight: 500; }
@@ -1081,7 +1097,7 @@
     .tokname { font-size: 22px; text-align: left; word-break: break-word; }
     .desc { text-align: left; font-size: 13.5px; }
     .links { flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
-    .links .btn { padding: 8px 12px !important; font-size: 12px !important; }
+    .links .btn { padding: 10px 14px !important; font-size: 13.5px !important; }
     #tCA { font-size: 10.5px; word-break: break-all; line-height: 1.5; }
     .feecard, .gradcard { padding: 14px; }
     .feerow { flex-wrap: wrap; gap: 4px; }
@@ -1108,6 +1124,62 @@
     .tcard .tstats { grid-template-columns: 1fr 1fr !important; }
     .calcres > div { padding: 10px; }
   }
+
+  /* ---------------------------------------------------------------- token page
+     Outlined treatment, scoped to Stable on purpose. The flat restyle above
+     strips borders from every card with `border: 0 !important`, which suits the
+     dark mintd.money skin but leaves the launchpad's token page reading as a
+     wash of pale rectangles with no edges. This puts the edges back only where
+     asked: `[data-chain="stable"]` is stamped on <html> by applyChainUi, so
+     mintd.money is untouched by everything below.
+     Specificity plus !important is required to beat that earlier rule. */
+  :root[data-chain="stable"] #view-token .tokhead,
+  :root[data-chain="stable"] #view-token .gradcard,
+  :root[data-chain="stable"] #view-token .chartcard,
+  :root[data-chain="stable"] #view-token .trade,
+  :root[data-chain="stable"] #view-token .feecard {
+    border: 1px solid var(--line) !important;
+    background: var(--panel);
+    box-shadow: 0 1px 2px rgba(11, 17, 25, .04), 0 10px 30px -18px rgba(11, 17, 25, .16);
+  }
+  [data-theme="dark"]:root[data-chain="stable"] #view-token .tokhead,
+  [data-theme="dark"]:root[data-chain="stable"] #view-token .gradcard,
+  [data-theme="dark"]:root[data-chain="stable"] #view-token .chartcard,
+  [data-theme="dark"]:root[data-chain="stable"] #view-token .trade,
+  [data-theme="dark"]:root[data-chain="stable"] #view-token .feecard {
+    background: var(--panel);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 10px 30px -18px rgba(0, 0, 0, .5);
+  }
+
+  /* Each headline figure gets its own outlined tile, so the four read as four
+     things rather than one grey band. */
+  :root[data-chain="stable"] #view-token .stat {
+    border: 1px solid var(--line) !important;
+    background: var(--panel);
+  }
+  :root[data-chain="stable"] #view-token .statrow { gap: 12px; }
+  :root[data-chain="stable"] #view-token .tstats > div {
+    border: 1px solid var(--line) !important;
+    border-radius: 12px;
+    padding: 12px 14px !important;
+    background: var(--panel);
+    min-width: 0;
+  }
+  :root[data-chain="stable"] #view-token .tstats { gap: 12px; }
+
+  /* The avatar is a logo, not a swatch: give it an edge so it sits ON the card
+     rather than dissolving into it. */
+  :root[data-chain="stable"] #view-token .tokid .avatar {
+    border: 1px solid var(--line);
+    background: var(--panel);
+  }
+
+  /* The contract address is the thing people copy; make it look copyable. */
+  :root[data-chain="stable"] #view-token .qsym,
+  :root[data-chain="stable"] #view-token .amtbox {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
 </style>
 </head>
 <body>
@@ -1115,7 +1187,7 @@
 
 <header>
   <div class="logo" onclick="go('discover')" style="display:flex;align-items:center;gap:9px">
-    <img src="logo.svg" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />
+    <img src="/logo.svg" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />
     <span>mintd<b>.money</b><small>AGENTIC LIQUIDITY</small></span>
   </div>
   <nav>
@@ -1588,7 +1660,7 @@
   <section class="view" id="view-mintr">
     <div class="launchC" style="max-width:560px">
       <div class="heroC" style="margin:30px auto 22px">
-        <img class="mintr-logo" src="mintr.png" alt="MINTR" onerror="this.remove()" />
+        <img class="mintr-logo" src="/mintr.png" alt="MINTR" onerror="this.remove()" />
         <div class="badgepill">FULLY BACKED BY <span class="qsym">USDT0</span></div>
         <h1 style="font-size:44px">$MINTR<br /><span class="g">only goes up.</span></h1>
         <p>MINTR is 100% backed by a <span class="qsym">USDT0</span> reserve. Every buy and sell pays a small tax that stays in the reserve while tokens are burned, so the backing per token can only rise. Buy and sell straight from the contract at the backing price.</p>
@@ -1666,7 +1738,7 @@
   <section class="view" id="view-synth">
     <div class="launchC" style="max-width:620px">
       <div class="heroC" style="margin:30px auto 22px">
-        <img src="mgld.png" alt="MGLD" class="mgld-hero" onerror="this.remove()" />
+        <img src="/mgld.png" alt="MGLD" class="mgld-hero" onerror="this.remove()" />
         <div class="badgepill">BACKED BY USDT0 · PRICED BY REDSTONE</div>
         <h1 style="font-size:44px">Mintd Gold<br /><span class="g">$MGLD</span></h1>
         <p>Lock USDT0, mint $MGLD, hold gold exposure onchain. Every $MGLD is overcollateralized by USDT0 sitting in the contract and priced by RedStone's onchain gold feed. Every mint fee buys and burns $MINTD.</p>
@@ -2552,7 +2624,7 @@ function allPads() {
 // platform-side fee claim (their LP is held by the launcher, not the pad).
 const EXTERNAL_TOKENS = [
   { addr: "0xC3eea9FE4b84b125f3Ed14f3A169A0D5007be7B6", pool: "0xE5d70409809352216725Dd6E3f861f8122124af4",
-    logo: "usdt1.jpg", banner: "usdt1-banner.jpg", telegram: "https://t.me/usdt1stable", x: "https://x.com/USDT1_to",
+    logo: "/usdt1.jpg", banner: "/usdt1-banner.jpg", telegram: "https://t.me/usdt1stable", x: "https://x.com/USDT1_to",
     createdAt: 1784936682, lockedPosition: 4279 }, // $USDT1, LP locked forever
 ];
 // Permanent Uniswap V3 position locker: holds LP forever, fees stay claimable
@@ -2754,6 +2826,10 @@ migrateHash();
 
 function applyChainUi() {
   chainPill();
+  // Lets stylesheets target one chain. The token page's outlined treatment is
+  // Stable-only by request, and a data attribute keeps that in CSS rather than
+  // scattering conditionals through the render functions.
+  document.documentElement.dataset.chain = CHAIN_KEY;
   // A page whose contract does not exist on this chain is hidden, not shown
   // broken: Arc has no gold engine and no MINTD, so those read as failures.
   const map = { "nav-launch": "launch", "nav-mintswap": "swap", "nav-earn": "earn",
@@ -4128,7 +4204,7 @@ function renderCards() {
     // title left and broke alignment against every other card in the row.
     const initials = (t.symbol.slice(0, 2).replace(/[^\w]/g, "")
       || String(t.name).slice(0, 2).replace(/[^\w]/g, "") || "·").toUpperCase();
-    const imgSrc = t.platform ? "logo.png" : safeImg(t.meta.image);
+    const imgSrc = t.platform ? "/logo.png" : safeImg(t.meta.image);
     const av = imgSrc ? `<img src="${imgSrc}" loading="lazy" decoding="async" onerror="this.parentNode.textContent='${initials}'">` : initials;
     // A ticker identical to the name reads as a stutter and is the single
     // biggest cause of the title needing two lines.
@@ -4274,7 +4350,7 @@ function scRender() {
   el.innerHTML = list.map((t, i) => {
     const pts = scSeries(t.addr);
     const swaps = tradeLogs.filter((x) => sameAddr(x.addr, t.addr)).length;
-    const logo = t.meta && t.meta.image ? safeImg(t.meta.image) : (t.platform ? "logo.png" : "");
+    const logo = t.meta && t.meta.image ? safeImg(t.meta.image) : (t.platform ? "/logo.png" : "");
     const initials = (t.symbol || "?").slice(0, 2).toUpperCase();
     return `<div class="scrow" onclick="openToken('${t.addr}')">
       <span class="scrank">${i + 1}</span>
@@ -4504,9 +4580,9 @@ const tokenMetaCache = {};
 let MINTD_ADDR = NET.mintd.mintd;
 const TOKEN_LOGOS = {
   [ADDR.usdt0.toLowerCase()]: "https://stablescan.xyz/token/images/usdt0_64.png",
-  ...(MINTD_ADDR ? { [MINTD_ADDR.toLowerCase()]: "logo.png" } : {}),
-  "0x872a3c280b846759187c9e57f62d1ed8407b135c": "mgld.png", // $MGLD
-  "0x8817d05f2560189f3697028f639dbb4c68688400": "mintr.png", // $MINTR
+  ...(MINTD_ADDR ? { [MINTD_ADDR.toLowerCase()]: "/logo.png" } : {}),
+  "0x872a3c280b846759187c9e57f62d1ed8407b135c": "/mgld.png", // $MGLD
+  "0x8817d05f2560189f3697028f639dbb4c68688400": "/mintr.png", // $MINTR
 };
 function tokLogo(addr) { return TOKEN_LOGOS[addr.toLowerCase()] || ""; }
 function swBaseList() {
@@ -4515,14 +4591,14 @@ function swBaseList() {
   const pinned = [{ addr: ADDR.usdt0, sym: nc.symbol, name: nc.name, dec: 6 }];
   if (MINTSWAP.wgusdt) pinned.push({ addr: MINTSWAP.wgusdt, sym: "WgUSDT", name: "Wrapped gUSDT", dec: 18 });
   const plat = tokens.find((t) => t.platform);
-  if (plat) pinned.push({ addr: plat.addr, sym: plat.symbol, name: plat.name, dec: 18, logo: "logo.png" });
-  if (typeof MINTR_ADDR !== "undefined" && MINTR_ADDR) pinned.push({ addr: MINTR_ADDR, sym: "MINTR", name: "Mintr Reserve", dec: 18, logo: "mintr.png" });
-  if (typeof MGLD_ADDR !== "undefined" && MGLD_ADDR) pinned.push({ addr: MGLD_ADDR, sym: "MGLD", name: "Mintd Gold", dec: 18, logo: "mgld.png" });
+  if (plat) pinned.push({ addr: plat.addr, sym: plat.symbol, name: plat.name, dec: 18, logo: "/logo.png" });
+  if (typeof MINTR_ADDR !== "undefined" && MINTR_ADDR) pinned.push({ addr: MINTR_ADDR, sym: "MINTR", name: "Mintr Reserve", dec: 18, logo: "/mintr.png" });
+  if (typeof MGLD_ADDR !== "undefined" && MGLD_ADDR) pinned.push({ addr: MGLD_ADDR, sym: "MGLD", name: "Mintd Gold", dec: 18, logo: "/mgld.png" });
   const list = [...pinned];
   // every launchpad coin carries its own artwork from onchain metadata
   for (const t of tokens) list.push({
     addr: t.addr, sym: t.symbol, name: t.name, dec: 18,
-    logo: t.platform ? "logo.png" : safeImg(t.meta && t.meta.image),
+    logo: t.platform ? "/logo.png" : safeImg(t.meta && t.meta.image),
   });
   for (const c of JSON.parse(localStorage.getItem("swCustoms") || "[]")) list.push(c);
   const seen = {};
@@ -4557,7 +4633,15 @@ function swFill() {
   const list = swBaseList();
   if (!list.length) return;
   if (!$("swIn").value || !swMeta($("swIn").value)) $("swIn").value = list[0].addr;
-  if (!$("swOutSel").value || !swMeta($("swOutSel").value)) $("swOutSel").value = (list[1] || list[0]).addr;
+  // Default the receive side to the platform coin rather than whatever happens
+  // to sit second in the pinned list. On a launchpad the overwhelmingly common
+  // intent is "buy the platform token with the stable", and that is worth one
+  // fewer click. Falls through untouched on a chain that has no platform coin,
+  // which is why this reads the list instead of a hardcoded address.
+  const platTok = (tokens.find((t) => t.platform) || {}).addr;
+  const defOut = (platTok && list.some((t) => t.addr === platTok) && platTok !== $("swIn").value)
+    ? platTok : ((list[1] || list[0]).addr);
+  if (!$("swOutSel").value || !swMeta($("swOutSel").value)) $("swOutSel").value = defOut;
   if ($("swIn").value === $("swOutSel").value && list.length > 1) {
     $("swOutSel").value = list.find((t) => t.addr !== $("swIn").value).addr;
   }
@@ -5210,7 +5294,7 @@ async function loadPortfolio() {
   held.sort((a, b) => b.val - a.val);
   total += held.reduce((s, t) => s + t.val, 0);
   $("pfTokens").innerHTML = held.length ? held.map((t) => {
-    const av = t.meta && t.meta.image ? `<img src="${safeImg(t.meta.image)}" onerror="this.remove()">` : (t.platform ? `<img src="logo.svg" onerror="this.remove()">` : t.symbol.slice(0, 2));
+    const av = t.meta && t.meta.image ? `<img src="${safeImg(t.meta.image)}" onerror="this.remove()">` : (t.platform ? `<img src="/logo.svg" onerror="this.remove()">` : t.symbol.slice(0, 2));
     return `<div class="trade" style="display:flex;align-items:center;gap:12px;margin-bottom:8px;padding:12px 16px;cursor:pointer" onclick="openToken('${t.addr}')">
       <div class="avatar" style="width:36px;height:36px;font-size:12px">${av}</div>
       <div style="flex:1"><b>${esc(t.name)}</b> <span style="color:var(--green)">$${esc(t.symbol)}</span>
@@ -6903,7 +6987,7 @@ async function lkTokenInfo(addr) {
     info.sym = t.symbol; info.dec = 18;
     info.usd = Number(ethers.formatEther(t.price));
     info.label = t.name;
-    info.logo = t.platform ? "logo.png" : safeImg(t.meta.image);
+    info.logo = t.platform ? "/logo.png" : safeImg(t.meta.image);
     lkInfoCache[key] = info;
     return info;
   }
@@ -7158,13 +7242,13 @@ function paintTokenMeta() {
   const addr = cur.addr;
   $("tName").innerHTML = `${esc(cur.name)} <span>$${esc(cur.symbol)}</span>`;
   const tInitials = cur.symbol.slice(0, 2).replace(/[^\w]/g, "");
-  const tImgSrc = cur.platform ? "logo.png" : safeImg(cur.meta.image);
+  const tImgSrc = cur.platform ? "/logo.png" : safeImg(cur.meta.image);
   $("tAvatar").innerHTML = tImgSrc ? `<img src="${tImgSrc}" onerror="this.parentNode.textContent='${tInitials}'">` : tInitials;
   $("tDesc").textContent = cur.meta.description || "";
   $("tGradPill").style.display = cur.grad ? "" : "none";
   $("tPlatPill").style.display = cur.platform ? "" : "none";
   // banner: uploaded/linked via metadata; platform token falls back to local banner.png
-  const bannerSrc = safeImg(cur.meta.banner) || (cur.platform ? "banner.png" : "");
+  const bannerSrc = safeImg(cur.meta.banner) || (cur.platform ? "/banner.png" : "");
   $("tBanner").style.display = "none";
   if (bannerSrc) {
     const probe = new Image();
@@ -7172,17 +7256,17 @@ function paintTokenMeta() {
     probe.src = bannerSrc;
   }
   const links = [];
-  if (safeLink(cur.meta.x)) links.push(`<a class="btn ghost" style="padding:6px 12px;font-size:12px" target="_blank" href="${safeLink(cur.meta.x)}">X ↗</a>`);
-  if (safeLink(cur.meta.telegram)) links.push(`<a class="btn ghost" style="padding:6px 12px;font-size:12px" target="_blank" href="${safeLink(cur.meta.telegram)}">Telegram ↗</a>`);
-  if (safeLink(cur.meta.website)) links.push(`<a class="btn ghost" style="padding:6px 12px;font-size:12px" target="_blank" href="${safeLink(cur.meta.website)}">Website ↗</a>`);
-  links.push(`<a class="btn ghost" style="padding:6px 12px;font-size:12px" target="_blank" href="https://dexscreener.com/stable/${cur.pool}">Dexscreener ↗</a>`);
-  links.push(`<a class="btn ghost" style="padding:6px 12px;font-size:12px" target="_blank" href="${CHAIN.blockExplorerUrls[0]}/address/${addr}">Explorer ↗</a>`);
+  if (safeLink(cur.meta.x)) links.push(`<a class="btn ghost" target="_blank" href="${safeLink(cur.meta.x)}">X ↗</a>`);
+  if (safeLink(cur.meta.telegram)) links.push(`<a class="btn ghost" target="_blank" href="${safeLink(cur.meta.telegram)}">Telegram ↗</a>`);
+  if (safeLink(cur.meta.website)) links.push(`<a class="btn ghost" target="_blank" href="${safeLink(cur.meta.website)}">Website ↗</a>`);
+  links.push(`<a class="btn ghost" target="_blank" href="https://dexscreener.com/stable/${cur.pool}">Dexscreener ↗</a>`);
+  links.push(`<a class="btn ghost" target="_blank" href="${CHAIN.blockExplorerUrls[0]}/address/${addr}">Explorer ↗</a>`);
   if (cur.lockedPosition && V3_LOCKER_ADDR) {
-    links.push(`<a class="btn ghost" style="padding:6px 12px;font-size:12px;border-color:#ffab00;color:#d18e00" target="_blank" title="Liquidity permanently locked, verifiable onchain" href="${CHAIN.blockExplorerUrls[0]}/address/${V3_LOCKER_ADDR}"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> LP locked forever</a>`);
+    links.push(`<a class="btn ghost" style="border-color:var(--gold);color:var(--gold)" target="_blank" title="Liquidity permanently locked, verifiable onchain" href="${CHAIN.blockExplorerUrls[0]}/address/${V3_LOCKER_ADDR}"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> LP locked forever</a>`);
   }
   // creators see an edit button on their own token's page
   if (META_REGISTRY_ADDR && wallet && cur.creator && wallet.toLowerCase() === cur.creator.toLowerCase()) {
-    links.push(`<button class="btn ghost" style="padding:6px 12px;font-size:12px;border-color:#ffab00" onclick="openPageEdit()"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg> Edit page</button>`);
+    links.push(`<button class="btn ghost" style="border-color:var(--gold)" onclick="openPageEdit()"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg> Edit page</button>`);
   }
   $("tLinks").innerHTML = links.join("");
 }

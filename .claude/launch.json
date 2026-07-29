@@ -6,6 +6,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8899", "--directory", "money"],
       "port": 8899
+    },
+    {
+      "name": "fun",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8898", "--directory", "frontend"],
+      "port": 8898
     }
   ]
 }

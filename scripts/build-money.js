@@ -127,12 +127,12 @@ sub("legacy dark palette",
 // it), so the header image and the favicon point at the SVG rather than the
 // launchpad's logo.png. Both header uses and the favicon are switched.
 sub("header logo",
-  `<img src="logo.png" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />`,
-  `<img src="logo.svg" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />`);
-sub("platform token avatar", `t.platform ? \`<img src="logo.png" onerror="this.remove()">\``,
-  `t.platform ? \`<img src="logo.svg" onerror="this.remove()">\``);
-sub("favicon", `<link rel="icon" type="image/png" href="logo.png" />`,
-  `<link rel="icon" type="image/svg+xml" href="logo.svg" />`);
+  `<img src="/logo.png" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />`,
+  `<img src="/logo.svg" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />`);
+sub("platform token avatar", `t.platform ? \`<img src="/logo.png" onerror="this.remove()">\``,
+  `t.platform ? \`<img src="/logo.svg" onerror="this.remove()">\``);
+sub("favicon", `<link rel="icon" type="image/png" href="/logo.png" />`,
+  `<link rel="icon" type="image/svg+xml" href="/logo.svg" />`);
 
 fs.writeFileSync(OUT, s);
 
