@@ -28,7 +28,7 @@ const TOKEN_ABI = [
   "function decimals() view returns (uint8)",
 ];
 const POOL_ABI = [
-  "function slot0() view returns (uint160,int24 tick,uint16,uint16,uint16,uint8,bool)",
+  "function slot0() view returns (uint160,int24 tick,uint16 obsIndex,uint16 card,uint16 cardNext,uint8,bool)",
   "function observe(uint32[]) view returns (int56[],uint160[])",
   "function tickSpacing() view returns (int24)",
   "function fee() view returns (uint24)",
@@ -57,7 +57,7 @@ async function main() {
   // A key that has never existed before this run.
   const stranger = ethers.Wallet.createRandom().connect(rp);
   console.log(`\nstranger ${stranger.address}  (fresh key, no history)`);
-  await (await funder.sendTransaction({ to: stranger.address, value: ethers.parseEther("0.6"), gasLimit: 30000 })).wait();
+  await (await funder.sendTransaction({ to: stranger.address, value: ethers.parseEther("1.6"), gasLimit: 30000 })).wait();
   console.log(`funded with ${ethers.formatEther(await rp.getBalance(stranger.address))} gas, and nothing else`);
 
   const pool = new ethers.Contract(t.pool, POOL_ABI, rp);
@@ -75,9 +75,17 @@ async function main() {
   } catch {}
   check(twap1800 !== null, "observe() spans the default 1800s window",
     "seed more history with seed-twap.js before inviting anyone");
-  check(twap1800 !== null && twap1800 !== spot,
-    "the 1800s TWAP differs from spot, so it is a real average",
-    `spot ${spot}, twap ${twap1800}`);
+
+  // Cardinality, NOT a spot/TWAP divergence, is what proves the buffer is real.
+  // An earlier version of this asserted twap !== spot, which was right when the
+  // failure mode was cardinality 1 and observe() extrapolating from the current
+  // tick. With a real buffer and a price sitting in a three-tick band the two
+  // legitimately coincide, and that assertion would fail a healthy pool.
+  const card = Number((await pool.slot0()).card);
+  check(card > 1, "the pool has a real observation buffer, not a single slot",
+    `observationCardinality ${card}`);
+  console.log(`      cardinality ${card}, spot ${spot}, 1800s twap ${twap1800}` +
+    (twap1800 === spot ? "  (equal, because the price has been stable)" : ""));
 
   console.log("\n=== a stranger can get tokens and make a vault ===");
   const usd = new ethers.Contract(t.tUSD, TOKEN_ABI, stranger);
@@ -105,9 +113,16 @@ async function main() {
   await (await usd.approve(vAddr, ethers.MaxUint256, { gasLimit: 200000 })).wait();
   await mustRevert(() => v.deposit(0, 0, { gasLimit: 500000 }).then((x) => x.wait()),
     "an empty deposit is rejected rather than silently doing nothing");
+  // Which slot tUSD occupies is decided by address ordering, not by which token
+  // matters to us: here token0 is tETH. Assuming tUSD was amount0 made deposit
+  // try to pull tETH, which was never approved, and it reverted with no reason.
+  // Resolved from the vault rather than assumed.
+  const vt0 = await v.token0();
+  const usdIsToken0 = vt0.toLowerCase() === t.tUSD.toLowerCase();
+  const [amt0, amt1] = usdIsToken0 ? [dep, 0n] : [0n, dep];
   // Explicit gasLimit: AgentVault documents deposit as under-reported by
   // estimateGas, which is CLAUDE.md gotcha 8.
-  await (await v.deposit(dep, 0n, { gasLimit: 1_500_000 })).wait();
+  await (await v.deposit(amt0, amt1, { gasLimit: 1_500_000 })).wait();
   const val = await v.valueNow();
   check(val > 0n, "a one-sided tUSD deposit is accepted and valued",
     `value ${ethers.formatUnits(val, usdDec)} tUSD`);
@@ -137,7 +152,7 @@ async function main() {
   const lower = alignUp(tw - half, spacing), upper = alignDown(tw + half, spacing);
   await (await v.propose(lower, upper, { gasLimit: 800000 })).wait();
   const before = await v.valueNow();
-  await (await v.execute({ gasLimit: 12_000_000 })).wait();
+  await (await v.execute({ gasLimit: 3_000_000 })).wait();
   const after = await v.valueNow();
   check((await v.positionId()) > 0n, "a position was opened", `range ${lower}..${upper}`);
   const costPct = (Number(before - after) / Number(before)) * 100;
@@ -148,7 +163,7 @@ async function main() {
   console.log("\n=== the owner can always get out ===");
   const beforeUsd = await usd.balanceOf(stranger.address);
   const beforeEth = await eth.balanceOf(stranger.address);
-  await (await v.withdrawAll({ gasLimit: 12_000_000 })).wait();
+  await (await v.withdrawAll({ gasLimit: 3_000_000 })).wait();
   const gotUsd = (await usd.balanceOf(stranger.address)) - beforeUsd;
   const gotEth = (await eth.balanceOf(stranger.address)) - beforeEth;
   check(gotUsd > 0n || gotEth > 0n, "funds returned to the owner's wallet");

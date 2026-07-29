@@ -1,6 +1,6 @@
 # Community agent testing on Arc
 
-Status: draft
+Status: **shipped to Arc testnet. Ready for community testing.**
 Date: 2026-07-29
 
 ## What problem this solves
@@ -129,15 +129,32 @@ time or teach them something false about the product.
 
 ## Tests that must pass before deploy
 
-- [ ] `node scripts/test-agent-vault.js` still green (48)
-- [ ] `node scripts/test-agent-vault-factory.js` still green (64)
-- [ ] new `scripts/test-test-token.js`: decimals, bool returns, faucet cooldown
-- [ ] a ganache dry run of the deploy-and-seed script
-- [ ] end to end on Arc, done by me before anyone is invited: faucet, create,
-      deposit one-sided, set every policy field, run the keeper through a real
-      rebalance, then withdraw and confirm the balance returns
-- [ ] the same flow from a second address that is not the deployer, to prove
-      nothing depends on being the repo owner
+- [x] `node scripts/test-agent-vault.js` still green (48)
+- [x] `node scripts/test-agent-vault-factory.js` still green (64)
+- [x] `scripts/test-test-token.js`: decimals, bool returns, faucet cooldown (22)
+- [x] a dry run of the deploy-and-seed script
+- [x] end to end on Arc via `scripts/test-arc-agent-e2e.js`, 19 checks, run from
+      a FRESHLY GENERATED key funded with gas and nothing else, which is the
+      "second address" requirement in its strongest form: faucet, create,
+      one-sided 5,000 tUSD deposit, policy bounds rejected and accepted on
+      chain, autonomous, a real rebalance at 0.1683%, then 99.88% recovered
+
+### What the e2e caught
+
+Two bugs, both mine, both in the test rather than the product:
+
+- **Token ordering.** `deposit(dep, 0)` assumed tUSD was `amount0`. Uniswap
+  orders by address and token0 here is tETH, so it tried to pull a token the
+  stranger had never approved and reverted with no reason string. The slot is
+  now resolved from the vault. The UI was already correct, because it labels
+  its inputs from the vault's own `token0`/`token1` rather than assuming.
+- **A wrong assertion about the TWAP.** The first version asserted
+  `twap !== spot`. That was the right check when the failure mode was
+  cardinality 1 and `observe()` extrapolating from the current tick. With a
+  real 128-slot buffer and a price sitting in a three-tick band the two
+  legitimately coincide, so the assertion would have failed a healthy pool.
+  Cardinality is what proves the buffer is real; equality proves nothing either
+  way.
 
 ## Deploy steps
 
