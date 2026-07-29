@@ -12,14 +12,14 @@
       "token": "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       "createdAt": 1784844341,
       "usdtIs0": true,
-      "allTime": "540214649568"
+      "allTime": "543115342249"
     },
     "0x63ccf0c040845aa59a3b0898b28bf6c090850c2b": {
       "kind": "v3",
       "token": "0x9a9cBd346a64a57b6c44047AfC4B0170fB46Dc88",
       "createdAt": 1784850213,
       "usdtIs0": true,
-      "allTime": "22020308099"
+      "allTime": "22023688659"
     },
     "0x2fc0d2d303460410c4be77905a69e379586bc8c7": {
       "kind": "v3",
@@ -96,7 +96,7 @@
       "token": "0x7A9eA759306003DA558Cf41742b22F6D170dDa89",
       "createdAt": 1784888905,
       "usdtIs0": true,
-      "allTime": "1182686203"
+      "allTime": "0"
     },
     "0xe2614b99c5843179399fe9963a8ec3e6b0be1da7": {
       "kind": "v3",
@@ -159,7 +159,7 @@
       "token": "0x67b1c700b0B76a6857Cf3010Cf389a500A5cc133",
       "createdAt": 1784970264,
       "usdtIs0": false,
-      "allTime": "41626777297"
+      "allTime": "41656899877"
     },
     "0x7404e2c3ad036425483678e6b4d63b400acf7696": {
       "kind": "v3",
@@ -201,7 +201,7 @@
       "token": "0x81cA4B1a1E0ED14f1528EE60a74CD14775EC56eF",
       "createdAt": 1784988089,
       "usdtIs0": true,
-      "allTime": "14850929"
+      "allTime": "0"
     },
     "0x5c7aa4ab1fa679873c37021b02f782a29c226281": {
       "kind": "v3",
@@ -705,7 +705,7 @@
       "token": "0x65c2a6746236A6c49b2971EA2eC9048302322072",
       "createdAt": 1785009488,
       "usdtIs0": false,
-      "allTime": "7463891385"
+      "allTime": "7464070136"
     },
     "0x3c146fed993d674f0e6ffe829bd7812594b71b72": {
       "kind": "v3",
@@ -747,7 +747,7 @@
       "token": "0xB684828fC6752db70BF515a747aecB56E36d643b",
       "createdAt": 1785011083,
       "usdtIs0": true,
-      "allTime": "9929700455"
+      "allTime": "9929803079"
     },
     "0xb9f6aa2cfd2d12dac8c24609d1131b9313bf5acf": {
       "kind": "v3",
@@ -782,7 +782,7 @@
       "token": "0xc61f111f5c7c69A8360d6feB9D75f293208aA39b",
       "createdAt": 1785020753,
       "usdtIs0": true,
-      "allTime": "55344150"
+      "allTime": "0"
     },
     "0x3e39479ac9172db00d8aee60d365f2002f6d1c59": {
       "kind": "v3",
@@ -858,13 +858,13 @@
       "kind": "v2",
       "token": "0x8817D05f2560189F3697028f639Dbb4C68688400",
       "usdtIs0": true,
-      "allTime": "726268863"
+      "allTime": "733453580"
     },
     "0x1f3002eea8b1b22f7fd67280e305ecea540c71be": {
       "kind": "v2",
       "token": "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       "usdtIs0": true,
-      "allTime": "5329116801"
+      "allTime": "5374567284"
     },
     "0x5b4fb979aa7ff810a15641bdc4e30f3f40254a25": {
       "kind": "v2",
@@ -876,8 +876,8 @@
       "kind": "v2",
       "token": "0x8817D05f2560189F3697028f639Dbb4C68688400",
       "usdtIs0": true,
-      "allTime": "140152759"
+      "allTime": "140515946"
     }
   },
-  "lastBlock": 33505174
+  "lastBlock": 33566439
 }
