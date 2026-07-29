@@ -13,6 +13,13 @@ const build = (n) => require(path.join(__dirname, "..", "build", `${n}.json`));
 const uni = (p) => require(p);
 const E = (v) => ethers.parseEther(String(v));
 
+// Every deposit/execute/setMode/setAgent/revokeAgent/veto/withdrawAll call here
+// passes an explicit gasLimit. That is not decoration: AgentVault documents
+// these entry points as under-reported by eth_estimateGas, because clearing a
+// proposal refunds storage and the estimate comes back NET while the EVM needs
+// GROSS. Bare calls made this suite fail roughly three runs in five, always at
+// whichever deposit happened to land on a short estimate, which read as a
+// contract bug rather than a harness one. Do not remove these.
 let passed = 0, failed = 0;
 function check(cond, name, detail) {
   if (cond) { passed++; console.log(`  ok  ${name}`); }
@@ -147,7 +154,7 @@ async function main() {
 
   await (await A.connect(owner).approve(vAddr, ethers.MaxUint256)).wait();
   await (await B.connect(owner).approve(vAddr, ethers.MaxUint256)).wait();
-  await (await vault.connect(owner).deposit(E(50_000), E(50_000))).wait();
+  await (await vault.connect(owner).deposit(E(50_000), E(50_000), { gasLimit: 3_000_000 })).wait();
   const deposited = await vault.valueNow();
   console.log(`      deposited, vault value ${ethers.formatEther(deposited)} (in token1 terms)`);
   check(deposited > 0n, "deposit registers value");
@@ -168,10 +175,10 @@ async function main() {
     "a stranger cannot propose");
 
   console.log("\n=== human in the loop ===");
-  await (await vault.connect(keeper).propose(lo, hi)).wait();
+  await (await vault.connect(keeper).propose(lo, hi, { gasLimit: 1_000_000 })).wait();
   await reverts(() => vault.connect(keeper).execute({ gasLimit: 6_000_000 }),
     "PROPOSE_ONLY: agent cannot execute without approval");
-  await (await vault.connect(owner).approve(await vault.proposalNonce())).wait();
+  await (await vault.connect(owner).approve(await vault.proposalNonce(), { gasLimit: 1_000_000 })).wait();
   await (await vault.connect(keeper).execute({ gasLimit: 12_000_000 })).wait();
   check((await vault.positionId()) > 0n, "approved proposal executes and opens a position");
 
@@ -181,7 +188,7 @@ async function main() {
 
   await (await vault.connect(owner).setMode(2, { gasLimit: 500_000 })).wait(); // TIMELOCKED
   await warp(3700);
-  await (await vault.connect(keeper).propose(lo, hi)).wait();
+  await (await vault.connect(keeper).propose(lo, hi, { gasLimit: 1_000_000 })).wait();
   await reverts(() => vault.connect(keeper).execute({ gasLimit: 6_000_000 }),
     "TIMELOCKED: agent cannot execute inside the review window");
   await (await vault.connect(owner).veto({ gasLimit: 500_000 })).wait();
@@ -194,21 +201,21 @@ async function main() {
   //    TIMELOCKED that was worse: `approved` is the fast-track past the review
   //    window, so a substituted proposal executed instantly with no review.
   await (await vault.connect(owner).setMode(1, { gasLimit: 500_000 })).wait(); // PROPOSE_ONLY
-  await (await vault.connect(keeper).propose(lo, hi)).wait();
+  await (await vault.connect(keeper).propose(lo, hi, { gasLimit: 1_000_000 })).wait();
   const nonceA = await vault.proposalNonce();
-  await (await vault.connect(keeper).propose(alignDown(t - 1200), alignDown(t + 1200))).wait();
+  await (await vault.connect(keeper).propose(alignDown(t - 1200), alignDown(t + 1200), { gasLimit: 1_000_000 })).wait();
   const nonceB = await vault.proposalNonce();
   check(nonceB > nonceA, "each proposal gets a fresh nonce");
   await reverts(() => vault.connect(owner).approve(nonceA, { gasLimit: 500_000 }),
     "approving a substituted proposal reverts as stale");
-  await (await vault.connect(owner).approve(nonceB)).wait();
+  await (await vault.connect(owner).approve(nonceB, { gasLimit: 1_000_000 })).wait();
   check((await vault.proposal()).approved, "approving the proposal actually pending works");
 
   // 2. A proposal used to survive a mode change, so an agent could stage one
   //    under AUTONOMOUS, let it mature, and execute it the instant the owner
   //    tightened to TIMELOCKED, with zero review.
   await (await vault.connect(owner).setMode(3, { gasLimit: 500_000 })).wait(); // AUTONOMOUS
-  await (await vault.connect(keeper).propose(lo, hi)).wait();
+  await (await vault.connect(keeper).propose(lo, hi, { gasLimit: 1_000_000 })).wait();
   check((await vault.proposal()).open, "a proposal is pending under AUTONOMOUS");
   await warp(4000); // let it mature past readyAt
   await (await vault.connect(owner).setMode(2, { gasLimit: 500_000 })).wait(); // owner tightens to TIMELOCKED
@@ -218,7 +225,7 @@ async function main() {
 
   // Same for handing the agent role somewhere else, and for revoking it.
   await (await vault.connect(owner).setMode(3, { gasLimit: 500_000 })).wait();
-  await (await vault.connect(keeper).propose(lo, hi)).wait();
+  await (await vault.connect(keeper).propose(lo, hi, { gasLimit: 1_000_000 })).wait();
   await (await vault.connect(owner).setAgent(KEEPER, { gasLimit: 500_000 })).wait();
   check(!(await vault.proposal()).open, "changing the agent clears any pending proposal");
 
@@ -239,7 +246,7 @@ async function main() {
     "a range entirely above the TWAP is rejected");
   await reverts(() => vault.connect(keeper).propose(alignDown(tNow - 1860), alignDown(tNow - 120), { gasLimit: 500_000 }),
     "a range entirely below the TWAP is rejected");
-  await (await vault.connect(keeper).propose(alignDown(tNow - 600), alignDown(tNow + 600))).wait();
+  await (await vault.connect(keeper).propose(alignDown(tNow - 600), alignDown(tNow + 600), { gasLimit: 1_000_000 })).wait();
   check((await vault.proposal()).open, "a straddling range is still accepted");
   await (await vault.connect(owner).veto({ gasLimit: 500_000 })).wait();
 
@@ -275,11 +282,11 @@ async function main() {
   await v2.waitForDeployment();
   const v2Addr = await v2.getAddress();
   await (await v2.connect(owner).setMode(3, { gasLimit: 500_000 })).wait();
-  await (await v2.connect(owner).setPolicy(2000, 100, 500, 300, 300, 0)).wait();
+  await (await v2.connect(owner).setPolicy(2000, 100, 500, 300, 300, 0, { gasLimit: 1_000_000 })).wait();
   await (await A.connect(owner).approve(v2Addr, ethers.MaxUint256)).wait();
   await (await B.connect(owner).approve(v2Addr, ethers.MaxUint256)).wait();
   await topUp();
-  await (await v2.connect(owner).deposit(E(50_000), E(50_000))).wait();
+  await (await v2.connect(owner).deposit(E(50_000), E(50_000), { gasLimit: 3_000_000 })).wait();
 
   const startValue = await v2.valueNow();
   console.log(`      vault holds ${ethers.formatEther(startValue)}; attacker holds ~3,000,000 of each`);
@@ -354,11 +361,11 @@ async function main() {
   const v3Addr = await v3.getAddress();
   await (await v3.connect(owner).setMode(3, { gasLimit: 500_000 })).wait();
   // Tight tolerance so the breaker is reachable inside a test run.
-  await (await v3.connect(owner).setPolicy(2000, 100, 100, 300, 300, 0)).wait();
+  await (await v3.connect(owner).setPolicy(2000, 100, 100, 300, 300, 0, { gasLimit: 1_000_000 })).wait();
   await (await A.connect(owner).approve(v3Addr, ethers.MaxUint256)).wait();
   await (await B.connect(owner).approve(v3Addr, ethers.MaxUint256)).wait();
   await topUp();
-  await (await v3.connect(owner).deposit(E(20_000), E(20_000))).wait();
+  await (await v3.connect(owner).deposit(E(20_000), E(20_000), { gasLimit: 3_000_000 })).wait();
 
   const grindStart = await v3.valueNow();
   let grinds = 0, halted = false;
@@ -402,11 +409,11 @@ async function main() {
   await v4.waitForDeployment();
   const v4Addr = await v4.getAddress();
   await (await v4.connect(owner).setMode(3, { gasLimit: 500_000 })).wait();
-  await (await v4.connect(owner).setPolicy(2000, 100, 0, 300, 300, 0)).wait(); // zero tolerance
+  await (await v4.connect(owner).setPolicy(2000, 100, 0, 300, 300, 0, { gasLimit: 1_000_000 })).wait(); // zero tolerance
   await (await A.connect(owner).approve(v4Addr, ethers.MaxUint256)).wait();
   await (await B.connect(owner).approve(v4Addr, ethers.MaxUint256)).wait();
   await topUp();
-  await (await v4.connect(owner).deposit(E(20_000), E(20_000))).wait();
+  await (await v4.connect(owner).deposit(E(20_000), E(20_000), { gasLimit: 3_000_000 })).wait();
   check((await v4.valueCheckpoint()) > 0n, "a checkpoint is armed on deposit");
 
   let tripped = false, ran = 0, lastReason = "";
@@ -433,7 +440,7 @@ async function main() {
 
   // And an owner can deliberately re-arm it, which must be manual: an automatic
   // reset would let a slow drain continue indefinitely.
-  await (await v4.connect(owner).resetCheckpoint()).wait();
+  await (await v4.connect(owner).resetCheckpoint({ gasLimit: 1_000_000 })).wait();
   check((await v4.valueCheckpoint()) > 0n, "owner can re-arm the checkpoint after a halt");
   await reverts(() => v4.connect(mallory).resetCheckpoint({ gasLimit: 500_000 }),
     "the agent cannot re-arm the checkpoint itself");
@@ -469,7 +476,7 @@ async function main() {
   const v5Addr = await v5.getAddress();
   await (await A.connect(owner).approve(v5Addr, ethers.MaxUint256)).wait();
   await (await B.connect(owner).approve(v5Addr, ethers.MaxUint256)).wait();
-  await (await v5.connect(owner).deposit(E(10_000), E(10_000))).wait();
+  await (await v5.connect(owner).deposit(E(10_000), E(10_000), { gasLimit: 3_000_000 })).wait();
   const cp1 = await v5.valueCheckpoint();
   check(cp1 > 0n, "deposit arms the checkpoint");
   await (await v5.connect(owner).deposit(E(5_000), E(5_000), { gasLimit: 2_000_000 })).wait();

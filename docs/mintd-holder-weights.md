@@ -13,12 +13,12 @@ has held since launch scores the full period.
 |---|---|
 | Token | `0xE62C47074abb52A2bc87B62E47e3411A0020f020` on Stable (chain 988) |
 | Tracked from block | 32863093 |
-| Tracked to block | 33493187 |
-| Blocks covered | 630,094 |
-| Period | 5.10 days |
-| Transfers processed | 11,159 |
+| Tracked to block | 33494888 |
+| Blocks covered | 631,795 |
+| Period | 5.12 days |
+| Transfers processed | 11,167 |
 | Addresses tracked | 1,300 |
-| Indexer runs | 38 |
+| Indexer runs | 40 |
 
 Balances are checked against `totalSupply` on every run and the cursor does
 not advance unless they match, so there are no silent gaps in this window.
@@ -35,33 +35,33 @@ the qualifying total, which is what an allocation would divide.
 
 | # | address | score | time-weighted avg | held now | share |
 |---|---|---|---|---|---|
-| 1 | `0x52c717ce5a6b483a890bcdc3114ff140e679b43f` | 19,127,837 | 19,127,837 | 25,789,676 | 5.49% |
-| 2 | `0xf29f0a86420399f662577b68c48137d510084d96` | 14,759,007 | 14,759,007 | 20,077,945 | 4.23% |
-| 3 | `0x5638484ba2d2f1d1d35020572b0aa439a9869192` | 14,500,951 | 14,500,951 | 14,780,901 | 4.16% |
-| 4 | `0x96d4dcda8e116ec26905900e17ce2ca60b9e74a9` | 14,065,022 | 16,166,140 | 14,065,022 | 4.03% |
-| 5 | `0xec230a7dbc09c9715f2918c36d7f217e178ab4cd` | 13,886,928 | 13,886,928 | 14,155,070 | 3.98% |
-| 6 | `0x9cd71850a7f491e5c46b2cddd11c811a17532dc9` | 13,311,137 | 13,311,137 | 13,568,161 | 3.82% |
-| 7 | `0xfcaaae0c322be427d4cff22d1f5318c12e262975` | 12,770,430 | 12,770,430 | 13,017,014 | 3.66% |
-| 8 | `0xc5e0ed7f4afdf8f1c2eb6e559f6a025490ca345b` | 12,693,222 | 12,693,222 | 21,605,023 | 3.64% |
-| 9 | `0x4883d497b43e981cffa0c15c0008e0c9413af57a` | 12,262,013 | 12,262,013 | 12,498,780 | 3.52% |
-| 10 | `0x3c86d511803afb9b7478a15527274f9b464bab89` | 11,783,365 | 11,783,365 | 12,010,890 | 3.38% |
-| 11 | `0x2aa460bce4bd548fe402c8797de1db122fbcd7b6` | 11,332,207 | 11,332,207 | 11,551,020 | 3.25% |
-| 12 | `0xfb5ea923b63f2dfd2dd609bf56511d0cb28b91c3` | 10,906,472 | 10,906,472 | 11,117,065 | 3.13% |
-| 13 | `0xc7ea727095266741e48a949dd14a102d123b4e52` | 10,504,287 | 10,504,287 | 10,707,114 | 3.01% |
-| 14 | `0x8004ce0fc1d60da4ebc15c8e0557532f44cdba9b` | 10,123,945 | 10,123,945 | 10,319,428 | 2.90% |
-| 15 | `0x4e1bdda540cfd4c829768987d587cb86fac4bd5a` | 8,702,961 | 8,702,961 | 11,135,379 | 2.50% |
-| 16 | `0x23a750aea72382bb8cb9d29c90ef566f44d8e13e` | 8,606,480 | 8,606,480 | 15,120,470 | 2.47% |
-| 17 | `0xb601f62023c99af02f126ac4c675411f64d5b5e1` | 7,934,055 | 7,934,055 | 10,940,275 | 2.28% |
-| 18 | `0x4d7a1f759fe4f0082fcedea72bfb1063e841c4cc` | 6,129,560 | 6,129,560 | 19,768,840 | 1.76% |
-| 19 | `0x0fa7cbdb83bd225366fd4ca5808b46de60b8fbcb` | 5,861,689 | 5,861,689 | 8,491,058 | 1.68% |
-| 20 | `0x615b19602eb9a3877ef294f71fdbdbf3ffc54709` | 5,704,776 | 6,898,800 | 5,704,776 | 1.64% |
-| 21 | `0x34bc81192b1787ae0c03820cacd2cc32518d3699` | 5,385,174 | 5,385,174 | 6,018,544 | 1.54% |
-| 22 | `0x5f1fb5340bc3dad89a462d7a40d37c9930d20bde` | 4,928,033 | 4,928,033 | 7,603,744 | 1.41% |
-| 23 | `0xe86140dd1148421dc797e1e1aa22992a2869c052` | 4,802,947 | 4,802,947 | 7,427,645 | 1.38% |
-| 24 | `0x45963ed8d3ad465ca58f3e9f36557b60024fd36f` | 3,742,730 | 3,742,730 | 7,014,014 | 1.07% |
-| 25 | `0x99cc0bb471e5c2c19ac40932e1510a09f90b6f9d` | 3,392,326 | 3,392,326 | 11,742,896 | 0.97% |
+| 1 | `0x52c717ce5a6b483a890bcdc3114ff140e679b43f` | 19,145,773 | 19,145,773 | 25,789,676 | 5.58% |
+| 2 | `0xf29f0a86420399f662577b68c48137d510084d96` | 14,773,328 | 14,773,328 | 20,077,945 | 4.31% |
+| 3 | `0x5638484ba2d2f1d1d35020572b0aa439a9869192` | 14,501,704 | 14,501,704 | 14,780,901 | 4.23% |
+| 4 | `0x96d4dcda8e116ec26905900e17ce2ca60b9e74a9` | 14,065,022 | 16,160,484 | 14,065,022 | 4.10% |
+| 5 | `0xec230a7dbc09c9715f2918c36d7f217e178ab4cd` | 13,887,649 | 13,887,649 | 14,155,070 | 4.05% |
+| 6 | `0x9cd71850a7f491e5c46b2cddd11c811a17532dc9` | 13,311,829 | 13,311,829 | 13,568,161 | 3.88% |
+| 7 | `0xfcaaae0c322be427d4cff22d1f5318c12e262975` | 12,771,094 | 12,771,094 | 13,017,014 | 3.72% |
+| 8 | `0xc5e0ed7f4afdf8f1c2eb6e559f6a025490ca345b` | 12,717,215 | 12,717,215 | 21,605,023 | 3.71% |
+| 9 | `0x4883d497b43e981cffa0c15c0008e0c9413af57a` | 12,262,650 | 12,262,650 | 12,498,780 | 3.58% |
+| 10 | `0x3c86d511803afb9b7478a15527274f9b464bab89` | 11,783,978 | 11,783,978 | 12,010,890 | 3.44% |
+| 11 | `0x2aa460bce4bd548fe402c8797de1db122fbcd7b6` | 11,332,796 | 11,332,796 | 11,551,020 | 3.30% |
+| 12 | `0xfb5ea923b63f2dfd2dd609bf56511d0cb28b91c3` | 10,907,039 | 10,907,039 | 11,117,065 | 3.18% |
+| 13 | `0xc7ea727095266741e48a949dd14a102d123b4e52` | 10,504,833 | 10,504,833 | 10,707,114 | 3.06% |
+| 14 | `0x8004ce0fc1d60da4ebc15c8e0557532f44cdba9b` | 10,124,471 | 10,124,471 | 10,319,428 | 2.95% |
+| 15 | `0x4e1bdda540cfd4c829768987d587cb86fac4bd5a` | 8,709,510 | 8,709,510 | 11,135,379 | 2.54% |
+| 16 | `0x23a750aea72382bb8cb9d29c90ef566f44d8e13e` | 8,624,018 | 8,624,018 | 15,120,470 | 2.51% |
+| 17 | `0xb601f62023c99af02f126ac4c675411f64d5b5e1` | 7,942,149 | 7,942,149 | 10,940,275 | 2.32% |
+| 18 | `0x4d7a1f759fe4f0082fcedea72bfb1063e841c4cc` | 6,166,281 | 6,166,281 | 19,768,840 | 1.80% |
+| 19 | `0x615b19602eb9a3877ef294f71fdbdbf3ffc54709` | 5,704,776 | 6,895,585 | 5,704,776 | 1.66% |
+| 20 | `0x34bc81192b1787ae0c03820cacd2cc32518d3699` | 5,386,879 | 5,386,879 | 6,018,544 | 1.57% |
+| 21 | `0x5f1fb5340bc3dad89a462d7a40d37c9930d20bde` | 4,935,236 | 4,935,236 | 7,603,744 | 1.44% |
+| 22 | `0xe86140dd1148421dc797e1e1aa22992a2869c052` | 4,810,013 | 4,810,013 | 7,427,645 | 1.40% |
+| 23 | `0x45963ed8d3ad465ca58f3e9f36557b60024fd36f` | 3,751,537 | 3,751,537 | 7,014,014 | 1.09% |
+| 24 | `0x99cc0bb471e5c2c19ac40932e1510a09f90b6f9d` | 3,414,809 | 3,414,809 | 11,742,896 | 1.00% |
+| 25 | `0x0923c325344017d0e2cb72caf592a35ee7e5c24a` | 3,228,970 | 3,228,970 | 14,055,040 | 0.94% |
 
-**321** addresses qualify, 348,606,246 MINTD of score between
+**319** addresses qualify, 342,974,919 MINTD of score between
 them. 1256 held at some point during the window.
 
 ## Why the score is a minimum of two numbers
@@ -77,13 +77,13 @@ nothing at all:
 
 | address | time-weighted avg | held now |
 |---|---|---|
-| `0x70054f9a7aa24af201892adc6c8497de186bac9e` | 12,400,157 | 0 |
-| `0x2692c4fbf2c4666cc440bbb1b959c18acb6b7aea` | 12,045,164 | 0 |
-| `0x70c97b8a9488565ec5875a5120eaed8e1a825fe8` | 11,588,495 | 0 |
-| `0x0796b57e2eddfe02d38ab93b7ee89eeb209fb9fa` | 7,767,157 | 0 |
-| `0x30e5f7c6b1371c9c13660527a1901bbbbb0085d5` | 7,530,350 | 0 |
+| `0x70054f9a7aa24af201892adc6c8497de186bac9e` | 12,366,771 | 0 |
+| `0x2692c4fbf2c4666cc440bbb1b959c18acb6b7aea` | 12,012,734 | 0 |
+| `0x70c97b8a9488565ec5875a5120eaed8e1a825fe8` | 11,557,295 | 0 |
+| `0x0796b57e2eddfe02d38ab93b7ee89eeb209fb9fa` | 7,746,246 | 0 |
+| `0x30e5f7c6b1371c9c13660527a1901bbbbb0085d5` | 7,510,076 | 0 |
 
-935 address(es) in this window have a positive time-weighted average
+937 address(es) in this window have a positive time-weighted average
 and a zero balance. Weighting on duration alone would have paid every one of
 them.
 
@@ -96,9 +96,9 @@ holding it, scores.
 
 | kind | addresses | combined time-weighted |
 |---|---|---|
-| Contracts and pools | 17 | 270,481,751 |
-| Project wallets | 3 | 6,322,652 |
-| Burned | 1 | 66,601,464 |
+| Contracts and pools | 17 | 270,759,453 |
+| Project wallets | 3 | 6,316,832 |
+| Burned | 1 | 66,646,383 |
 
 ## This is not an allocation formula
 

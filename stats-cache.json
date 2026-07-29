@@ -5,14 +5,14 @@
       "token": "0xB02F181cFeb3DeA5f562693628cAaa772bc02240",
       "createdAt": 6458,
       "usdtIs0": true,
-      "allTime": "2490000"
+      "allTime": "3471057"
     },
     "0xbef7e37d8f6d9dc70af16ed1b3f7a7db8e13aff6": {
       "kind": "v3",
       "token": "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       "createdAt": 1784844341,
       "usdtIs0": true,
-      "allTime": "538995264000"
+      "allTime": "539256836931"
     },
     "0x63ccf0c040845aa59a3b0898b28bf6c090850c2b": {
       "kind": "v3",
@@ -858,13 +858,13 @@
       "kind": "v2",
       "token": "0x8817D05f2560189F3697028f639Dbb4C68688400",
       "usdtIs0": true,
-      "allTime": "723919916"
+      "allTime": "724781363"
     },
     "0x1f3002eea8b1b22f7fd67280e305ecea540c71be": {
       "kind": "v2",
       "token": "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       "usdtIs0": true,
-      "allTime": "5308242677"
+      "allTime": "5314169530"
     },
     "0x5b4fb979aa7ff810a15641bdc4e30f3f40254a25": {
       "kind": "v2",
@@ -879,5 +879,5 @@
       "allTime": "140152759"
     }
   },
-  "lastBlock": 33492787
+  "lastBlock": 33495021
 }
