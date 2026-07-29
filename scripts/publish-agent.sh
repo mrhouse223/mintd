@@ -3,7 +3,7 @@
 #
 #   ./scripts/publish-agent.sh
 #
-# The dashboard at money/agent.html reads a committed JSON snapshot, so the live
+# The Agent tab in the app reads a committed JSON snapshot, so the live
 # page is exactly as fresh as the last run of this script. Without it the page
 # stops moving the moment the agent does something interesting.
 #
