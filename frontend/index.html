@@ -3178,6 +3178,24 @@ function agPrice(tick, d0, d1) {
   return p.toPrecision(4);
 }
 
+/// Retry a chain read that collided with rate limiting.
+///
+/// Arc accepts a burst and then rate limits it, and this page's reads land
+/// while the app's own token loader is still going, so they come back as a bare
+/// "Failed to fetch". Every read on this page goes through here. An earlier
+/// version retried only the per-vault reads and left the factory call bare,
+/// which meant a hiccup one level up produced "Could not read the factory" and
+/// no list at all, while the level below it was carefully resilient.
+async function agRetry(fn, attempts = 5) {
+  const backoff = [0, 700, 1600, 3000, 5000];
+  let last = null;
+  for (let i = 0; i < Math.min(attempts, backoff.length); i++) {
+    if (backoff[i]) await new Promise((r) => setTimeout(r, backoff[i]));
+    try { return await fn(); } catch (e) { last = e; }
+  }
+  throw last;
+}
+
 /// Read one vault's live state. Sequential by design: Arc accepts a batch and
 /// then rate limits it, returning one result and errors for the rest, so a
 /// Promise.all here loses most of its reads (gotcha 1).
@@ -3244,9 +3262,9 @@ async function agLoad(force) {
     // rate limits them, so a Promise.all here loses most of its reads and the
     // page silently shows fewer vaults than exist (gotcha 1).
     const f = new ethers.Contract(agFactory(), AGENT_FACTORY_ABI, rp);
-    const n = Number(await f.vaultCount());
+    const n = Number(await agRetry(() => f.vaultCount()));
     const addrs = [];
-    for (let i = 0; i < n; i += 100) addrs.push(...await f.allVaultsSlice(i, 100));
+    for (let i = 0; i < n; i += 100) addrs.push(...await agRetry(() => f.allVaultsSlice(i, 100)));
 
     const out = [];
     const failed = [];
@@ -3256,18 +3274,8 @@ async function agLoad(force) {
       // traffic fails transiently. Swallowing that turned a temporary error
       // into "no vaults yet", which reads as an empty product rather than a
       // hiccup, and is exactly how the first version of this page shipped.
-      // Backoff is generous because the collision is with this app's OWN
-      // startup traffic: opening Agent straight from Discover lands while the
-      // token loader is still reading, Arc rate limits the pile-up, and the
-      // read comes back as a bare "Failed to fetch". Measured: it fails for
-      // several seconds after load, then succeeds first try. Short retries
-      // (400ms, 800ms) were not enough and still showed an error on arrival.
       let rec = null, lastErr = null;
-      const backoff = [0, 700, 1600, 3000, 5000];
-      for (let attempt = 0; attempt < backoff.length && !rec; attempt++) {
-        if (backoff[attempt]) await new Promise((r) => setTimeout(r, backoff[attempt]));
-        try { rec = await agReadVault(a); } catch (e) { lastErr = e; }
-      }
+      try { rec = await agRetry(() => agReadVault(a)); } catch (e) { lastErr = e; }
       if (rec) out.push(rec);
       else failed.push({ address: a, err: (lastErr && (lastErr.shortMessage || lastErr.message)) || "unreadable" });
     }
