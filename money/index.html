@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>mintd.money | Launch. Lock. Trade.</title>
-<link rel="icon" type="image/png" href="logo.png" />
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
 <link rel="manifest" href="/manifest.webmanifest" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <meta name="theme-color" content="#0a0d12" media="(prefers-color-scheme: dark)" />
@@ -1115,7 +1115,7 @@
 
 <header>
   <div class="logo" onclick="go('discover')" style="display:flex;align-items:center;gap:9px">
-    <img src="logo.png" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />
+    <img src="logo.svg" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />
     <span>mintd<b>.money</b><small>AGENTIC LIQUIDITY</small></span>
   </div>
   <nav>
@@ -4524,7 +4524,7 @@ async function loadPortfolio() {
   held.sort((a, b) => b.val - a.val);
   total += held.reduce((s, t) => s + t.val, 0);
   $("pfTokens").innerHTML = held.length ? held.map((t) => {
-    const av = t.meta && t.meta.image ? `<img src="${safeImg(t.meta.image)}" onerror="this.remove()">` : (t.platform ? `<img src="logo.png" onerror="this.remove()">` : t.symbol.slice(0, 2));
+    const av = t.meta && t.meta.image ? `<img src="${safeImg(t.meta.image)}" onerror="this.remove()">` : (t.platform ? `<img src="logo.svg" onerror="this.remove()">` : t.symbol.slice(0, 2));
     return `<div class="trade" style="display:flex;align-items:center;gap:12px;margin-bottom:8px;padding:12px 16px;cursor:pointer" onclick="openToken('${t.addr}')">
       <div class="avatar" style="width:36px;height:36px;font-size:12px">${av}</div>
       <div style="flex:1"><b>${esc(t.name)}</b> <span style="color:var(--green)">$${esc(t.symbol)}</span>

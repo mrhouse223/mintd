@@ -122,17 +122,26 @@ sub("legacy dark palette",
     --ink: #e8edf2; --dim: #8b98a8; --green: #4ade80; --green2: #22c55e;
     --green-soft: rgba(74,222,128,.1); --gold: #f0a500; --gold-soft: rgba(240,165,0,.1);`);
 
+// ---------------------------------------------------------------- branding
+// mintd.money has its own mark (money/logo.svg and the icon set rasterised from
+// it), so the header image and the favicon point at the SVG rather than the
+// launchpad's logo.png. Both header uses and the favicon are switched.
+sub("header logo",
+  `<img src="logo.png" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />`,
+  `<img src="logo.svg" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />`);
+sub("platform token avatar", `t.platform ? \`<img src="logo.png" onerror="this.remove()">\``,
+  `t.platform ? \`<img src="logo.svg" onerror="this.remove()">\``);
+sub("favicon", `<link rel="icon" type="image/png" href="logo.png" />`,
+  `<link rel="icon" type="image/svg+xml" href="logo.svg" />`);
+
 fs.writeFileSync(OUT, s);
 
 // ------------------------------------------------------------------ assets
-// The app references these by bare filename, so they have to sit beside
-// index.html. Copied rather than symlinked: Netlify does not reliably follow
-// symlinks, and a missing icon is a 404 nobody notices until the PWA install
-// prompt looks broken.
-const ASSETS = [
-  "logo.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png",
-  "icon-maskable-512.png", "mintr.png", "mgld.png", "sw.js",
-];
+// Only assets the launchpad and this site genuinely SHARE are copied. The
+// brand mark is NOT: money/logo.svg and the icon PNGs rasterised from it are
+// money-specific and committed, and copying the launchpad's logo over them
+// would silently rebrand this site back on every build.
+const ASSETS = ["mintr.png", "mgld.png", "sw.js"];
 let copied = 0;
 for (const f of ASSETS) {
   const from = path.join(ROOT, "frontend", f);
