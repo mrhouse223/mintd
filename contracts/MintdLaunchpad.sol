@@ -210,6 +210,10 @@ contract MintdLaunchpad {
     int24 public constant TICK_SPACING = 200;
     int24 public constant MAX_TICK = 887_200;             // spacing-aligned
     uint256 public constant MIN_CREATOR_SHARE_BPS = 5_000;
+    /// @notice Ceiling on the launch fee, in the quote asset's NATIVE 18-dec
+    /// units. Generous against a 1 USDC fee, and low enough that it can never
+    /// swallow a launcher's dev buy.
+    uint256 public constant MAX_CREATION_FEE = 100e18;
 
     uint256 private constant Q96 = 0x1000000000000000000000000;
     // sqrtRatioAtTick(+/- 887200), the fixed outer edge of every launch
@@ -400,14 +404,13 @@ contract MintdLaunchpad {
 
         emit TokenLaunched(token, msg.sender, pool, positionId, name_, symbol_, metadataURI_);
 
-        if (creationFee > 0) _sendValue(opsRecipient, creationFee);
-
         uint256 buyValue = msg.value - creationFee;
         if (buyValue > 0) {
             uint256 amountIn = buyValue / nativeToErc20;
             uint256 erc20Bal = quoteToken.balanceOf(address(this));
             if (amountIn > erc20Bal) amountIn = erc20Bal; // fractional reconciliation guard
             require(amountIn > 0, "dev buy too small");
+            uint256 devBalBefore = MemeToken20(token).balanceOf(msg.sender);
             quoteToken.approve(address(swapRouter), amountIn);
             uint256 out = swapRouter.exactInputSingle(
                 ISwapRouter02.ExactInputSingleParams({
@@ -422,11 +425,30 @@ contract MintdLaunchpad {
             );
             // Checked on tokens received, not on quote spent. The quote figure
             // is derived from the curve and could drift; this cannot.
-            require(out <= maxDevBuyTokens, "dev buy over cap");
-            emit DevBuy(token, msg.sender, amountIn, out);
+            // Measured, not taken from the router's return value. `swapRouter` is
+            // immutable and its Arc address was unconfirmed at deploy time, so a
+            // wrong-but-callable address could return 0 without transferring:
+            // `out <= cap` would pass, the launch would SUCCEED, and the creator
+            // would silently receive nothing. A balance delta cannot be lied about.
+            uint256 got = MemeToken20(token).balanceOf(msg.sender) - devBalBefore;
+            require(got >= minTokensOut, "dev buy short");
+            require(got <= maxDevBuyTokens, "dev buy over cap");
+            // Left at zero so a router that did not pull cannot spend later.
+            quoteToken.approve(address(swapRouter), 0);
+            emit DevBuy(token, msg.sender, amountIn, got);
         } else {
             require(minTokensOut == 0, "no buy value");
         }
+        // Paid LAST, deliberately. `_sendValue` is a bare `call` forwarding all
+        // remaining gas, and `opsRecipient` is owner-settable, so paying it
+        // before the dev buy handed an owner-chosen contract control at the exact
+        // moment the pool was live at the launch price and the creator had not
+        // yet bought. It could take the floor and leave the creator's own buy to
+        // execute into a worse curve, unprotected because callers pass
+        // minTokensOut = 0. The dev-buy cap did not help: it bounds this
+        // contract's swap, not a callback's. Nothing value-sensitive follows
+        // this line, so moving it closes the hole without trusting the recipient.
+        if (creationFee > 0) _sendValue(opsRecipient, creationFee);
     }
 
     /// @notice Launch paired against MINTR instead of the quote asset. This
@@ -449,10 +471,9 @@ contract MintdLaunchpad {
 
         emit TokenLaunched(token, msg.sender, pool, positionId, name_, symbol_, metadataURI_);
 
-        if (creationFee > 0) _sendValue(opsRecipient, creationFee);
-
         if (mintrDevBuy > 0) {
             require(mintr.transferFrom(msg.sender, address(this), mintrDevBuy), "mintr in");
+            uint256 devBalBeforeM = MemeToken20(token).balanceOf(msg.sender);
             mintr.approve(address(swapRouter), mintrDevBuy);
             uint256 out = swapRouter.exactInputSingle(
                 ISwapRouter02.ExactInputSingleParams({
@@ -465,11 +486,24 @@ contract MintdLaunchpad {
                     sqrtPriceLimitX96: 0
                 })
             );
-            require(out <= maxDevBuyTokens, "dev buy over cap");
-            emit DevBuy(token, msg.sender, mintrDevBuy, out);
+            uint256 gotM = MemeToken20(token).balanceOf(msg.sender) - devBalBeforeM;
+            require(gotM >= minTokensOut, "dev buy short");
+            require(gotM <= maxDevBuyTokens, "dev buy over cap");
+            mintr.approve(address(swapRouter), 0);
+            emit DevBuy(token, msg.sender, mintrDevBuy, gotM);
         } else {
             require(minTokensOut == 0, "no buy value");
         }
+        // Paid LAST, deliberately. `_sendValue` is a bare `call` forwarding all
+        // remaining gas, and `opsRecipient` is owner-settable, so paying it
+        // before the dev buy handed an owner-chosen contract control at the exact
+        // moment the pool was live at the launch price and the creator had not
+        // yet bought. It could take the floor and leave the creator's own buy to
+        // execute into a worse curve, unprotected because callers pass
+        // minTokensOut = 0. The dev-buy cap did not help: it bounds this
+        // contract's swap, not a callback's. Nothing value-sensitive follows
+        // this line, so moving it closes the hole without trusting the recipient.
+        if (creationFee > 0) _sendValue(opsRecipient, creationFee);
     }
 
     function _openMarket(address token, address quote, uint256 startPrice1e18, uint256 scale)
@@ -693,6 +727,11 @@ contract MintdLaunchpad {
         require(_creatorShareBps >= MIN_CREATOR_SHARE_BPS && _creatorShareBps <= 10_000, "bad share");
         require(_buybackShareBps <= 10_000, "bad buyback share");
         require(_startPriceQuote1e18 > 0, "bad price");
+        // Bounded so a pending launch cannot have its entire dev buy taken as a
+        // "fee". With no ceiling, raising the fee to match an in-flight msg.value
+        // left buyValue at 0, which the minTokensOut == 0 branch accepts, so the
+        // launcher got a successful transaction and no tokens.
+        require(_creationFee <= MAX_CREATION_FEE, "fee too high");
         creationFee = _creationFee;
         creatorShareBps = _creatorShareBps;
         buybackShareBps = _buybackShareBps;
