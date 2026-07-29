@@ -1,0 +1,28 @@
+{
+  "chain": "arc-mainnet",
+  "chainId": 5042,
+  "contracts": {
+    "ArcSwapLaunchpad": "0x7D1894CBbf12E086D1530C01B131A9F5F993DFC9",
+    "UniswapV3Factory": "0xf0db7b58379503491d857dB50AC9ece64c653918",
+    "NonfungiblePositionManager": "0x39654A85A4C05127f5Fd6ED22CAeC077A0fB1377",
+    "SwapRouter02": "0x53BF6B0684Ec7eF91e1387Da3D1a1769bC5A6F77",
+    "USDC": "0x3600000000000000000000000000000000000000"
+  },
+  "verified": {
+    "router": "CONFIRMED via the wallet-driven deploy page: has 24497 bytes of code, factory() matches positionManager.factory(), and the exactInputSingle selector 0x04e45aaf the launchpad calls is present in its bytecode.",
+    "launchpad": "All 11 immutables read back and diffed after deploy; every field matched.",
+    "deployTx": "0xbea28b6d713d6d90309d8fda8e701760c0d2fb0ed95d93f38e77ea66b4a518fb"
+  },
+  "terms": {
+    "creatorShareBps": 8000,
+    "buybackShareBps": 0,
+    "note": "80/20. buybackShareBps 0 with both protocol recipients equal means nothing burns and nothing buys back; the protocol share is a plain transfer.",
+    "creationFee": "1000000000000000000",
+    "creationFeeHuman": "1 USDC (native 18-dec)",
+    "devBuyCapBps": 500,
+    "startPriceQuote1e18": "3000000000000",
+    "startPriceHuman": "0.000003 USDC per token = 3,000 USDC market cap on a 1B supply"
+  },
+  "owner": "0x64838C341956FcE51FA6575c5F593D0415f23E72",
+  "rpcNote": "No reachable Arc mainnet RPC answers reads. thirdweb returns -32603 for everything except eth_chainId; Alchemy has no ARC_MAINNET. The site cannot render chain data until a working read endpoint is configured."
+}

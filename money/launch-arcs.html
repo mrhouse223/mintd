@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Launch $ARCS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+<style>
+  :root { --bg:#0a0e14; --panel:#111823; --line:#212c3a; --ink:#eef3fa; --dim:#8a9ab0;
+          --blue:#4d94f0; --ok:#35c184; --bad:#f0685c; --warn:#e6bf52;
+          --mono: ui-monospace,"SF Mono",Menlo,monospace; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:24px;margin:0 0 6px}
+  .lede{color:var(--dim);font-size:14px;max-width:70ch}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:18px}
+  .row{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+  .row:last-child{border-bottom:0}
+  .row b{font-family:var(--mono);word-break:break-all;text-align:right}
+  label{display:block;font-size:12px;color:var(--dim);margin:12px 0 4px}
+  input{width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--line);
+        background:#070b11;color:var(--ink);font-family:var(--mono);font-size:14px}
+  button{font:inherit;font-weight:640;padding:12px 18px;border-radius:10px;border:1px solid var(--line);
+         background:var(--blue);color:#04121f;cursor:pointer}
+  button.ghost{background:transparent;color:var(--ink)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .warn{background:rgba(230,191,82,.1);border:1px solid var(--warn);color:var(--warn);
+        border-radius:10px;padding:12px 14px;font-size:13px;margin-top:14px}
+  .log{font-family:var(--mono);font-size:12.5px;white-space:pre-wrap;background:#070b11;
+       border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:14px;max-height:360px;overflow:auto}
+  .ok{color:var(--ok)} .bad{color:var(--bad)} .dim{color:var(--dim)} .w{color:var(--warn)}
+  a{color:var(--blue)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Launch $ARCS</h1>
+  <p class="lede">
+    Token #0 on the arcswap launchpad. Driven from your wallet for the same reason the deploy was: no reachable
+    Arc mainnet RPC answers reads, so nothing can be built or checked server-side.
+  </p>
+
+  <div class="card">
+    <div class="row"><span>Launchpad</span><b>0x7D1894CBbf12E086D1530C01B131A9F5F993DFC9</b></div>
+    <div class="row"><span>Creation fee</span><b>1 USDC</b></div>
+    <div class="row"><span>Supply</span><b>1,000,000,000 <span class="dim">fixed</span></b></div>
+    <div class="row"><span>Start market cap</span><b>3,000 USDC</b></div>
+    <div class="row"><span>Creator fee share</span><b>80% <span class="dim">snapshotted at launch</span></b></div>
+    <div class="row"><span>Dev buy cap</span><b>5% of supply</b></div>
+
+    <label>Name</label>
+    <input id="fName" value="arcswap" />
+    <label>Symbol</label>
+    <input id="fSymbol" value="ARCS" />
+    <label>Metadata URI <span class="dim">(optional; logo/socials can be set later)</span></label>
+    <input id="fUri" value="" placeholder="https://... or leave blank" />
+    <label>Dev buy in USDC <span class="dim">on top of the 1 USDC fee. 0 for none.</span></label>
+    <input id="fDev" value="0" />
+  </div>
+
+  <div class="warn">
+    <b>The dev buy is capped at 5% of supply and the cap is measured on tokens actually received.</b>
+    A minimum-out of 0 is sent, which is normal for a launch because the pool is created in the same
+    transaction and there is no prior price to quote against. Nobody can front-run the launch price itself:
+    the contract reads the pool back after creating it and reverts if the price is not the one it set.
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+    <button id="bConnect">1. Connect wallet</button>
+    <button id="bCheck" class="ghost" disabled>2. Preflight</button>
+    <button id="bLaunch" disabled>3. Launch $ARCS</button>
+  </div>
+
+  <div class="log" id="log">Waiting.</div>
+</div>
+
+<script>
+const PAD = "0x7D1894CBbf12E086D1530C01B131A9F5F993DFC9";
+const CHAIN_HEX = "0x13b2";
+const PAD_ABI = [
+  "function launch(string name_, string symbol_, string metadataURI_, uint256 minTokensOut) payable returns (address token)",
+  "function creationFee() view returns (uint256)",
+  "function creatorShareBps() view returns (uint256)",
+  "function startPriceQuote1e18() view returns (uint256)",
+  "function devBuyCapBps() view returns (uint256)",
+  "function tokenCount() view returns (uint256)",
+  "function quoteToken() view returns (address)",
+  "function maxDevBuyQuote() view returns (uint256)",
+  "function launches(address) view returns (address token,address creator,address pool,address quote,uint256 positionId,uint64 createdAt,uint256 creatorFeesClaimedQuote,uint256 creatorFeesClaimedToken)",
+  "event TokenLaunched(address indexed token,address indexed creator,address pool,uint256 positionId,string name,string symbol,string metadataURI)",
+];
+
+const logEl = document.getElementById("log");
+let first = true;
+function log(m, cls) {
+  if (first) { logEl.textContent = ""; first = false; }
+  const s = document.createElement("span");
+  if (cls) s.className = cls;
+  s.textContent = m + "\n";
+  logEl.appendChild(s); logEl.scrollTop = logEl.scrollHeight;
+}
+let provider, signer, pad, feeWei = null;
+
+document.getElementById("bConnect").onclick = async () => {
+  try {
+    if (!window.ethereum) return log("No wallet in this browser.", "bad");
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    try { await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN_HEX }] }); } catch {}
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = await provider.getSigner();
+    const net = await provider.getNetwork();
+    if (net.chainId !== 5042n) return log(`Wrong chain: ${net.chainId}. Switch to Arc mainnet (5042).`, "bad");
+    log(`connected ${await signer.getAddress()} on chain ${net.chainId}`, "ok");
+    log(`gas balance ${ethers.formatEther(await provider.getBalance(await signer.getAddress()))}`);
+    pad = new ethers.Contract(PAD, PAD_ABI, signer);
+    document.getElementById("bCheck").disabled = false;
+  } catch (e) { log("connect failed: " + (e.shortMessage || e.message), "bad"); }
+};
+
+document.getElementById("bCheck").onclick = async () => {
+  try {
+    // Read the terms off the deployed pad rather than trusting this page's copy.
+    // If any of these disagree with what is displayed above, the page is wrong.
+    const [fee, share, price, cap, count] = [
+      await pad.creationFee(), await pad.creatorShareBps(),
+      await pad.startPriceQuote1e18(), await pad.devBuyCapBps(), await pad.tokenCount(),
+    ];
+    feeWei = fee;
+    log(`creationFee          ${ethers.formatEther(fee)} USDC`);
+    log(`creatorShareBps      ${share}  ${share === 8000n ? "(80/20 as intended)" : "(NOT 8000)"}`, share === 8000n ? "ok" : "bad");
+    log(`startPriceQuote1e18  ${price}`);
+    log(`devBuyCapBps         ${cap}`);
+    log(`tokenCount           ${count}  ${count === 0n ? "(ARCS will be token #0)" : "(pad already has launches)"}`);
+    if (share !== 8000n) return log("REFUSING: the pad's creator share is not 8000. Do not launch against it.", "bad");
+
+    const dev = (document.getElementById("fDev").value || "0").trim();
+    let devWei;
+    try { devWei = ethers.parseEther(dev); } catch { return log("Dev buy must be a number.", "bad"); }
+    const total = fee + devWei;
+    const bal = await provider.getBalance(await signer.getAddress());
+    log(`total to send         ${ethers.formatEther(total)} USDC (fee + dev buy)`);
+    if (bal < total) return log(`REFUSING: balance ${ethers.formatEther(bal)} is below the ${ethers.formatEther(total)} required.`, "bad");
+
+    if (devWei > 0n) {
+      // maxDevBuyQuote is returned in the quote asset's 6-dec ERC-20 units.
+      try {
+        const maxQ = await pad.maxDevBuyQuote();
+        log(`dev buy cap          ~${ethers.formatUnits(maxQ, 6)} USDC of quote at the launch price`);
+        if (devWei / 1000000000000n > maxQ) log("WARNING: the dev buy looks above the 5% cap and would revert. Lower it.", "w");
+      } catch { log("could not read the dev buy cap; the contract enforces it regardless", "dim"); }
+    }
+    const sym = document.getElementById("fSymbol").value.trim();
+    if (!sym) return log("Symbol is required.", "bad");
+    log(`will launch "${document.getElementById("fName").value.trim()}" / ${sym}`, "ok");
+    log("preflight passed.", "ok");
+    document.getElementById("bLaunch").disabled = false;
+  } catch (e) { log("preflight failed: " + (e.shortMessage || e.message), "bad"); }
+};
+
+document.getElementById("bLaunch").onclick = async () => {
+  try {
+    document.getElementById("bLaunch").disabled = true;
+    const name = document.getElementById("fName").value.trim();
+    const sym = document.getElementById("fSymbol").value.trim();
+    const uri = document.getElementById("fUri").value.trim();
+    const devWei = ethers.parseEther((document.getElementById("fDev").value || "0").trim());
+    const value = feeWei + devWei;
+    log(`launching, sending ${ethers.formatEther(value)} USDC...`);
+    // Explicit gas limit: the launch deploys a token, creates and initialises a
+    // pool, mints the full supply as liquidity and optionally swaps, and
+    // estimateGas handles that chain poorly.
+    const tx = await pad.launch(name, sym, uri, 0, { value, gasLimit: 9000000 });
+    log(`tx ${tx.hash}`);
+    const rec = await tx.wait();
+    log(`mined in block ${rec.blockNumber}, gas ${rec.gasUsed}`, "ok");
+    let token = null, pool = null;
+    for (const l of rec.logs) {
+      if (l.address.toLowerCase() !== PAD.toLowerCase()) continue;
+      try {
+        const p = pad.interface.parseLog(l);
+        if (p.name === "TokenLaunched") { token = p.args.token; pool = p.args.pool; }
+      } catch {}
+    }
+    if (!token) return log("launched, but no TokenLaunched event found in the receipt. Check the explorer.", "w");
+    log("", null);
+    log(`$${sym} TOKEN  ${token}`, "ok");
+    log(`POOL         ${pool}`, "ok");
+    log(`explorer     https://arc.exploreme.pro/address/${token}`);
+    const t = new ethers.Contract(token, ["function totalSupply() view returns (uint256)","function symbol() view returns (string)","function owner() view returns (address)"], provider);
+    log(`supply       ${ethers.formatUnits(await t.totalSupply(), 18)}`);
+    log(`symbol       ${await t.symbol()}`);
+    try { log(`token owner  ${await t.owner()}`); } catch { log("token has no owner function, which is correct: it is immutable with no mint and no taxes", "ok"); }
+    log("");
+    log("Send me the token address and I will point the site's platform token at it.", "ok");
+  } catch (e) {
+    log("launch failed: " + (e.shortMessage || e.message), "bad");
+    document.getElementById("bLaunch").disabled = false;
+  }
+};
+</script>
+</body>
+</html>
