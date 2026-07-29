@@ -31,6 +31,7 @@ for (const rel of [
   "contracts/test/MockFeeToken.sol",
   "contracts/test/MockFakePool.sol",
   "contracts/test/TestToken.sol",
+  "contracts/test/MockTokenMessenger.sol",
   // ArcLaunchpad redeclares MemeToken20 verbatim from InstantLaunchpad, and
   // artifacts are keyed by contract NAME, so build/MemeToken20.json is written
   // twice and the last one wins. The two are NOT interchangeable even though
@@ -51,6 +52,7 @@ for (const rel of [
   "contracts/AgentVault.sol",
   "contracts/AgentVaultFactory.sol",
   "contracts/AgentLens.sol",
+  "contracts/BridgeFeeRouter.sol",
 ]) {
   sources[rel] = { content: fs.readFileSync(path.join(root, rel), "utf8") };
 }
