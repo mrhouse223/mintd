@@ -12,7 +12,7 @@
       "token": "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       "createdAt": 1784844341,
       "usdtIs0": true,
-      "allTime": "546372926730"
+      "allTime": "546373941234"
     },
     "0x63ccf0c040845aa59a3b0898b28bf6c090850c2b": {
       "kind": "v3",
@@ -565,7 +565,7 @@
       "token": "0xB2E5435B97178Df35A9b5E0F8F4ed7388ED4a8a8",
       "createdAt": 1785000830,
       "usdtIs0": true,
-      "allTime": "11980103"
+      "allTime": "21781485"
     },
     "0x70687c0e6c94dd635339c65164a8dcbfd27f7804": {
       "kind": "v3",
@@ -879,5 +879,5 @@
       "allTime": "140701839"
     }
   },
-  "lastBlock": 33600418
+  "lastBlock": 33600852
 }
