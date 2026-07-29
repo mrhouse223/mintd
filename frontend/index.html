@@ -1120,6 +1120,7 @@
   </div>
   <nav>
     <button id="nav-discover" class="active" onclick="go('discover')">Discover</button>
+    <button id="nav-agent" onclick="go('agent')">Agent</button>
     <button id="nav-launch" onclick="go('launch')">Launch</button>
     <button id="nav-mintswap" onclick="go('mintswap')">Swap</button>
     <button id="nav-earn" onclick="go('earn')">Earn</button>
@@ -1950,6 +1951,42 @@
     </div>
   </section>
 
+  <!-- AGENT: live view of the AgentVaultFactory and every vault it has made.
+       Current state is read from the chain on each visit, so this is the
+       contracts themselves rather than a snapshot of them. Only the event
+       history comes from agent-data.json, because reconstructing it in the
+       browser would mean thousands of getLogs calls against a 500-block cap. -->
+  <section class="view" id="view-agent">
+    <div class="launchC" style="max-width:1040px">
+      <div class="heroC" style="margin:28px auto 20px">
+        <div class="badgepill">AGENT VAULTS</div>
+        <h1 style="font-size:40px">An agent that cannot pick a price.</h1>
+        <p>Each vault holds one Uniswap V3 position. The agent proposes <b>timing</b> and nothing else: the vault derives every value-carrying number from a TWAP, so a stolen keeper key can waste gas but can never choose an execution price, a venue or a range.</p>
+      </div>
+
+      <div class="heroStats" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
+        <div class="hstat"><b id="agVaults">–</b><label>VAULTS</label></div>
+        <div class="hstat"><b id="agValue" style="color:var(--green)">–</b><label>MANAGED VALUE</label></div>
+        <div class="hstat"><b id="agRebs" style="color:var(--green2)">–</b><label>REBALANCES</label></div>
+        <div class="hstat"><b id="agCost">–</b><label>COST OF TRADING</label></div>
+      </div>
+
+      <div class="trade">
+        <div class="mkthead">
+          <h2>Vaults</h2>
+          <div class="spacer"></div>
+          <span class="live"><span class="dot"></span><span id="agUpd">–</span></span>
+          <button class="chip" onclick="agLoad(true)"><svg class="ic" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg> Refresh</button>
+        </div>
+        <div id="agRows"><div class="empty">Loading…</div></div>
+      </div>
+
+      <div class="finenote" style="margin-top:12px">
+        A rebalance burns the position, swaps to the ratio the new range needs and mints again, so it crosses the pool fee every time. A small loss per move is the expected outcome, not a fault. The vault re-values itself against the TWAP afterwards and reverts if the drop exceeds the owner's tolerance.
+      </div>
+    </div>
+  </section>
+
   <!-- HOLDERS: public standing board. Reads holder-scores.json, which the
        holder-ledger indexer regenerates. Deliberately shows SHARES, never token
        amounts: there is no Arc token, no supply decision and no live Arc
@@ -2212,7 +2249,7 @@ const CHAINS = {
     },
     // holders: the standing board only exists for MINTD on Stable, which is
     // the only token the ledger indexes.
-    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, screener: true, holders: true },
+    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, screener: true, holders: true, agent: false },
     statsFile: "stats.json",
     faucet: null,
     // Stable rejects any batch outright, so the shared provider batches only
@@ -2255,12 +2292,16 @@ const CHAINS = {
       mintswapFactory: "0x5481A9aBAC5747252Dda1f40A269A2D48Af2b8Db",
       mintswapRouter: "0x7de1C45839C56f8CC3252C5F394b3410393d996d",
       furnace: "0x17E5C63ab0Ff682e5C1Cb2e391870d1a57104C5F",
+      // AgentVaultFactory. Immutable, no owner, no setters: the position
+      // manager and router every vault it creates will approve tokens to are
+      // fixed at its construction, which is what makes isVault() worth reading.
+      agentFactory: "0x42D58A7dFB4235F25F8ef6Bf84753B4F9A6531be",
     },
     // No gold engine and no MINTD token on Arc yet, so those pages are hidden
     // rather than shown broken.
     // No bridge to a testnet: funds come from the faucet, and offering a
     // bridge here invites someone to send real money to a throwaway chain.
-    features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true, screener: true, bridge: false },
+    features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true, screener: true, bridge: false, agent: false },
     statsFile: null,   // no indexer running against Arc yet
     faucet: "https://faucet.circle.com",
     // Arc accepts batches and then rate limits them: a batch of 8 returns one
@@ -2721,6 +2762,9 @@ async function route() {
   } else if (h === "holders") {
     showView("holders");
     hoLoad();
+  } else if (h === "agent") {
+    showView("agent");
+    agLoad();
   } else if (h === "dev") {
     showView("dev");
     if (!tokens.length && padAddr()) await loadAll(); // symbols for the table
@@ -2743,7 +2787,8 @@ function applyChainUi() {
   // broken: Arc has no gold engine and no MINTD, so those read as failures.
   const map = { "nav-launch": "launch", "nav-mintswap": "swap", "nav-earn": "earn",
                 "nav-mintr": "mintr", "nav-synth": "gold", "nav-locker": "locker", "nav-burn": "burn",
-                "nav-screener": "screener", "nav-bridge": "bridge", "nav-holders": "holders" };
+                "nav-screener": "screener", "nav-bridge": "bridge", "nav-holders": "holders",
+                "nav-agent": "agent" };
   for (const [id, feat] of Object.entries(map)) {
     const b = $(id);
     if (b) b.style.display = NET.features[feat] === false ? "none" : "";
@@ -3044,6 +3089,319 @@ function hoPaint() {
   $("hoMStart").textContent = nf(d.startBlock, 0);
   $("hoMethodSrc").innerHTML = `<a href="https://github.com/mrhouse223/mintd/blob/main/scripts/holder-ledger.js" target="_blank" rel="noopener">scripts/holder-ledger.js ↗</a>`;
   hoTrend();
+}
+
+// ============================================================ AGENT VAULTS
+const AGENT_FACTORY_ABI = [
+  "function vaultCount() view returns (uint256)",
+  "function allVaultsSlice(uint256,uint256) view returns (address[])",
+];
+const AGENT_VAULT_ABI = [
+  "function owner() view returns (address)",
+  "function agent() view returns (address)",
+  "function pool() view returns (address)",
+  "function npm() view returns (address)",
+  "function mode() view returns (uint8)",
+  "function positionId() view returns (uint256)",
+  "function valueNow() view returns (uint256)",
+  "function valueCheckpoint() view returns (uint256)",
+  "function token0() view returns (address)",
+  "function token1() view returns (address)",
+  "function valueInToken0() view returns (bool)",
+];
+const AGENT_POOL_ABI = [
+  "function slot0() view returns (uint160,int24,uint16,uint16,uint16,uint8,bool)",
+  "function fee() view returns (uint24)",
+];
+const AGENT_NPM_ABI = [
+  "function positions(uint256) view returns (uint96,address,address,address,uint24,int24,int24,uint128,uint256,uint256,uint128,uint128)",
+];
+const AGENT_MODES = ["Paused", "Propose only", "Timelocked", "Autonomous"];
+
+let agVaults = null, agHistory = null, agFailed = [];
+
+function agFactory() { return NET.mintd && NET.mintd.agentFactory; }
+
+/// Raw integer to a decimal string, full precision. A rebalance that costs
+/// 0.000437 must never render as 0.00, so this does not round to 2dp.
+function agUnits(raw, dec, maxFrac) {
+  let s = String(raw), neg = s.startsWith("-");
+  s = s.replace("-", "").padStart(dec + 1, "0");
+  const whole = s.slice(0, s.length - dec) || "0";
+  let frac = dec ? s.slice(s.length - dec) : "";
+  if (maxFrac !== undefined) frac = frac.slice(0, maxFrac);
+  frac = frac.replace(/0+$/, "");
+  return (neg ? "-" : "") + Number(whole).toLocaleString() + (frac ? "." + frac : "");
+}
+
+/// Ticks are log scale. Showing only the raw tick says nothing about the price
+/// the position actually covers, which is the thing anyone looking wants.
+function agPrice(tick, d0, d1) {
+  const p = Math.pow(1.0001, tick) * Math.pow(10, d0 - d1);
+  if (!isFinite(p) || p <= 0) return "–";
+  if (p >= 1000) return nf(p, 0);
+  if (p >= 1) return p.toFixed(3);
+  return p.toPrecision(4);
+}
+
+/// Read one vault's live state. Sequential by design: Arc accepts a batch and
+/// then rate limits it, returning one result and errors for the rest, so a
+/// Promise.all here loses most of its reads (gotcha 1).
+async function agReadVault(a) {
+  const v = new ethers.Contract(a, AGENT_VAULT_ABI, rp);
+  const rec = { address: a };
+  rec.owner = await v.owner();
+  rec.agent = await v.agent();
+  rec.pool = await v.pool();
+  rec.mode = Number(await v.mode());
+  rec.positionId = (await v.positionId()).toString();
+  rec.checkpoint = (await v.valueCheckpoint()).toString();
+  rec.inToken0 = await v.valueInToken0();
+  const t0 = await v.token0(), t1 = await v.token1();
+  rec.t0 = await agToken(t0);
+  rec.t1 = await agToken(t1);
+  rec.num = rec.inToken0 ? rec.t0 : rec.t1;
+  // valueNow reverts when the pool cannot produce a TWAP. That is a real state
+  // for a fresh pool, not a fault, and a vault refusing to report a number it
+  // cannot stand behind is the correct behaviour. Distinguished from a failed
+  // read, which retries.
+  try { rec.value = (await v.valueNow()).toString(); } catch { rec.value = null; }
+  const pool = new ethers.Contract(rec.pool, AGENT_POOL_ABI, rp);
+  rec.tick = Number((await pool.slot0())[1]);
+  rec.fee = Number(await pool.fee());
+  if (rec.positionId !== "0") {
+    const npm = new ethers.Contract(await v.npm(), AGENT_NPM_ABI, rp);
+    const p = await npm.positions(rec.positionId);
+    rec.lower = Number(p[5]); rec.upper = Number(p[6]); rec.liq = p[7].toString();
+    rec.inRange = rec.tick >= rec.lower && rec.tick < rec.upper;
+  }
+  return rec;
+}
+
+async function agLoad(force) {
+  const box = $("agRows");
+  if (!agFactory()) {
+    box.innerHTML = `<div class="empty">No agent factory on ${esc(NET.short)}.</div>`;
+    return;
+  }
+  if (agVaults && !force) { agPaint(); return; }
+  box.innerHTML = `<div class="empty">Reading the factory…</div>`;
+  try {
+    // Live from the chain, one call at a time. Arc accepts batches and then
+    // rate limits them, so a Promise.all here loses most of its reads and the
+    // page silently shows fewer vaults than exist (gotcha 1).
+    const f = new ethers.Contract(agFactory(), AGENT_FACTORY_ABI, rp);
+    const n = Number(await f.vaultCount());
+    const addrs = [];
+    for (let i = 0; i < n; i += 100) addrs.push(...await f.allVaultsSlice(i, 100));
+
+    const out = [];
+    const failed = [];
+    for (const a of addrs) {
+      // Retried, and never silently dropped. Arc accepts a burst and then rate
+      // limits it, so a vault read that collides with the app's own startup
+      // traffic fails transiently. Swallowing that turned a temporary error
+      // into "no vaults yet", which reads as an empty product rather than a
+      // hiccup, and is exactly how the first version of this page shipped.
+      // Backoff is generous because the collision is with this app's OWN
+      // startup traffic: opening Agent straight from Discover lands while the
+      // token loader is still reading, Arc rate limits the pile-up, and the
+      // read comes back as a bare "Failed to fetch". Measured: it fails for
+      // several seconds after load, then succeeds first try. Short retries
+      // (400ms, 800ms) were not enough and still showed an error on arrival.
+      let rec = null, lastErr = null;
+      const backoff = [0, 700, 1600, 3000, 5000];
+      for (let attempt = 0; attempt < backoff.length && !rec; attempt++) {
+        if (backoff[attempt]) await new Promise((r) => setTimeout(r, backoff[attempt]));
+        try { rec = await agReadVault(a); } catch (e) { lastErr = e; }
+      }
+      if (rec) out.push(rec);
+      else failed.push({ address: a, err: (lastErr && (lastErr.shortMessage || lastErr.message)) || "unreadable" });
+    }
+    agFailed = failed;
+
+    agVaults = out;
+
+    // History is the one thing the browser cannot rebuild: reconstructing it
+    // means scanning logs against a 500-block cap on a chain making four
+    // blocks a second. The indexer banks it instead.
+    try {
+      const r = await fetch("/agent-data.json" + (force ? "?t=" + Date.now() : ""), { cache: force ? "reload" : "default" });
+      if (r.ok) agHistory = await r.json();
+    } catch { agHistory = null; }
+
+    agPaint();
+  } catch (e) {
+    box.innerHTML = `<div class="empty">Could not read the factory: ${esc(e.shortMessage || e.message)}</div>`;
+  }
+}
+
+// Its own ABI rather than the shared ERC20_ABI, which has no decimals() entry.
+// Reading through that one threw, and an earlier version of this swallowed the
+// throw and fell back to 18. On Arc, USDC is 18-decimal natively and 6 as an
+// ERC-20, so the fallback rendered 3.997599 USDC as 0.000000000003997599: the
+// dual-decimal trap in CLAUDE.md gotcha 6, arriving through a silent catch.
+const AGENT_ERC20_ABI = [
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
+];
+const agTokCache = {};
+async function agToken(addr) {
+  if (agTokCache[addr]) return agTokCache[addr];
+  const c = new ethers.Contract(addr, AGENT_ERC20_ABI, rp);
+  let sym = "?";
+  try { sym = await c.symbol(); } catch {}
+  // Deliberately NOT defaulted. A guessed decimal is a 1,000,000x error on a
+  // financial figure, so failing to read it has to fail loudly.
+  const dec = Number(await c.decimals());
+  if (!Number.isFinite(dec)) throw new Error("decimals() unreadable for " + addr);
+  return (agTokCache[addr] = { addr, sym, dec });
+}
+
+function agEvents(addr) {
+  if (!agHistory || !agHistory.vaults) return [];
+  const k = Object.keys(agHistory.vaults).find((x) => x.toLowerCase() === addr.toLowerCase());
+  return k ? agHistory.vaults[k].events || [] : [];
+}
+
+function agExplorer(path) {
+  const base = (NET.chain.blockExplorerUrls && NET.chain.blockExplorerUrls[0]) || "";
+  return base.replace(/\/+$/, "") + path;
+}
+
+function agPaint() {
+  const list = agVaults || [];
+  $("agVaults").textContent = list.length;
+  $("agUpd").textContent = agHistory && agHistory.updated
+    ? "history to block " + nf(agHistory.lastScanned, 0) : "live";
+
+  let rebs = 0, cost = 0n, costDec = null, costSym = "";
+  let val = 0, valSym = "";
+  for (const v of list) {
+    for (const e of agEvents(v.address)) {
+      if (e.name !== "Rebalanced") continue;
+      rebs++;
+      cost += BigInt(e.args[3]) - BigInt(e.args[2]);
+      costDec = v.num.dec; costSym = v.num.sym;
+    }
+    if (v.value !== null) { val += Number(v.value) / Math.pow(10, v.num.dec); valSym = v.num.sym; }
+  }
+  $("agValue").textContent = list.length ? nf(val, 4) + (valSym ? " " + valSym : "") : "–";
+  $("agRebs").textContent = rebs;
+  const cEl = $("agCost");
+  if (costDec === null) { cEl.textContent = "–"; cEl.style.color = ""; }
+  else {
+    cEl.textContent = (cost >= 0n ? "+" : "-") + agUnits((cost < 0n ? -cost : cost).toString(), costDec, 6) + " " + costSym;
+    cEl.style.color = cost >= 0n ? "var(--green)" : "var(--red)";
+  }
+
+  // A vault that could not be read is reported, never omitted. Dropping it
+  // silently makes a transient RPC failure look like an empty product, which
+  // is a far more damaging lie than an error message.
+  const errs = (agFailed || []).map((f) => `<div class="empty" style="color:var(--red)">
+    Could not read vault <a href="${agExplorer("/address/" + f.address)}" target="_blank" rel="noopener">${esc(f.address.slice(0, 10))}…</a>: ${esc(f.err)}. It exists on chain; this is a read failure, not an empty vault.
+  </div>`).join("");
+
+  if (!list.length) {
+    $("agRows").innerHTML = errs || `<div class="empty">No vaults yet. The factory is live at <a href="${agExplorer("/address/" + agFactory())}" target="_blank" rel="noopener">${esc(agFactory().slice(0, 10))}…</a> and creating one is a single transaction.</div>`;
+    return;
+  }
+  $("agRows").innerHTML = list.map(agCard).join("") + errs;
+}
+
+function agCard(v) {
+  const dec = v.num.dec, sym = v.num.sym;
+  const evs = agEvents(v.address);
+  const rebs = evs.filter((e) => e.name === "Rebalanced");
+  const modeCls = v.mode === 3 ? "var(--green)" : v.mode === 0 ? "var(--red)" : "var(--gold)";
+
+  let delta = "";
+  if (rebs.length && v.value !== null) {
+    const first = BigInt(rebs[0].args[2]), now = BigInt(v.value), d = now - first;
+    const pct = first > 0n ? (Number(d) / Number(first)) * 100 : 0;
+    delta = `<span style="color:${d >= 0n ? "var(--green)" : "var(--red)"};font-weight:700">
+      ${d >= 0n ? "+" : "-"}${agUnits((d < 0n ? -d : d).toString(), dec, 6)} ${esc(sym)} (${pct >= 0 ? "+" : ""}${pct.toFixed(3)}%)</span>
+      <span style="opacity:.6"> since its first rebalance</span>`;
+  }
+
+  let band = "";
+  if (v.lower !== undefined) {
+    const span = v.upper - v.lower, m = span * 0.35;
+    const lo = Math.min(v.lower - m, v.tick - span * 0.05), hi = Math.max(v.upper + m, v.tick + span * 0.05);
+    const pc = (x) => ((x - lo) / (hi - lo)) * 100;
+    band = `<div style="margin-top:14px">
+      <div style="position:relative;height:38px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden">
+        <div style="position:absolute;top:0;bottom:0;left:${pc(v.lower).toFixed(2)}%;width:${(pc(v.upper) - pc(v.lower)).toFixed(2)}%;background:var(--green);opacity:.25;border-left:2px solid var(--green);border-right:2px solid var(--green)"></div>
+        <div style="position:absolute;top:-4px;bottom:-4px;left:${pc(v.tick).toFixed(2)}%;width:2px;background:var(--ink)"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;opacity:.7;margin-top:5px">
+        <span>${agPrice(v.lower, v.t0.dec, v.t1.dec)}</span>
+        <span>spot <b>${agPrice(v.tick, v.t0.dec, v.t1.dec)}</b> ${esc(v.t1.sym)} per ${esc(v.t0.sym)}</span>
+        <span>${agPrice(v.upper, v.t0.dec, v.t1.dec)}</span>
+      </div></div>`;
+  }
+
+  const rows = [...evs].reverse().slice(0, 12).map((e) => {
+    let act = e.name, detail = "", chg = "", col = "";
+    if (e.name === "Rebalanced") {
+      act = "Rebalance"; col = "var(--green2)";
+      const b = BigInt(e.args[2]), a = BigInt(e.args[3]), d = a - b;
+      const pct = b > 0n ? (Number(d) / Number(b)) * 100 : 0;
+      detail = `ticks ${esc(e.args[0])} to ${esc(e.args[1])}`;
+      chg = `${agUnits(b, dec, 6)} to ${agUnits(a, dec, 6)}
+        <b style="color:${d >= 0n ? "var(--green)" : "var(--red)"}">
+        ${d >= 0n ? "+" : "-"}${agUnits((d < 0n ? -d : d).toString(), dec, 6)} (${pct >= 0 ? "+" : ""}${pct.toFixed(3)}%)</b>`;
+    } else if (e.name === "Deposited" || e.name === "Withdrawn") {
+      act = e.name === "Deposited" ? "Deposit" : "Withdraw"; col = "var(--green)";
+      detail = `${agUnits(e.args[0], v.t0.dec, 6)} ${esc(v.t0.sym)} + ${agUnits(e.args[1], v.t1.dec, 4)} ${esc(v.t1.sym)}`;
+    } else if (e.name === "Proposed") {
+      act = "Proposed"; detail = `ticks ${esc(e.args[0])} to ${esc(e.args[1])}, no authority on its own`;
+    } else if (e.name === "ModeChanged") {
+      act = "Mode change"; detail = `${esc(AGENT_MODES[e.args[0]] || e.args[0])} to <b>${esc(AGENT_MODES[e.args[1]] || e.args[1])}</b>`;
+    } else if (e.name === "Halted") {
+      act = "Loss breaker fired"; col = "var(--red)";
+      detail = `value ${agUnits(e.args[0], dec, 6)} fell below the checkpoint ${agUnits(e.args[1], dec, 6)}`;
+    } else if (e.name === "Compounded") {
+      act = "Compound"; detail = `fees collected`;
+    } else if (e.name === "AgentChanged") { act = "Agent changed"; }
+    else if (e.name === "Vetoed") { act = "Vetoed"; detail = "the owner cancelled the pending proposal"; }
+    const t = new Date(e.time * 1000).toISOString().slice(5, 16).replace("T", " ");
+    return `<tr>
+      <td style="padding:8px 4px;white-space:nowrap;opacity:.75">${t}</td>
+      <td style="white-space:nowrap;color:${col || "inherit"};font-weight:600">${esc(act)}</td>
+      <td>${detail}</td>
+      <td style="white-space:nowrap">${chg}</td>
+      <td><a href="${agExplorer("/tx/" + e.tx)}" target="_blank" rel="noopener">${esc(e.tx.slice(0, 8))}…</a></td></tr>`;
+  }).join("");
+
+  return `<div style="border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px">
+    <div class="mkthead" style="margin-bottom:6px">
+      <a href="${agExplorer("/address/" + v.address)}" target="_blank" rel="noopener"><b>${esc(v.address.slice(0, 8))}…${esc(v.address.slice(-4))}</b></a>
+      <span class="badgepill" style="color:${modeCls};border-color:${modeCls}">${esc(AGENT_MODES[v.mode] || v.mode)}</span>
+      ${v.lower !== undefined
+        ? `<span class="badgepill" style="color:${v.inRange ? "var(--green)" : "var(--red)"};border-color:${v.inRange ? "var(--green)" : "var(--red)"}">${v.inRange ? "in range" : "out of range"}</span>`
+        : `<span class="badgepill">no position</span>`}
+      <span class="badgepill">${esc(v.t0.sym)}/${esc(v.t1.sym)} ${(v.fee / 10000).toFixed(2)}%</span>
+      <div class="spacer"></div>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:10px 0 2px">
+      <b style="font-size:30px">${v.value === null ? "–" : agUnits(v.value, dec, 6)}</b>
+      <span style="opacity:.6">${esc(sym)}</span>
+      ${delta}
+    </div>
+    ${v.value === null ? `<div class="finenote" style="margin-top:6px">No TWAP available on this pool yet, so the vault will not report a value it cannot stand behind.</div>` : ""}
+    ${band}
+    <div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:14px;font-size:12px;opacity:.8">
+      <span>owner <a href="${agExplorer("/address/" + v.owner)}" target="_blank" rel="noopener">${esc(v.owner.slice(0, 8))}…</a></span>
+      <span>agent ${v.agent === "0x0000000000000000000000000000000000000000" ? "<b>revoked</b>" : `<a href="${agExplorer("/address/" + v.agent)}" target="_blank" rel="noopener">${esc(v.agent.slice(0, 8))}…</a>`}</span>
+      <span>rebalances <b>${rebs.length}</b></span>
+      <span>loss breaker ${v.checkpoint === "0" ? "<b>unarmed</b>" : "<b>" + agUnits(v.checkpoint, dec, 6) + " " + esc(sym) + "</b>"}</span>
+    </div>
+    ${rows ? `<div style="overflow-x:auto;margin-top:14px"><table style="width:100%;font-size:12.5px;border-collapse:collapse;min-width:600px">
+      <tr style="opacity:.6;text-align:left"><th style="padding:6px 4px">WHEN</th><th>ACTION</th><th>DETAIL</th><th>VALUE CHANGE</th><th>TX</th></tr>
+      ${rows}</table></div>`
+      : `<div class="finenote" style="margin-top:12px">No recorded history yet. Run <b>scripts/publish-agent.sh</b> to bank it.</div>`}
+  </div>`;
 }
 
 // Link every wallet to the explorer. These are public addresses on a public

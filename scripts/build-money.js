@@ -61,8 +61,8 @@ sub("arc registry", `meta: "0x09c419226e83A91323FDC170144526D8C4a39B75",`,
 
 // MINTR is deployed on Arc but is not part of this product yet.
 sub("arc features",
-  "features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true, screener: true, bridge: false },",
-  "features: { launch: true, swap: true, earn: true, mintr: false, gold: false, locker: true, burn: true, screener: true, bridge: false, holders: false },");
+  "features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true, screener: true, bridge: false, agent: false },",
+  "features: { launch: true, swap: true, earn: true, mintr: false, gold: false, locker: true, burn: true, screener: true, bridge: false, holders: false, agent: true },");
 
 // The burn PAGE (the Furnace) works on Arc and stays. The burn STAT counts
 // MINTD sent to the dead address, and there is no MINTD on Arc, so the tile is
