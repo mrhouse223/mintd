@@ -1195,7 +1195,8 @@
     <button id="nav-agent" onclick="go('agent')">Agent</button>
     <button id="nav-launch" onclick="go('launch')">Launch</button>
     <button id="nav-mintswap" onclick="go('mintswap')">Swap</button>
-    <button id="nav-earn" onclick="go('earn')">Earn</button>
+    <button id="nav-bridge" onclick="go('bridge')">Bridge</button>
+    <button id="nav-earn" onclick="go('earn')">Farms</button>
     <button id="nav-screener" onclick="go('screener')">Screener</button>
     <button id="nav-mintr" onclick="go('mintr')">MINTR</button>
     <button id="nav-synth" onclick="go('synth')">Gold</button>
@@ -1222,7 +1223,7 @@
            hardcoded default renders as a confident wrong number on Arc until
            the real value arrives. -->
       <div class="badgepill"><span id="heroNet">STABLE MAINNET</span> · CREATORS KEEP <span id="heroShare">–</span> OF FEES</div>
-      <h1>Launch on <span id="heroChain">Stable</span> for $1.<br /><span class="g">Earn fees instantly.</span></h1>
+      <h1>The Pons of Arc Mainnet.<br /><span class="g">Launch a coin for 1 USDC.</span></h1>
       <p id="heroBlurb"></p>
       <div class="herobtns">
         <button class="btn" onclick="go('launch')">Launch a token</button>
@@ -2297,7 +2298,7 @@
 
 <div class="moremenu" id="moreMenu">
         <button id="nav-locker" onclick="go('locker')"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> Locker</button>
-        <button id="nav-bridge" onclick="go('bridge')"><svg class="ic" viewBox="0 0 24 24"><path d="M3 17h18M6 17V9M18 17V9M3 9c3.5 4 14.5 4 18 0"/></svg> Bridge</button>
+        
         <button id="nav-portfolio" onclick="go('portfolio')"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="1.5"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg> Portfolio</button>
         <button id="nav-burn" onclick="go('burn')"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3c1.5 3 4.5 4.2 4.5 8a4.5 4.5 0 0 1-9 0C7.5 8 9 6.5 12 3z"/><path d="M12 21c-3 0-5.5-2-5.5-4.5"/><path d="M12 21c3 0 5.5-2 5.5-4.5"/></svg> Furnace</button>
         <button id="nav-docs" onclick="go('docs')"><svg class="ic" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg> Docs</button>
@@ -2957,7 +2958,7 @@ function paintHeroBlurb() {
     `Every coin trades on a bonding curve from its very first block. The curve lives inside a `
     + `permanently locked ${sym} pool on Uniswap V3, so there is no migration and no LP withdrawal, `
     + `ever. Coins graduate at 7,000 ${sym} in the pool. `
-    + (share != null ? `Creators claim ${share}% of every trading fee any time` : `Creators claim the majority of every trading fee any time`)
+    + (share != null ? `Creators claim ${share}% of every trading fee any time, and the remaining ${100 - share}% funds the protocol` : `Creators claim 80% of every trading fee any time, and the remaining 20% funds the protocol`)
     + (devCapBps != null ? `, and no launch can dev-buy more than ${devCapBps / 100}% of supply` : "")
     + (NET.mintd.mintd ? ", and 100% of $MINTD token fees are burned." : ".");
 }

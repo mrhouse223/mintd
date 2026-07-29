@@ -78,6 +78,43 @@ sub("x account",
   subs.push("added the Discord link (1)");
 }
 
+// ---------------------------------------------------------------- hero copy
+sub("hero headline",
+  '<h1>Launch on <span id="heroChain">Stable</span> for $1.<br /><span class="g">Earn fees instantly.</span></h1>',
+  '<h1>The Pons of Arc Mainnet.<br /><span class="g">Launch a coin for 1 USDC.</span></h1>');
+
+// The split is stated as 80/20 rather than "the majority". The percentage is
+// still read from the deployed pad when one exists, so the sentence cannot drift
+// from the contract; only the fallback text names 80 outright.
+sub("hero blurb split, known",
+  '`Creators claim ${share}% of every trading fee any time`',
+  '`Creators claim ${share}% of every trading fee any time, and the remaining ${100 - share}% funds the protocol`');
+sub("hero blurb split, fallback",
+  '`Creators claim the majority of every trading fee any time`',
+  '`Creators claim 80% of every trading fee any time, and the remaining 20% funds the protocol`');
+
+// ---------------------------------------------------------------------- nav
+// Bridge belongs in the top bar here, not buried in More: on arcswap it is the
+// way in. Moved rather than duplicated, and only on this build, so mintd.fun
+// keeps its own arrangement.
+{
+  const navStart = s.indexOf('<button id="nav-bridge"');
+  if (navStart === -1) throw new Error("build-money: could not find the Bridge nav button");
+  const navEnd = s.indexOf("</button>", navStart) + 9;
+  const btn = s.slice(navStart, navEnd);
+  s = s.slice(0, navStart) + s.slice(navEnd);
+  // After Swap, so the visible order on Arc reads Discover, Swap, Bridge, Farms
+  // once the chain's own feature flags hide Agent, Launch and Screener.
+  const afterSwap = s.indexOf("</button>", s.indexOf('<button id="nav-mintswap"')) + 9;
+  if (afterSwap < 9) throw new Error("build-money: could not find the Swap nav button");
+  s = s.slice(0, afterSwap) + "\n    " + btn.replace(/<svg[\s\S]*?<\/svg>\s*/, "") + s.slice(afterSwap);
+  subs.push("moved Bridge into the top bar, after Swap (1)");
+}
+
+// "Earn" is called Farms here, which is what it actually is.
+sub("farms label", '<button id="nav-earn" onclick="go(\'earn\')">Earn</button>',
+  '<button id="nav-earn" onclick="go(\'earn\')">Farms</button>');
+
 // ------------------------------------------------------------------ chains
 // Arc only. A chain switcher offering Stable would send someone to a different
 // product on a different chain from a site that is meant to be one thing.
