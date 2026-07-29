@@ -270,6 +270,18 @@ contract MintdLaunchpad {
     // launchpad ABI across chains and would misdecode launches() if its return
     // tuple grew.
     mapping(address => uint128) public launchLiquidity;
+    /// @notice The creator's fee share, in bps, FIXED AT LAUNCH for this token.
+    ///
+    /// Fees accrue continuously inside the Uniswap position, but the split used
+    /// to be read from the live `creatorShareBps` at claim time. That made an
+    /// owner's change retroactive: lowering the share and then calling the
+    /// permissionless `claimFees` in the same block reallocated a slice of the
+    /// entire accrued, unclaimed pot, and the owner could equally front-run a
+    /// creator's own claim. Snapshotting it means a creator gets the terms they
+    /// launched under, whatever the owner does afterwards.
+    ///
+    /// Outside the struct for the same reason as `launchLiquidity` above.
+    mapping(address => uint256) public launchCreatorShareBps;
     address[] public allTokens;
 
     uint256 private unlocked = 1;
@@ -559,6 +571,7 @@ contract MintdLaunchpad {
             creatorFeesClaimedToken: 0
         });
         launchLiquidity[token] = liquidity;
+        launchCreatorShareBps[token] = creatorShareBps;
         allTokens.push(token);
     }
 
@@ -590,12 +603,14 @@ contract MintdLaunchpad {
 
         // Each remainder by subtraction, never independently, so the three
         // payouts sum to exactly what was collected however the division falls.
-        uint256 creatorQuote = (quoteAmt * creatorShareBps) / 10_000;
+        // The share this token launched under, not today's. See the mapping.
+        uint256 shareBps = launchCreatorShareBps[token];
+        uint256 creatorQuote = (quoteAmt * shareBps) / 10_000;
         uint256 protocolQuote = quoteAmt - creatorQuote;
         uint256 buybackQuote = (protocolQuote * buybackShareBps) / 10_000;
         uint256 opsQuote = protocolQuote - buybackQuote;
 
-        uint256 creatorToken = (tokenAmt * creatorShareBps) / 10_000;
+        uint256 creatorToken = (tokenAmt * shareBps) / 10_000;
         uint256 protocolToken = tokenAmt - creatorToken;
         uint256 buybackToken = (protocolToken * buybackShareBps) / 10_000;
         uint256 opsToken = protocolToken - buybackToken;
