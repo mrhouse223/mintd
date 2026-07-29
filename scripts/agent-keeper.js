@@ -69,6 +69,7 @@ const VAULT_ABI = [
   "function lastAction() view returns (uint256)",
   "function valueNow() view returns (uint256)",
   "function valueCheckpoint() view returns (uint256)",
+  "function twapWindow() view returns (uint32)",
   "function proposal() view returns (int24 lower, int24 upper, uint64 readyAt, bool approved, bool open)",
   "function propose(int24 lower, int24 upper)",
   "function execute()",
@@ -77,6 +78,7 @@ const VAULT_ABI = [
 const POOL_ABI = [
   "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, uint8, bool)",
   "function tickSpacing() view returns (int24)",
+  "function observe(uint32[]) view returns (int56[],uint160[])",
 ];
 const NPM_ABI = [
   "function positions(uint256) view returns (uint96,address,address,address,uint24,int24 tickLower,int24 tickUpper,uint128 liquidity,uint256,uint256,uint128,uint128)",
@@ -86,10 +88,23 @@ const MODE = ["PAUSED", "PROPOSE_ONLY", "TIMELOCKED", "AUTONOMOUS"];
 const ts = () => new Date().toISOString().slice(11, 19);
 const log = (m) => console.log(`${ts()}  ${m}`);
 
-const alignDown = (t, s) => {
-  const q = Math.floor(t / s) * s;
-  return q;
-};
+const alignDown = (t, s) => Math.floor(t / s) * s;
+const alignUp = (t, s) => Math.ceil(t / s) * s;
+
+/// The tick the VAULT will validate against, computed exactly as the contract
+/// does. Proposals are checked against the TWAP, never against spot, so a
+/// keeper that builds ranges around spot proposes things the vault rejects.
+async function twapTick(pool, window) {
+  const [cum] = await pool.observe([window, 0]);
+  const delta = cum[1] - cum[0];
+  const w = BigInt(window);
+  let t = delta / w;
+  // Solidity truncates toward zero; the contract compensates so that a negative
+  // tick rounds down. Reproduce it rather than approximating, or ranges near
+  // zero land one tick off and fail validation for no visible reason.
+  if (delta < 0n && delta % w !== 0n) t -= 1n;
+  return Number(t);
+}
 
 const cacheFile = (chainId) =>
   path.join(__dirname, "..", "data", `agent-vaults-${chainId}.json`);
@@ -150,13 +165,23 @@ async function discover(provider, cache) {
 /// not something to hide in a heuristic.
 const WIDTH_SPACINGS = 30;
 
-function desiredRange(tick, spacing, maxDrift) {
+/// Build a range the vault will actually accept. `t` must be the TWAP tick.
+///
+/// Both bounds align INWARD: lower rounds up, upper rounds down. Rounding both
+/// down, as this did originally, pushes `lower` below the band floor whenever
+/// t - half is not already on a spacing boundary, and the vault rejects it with
+/// "outside TWAP band". That is not a rare edge: with drift 2000 and spacing
+/// 200 it happened on the very first live proposal.
+function desiredRange(t, spacing, maxDrift) {
   let half = WIDTH_SPACINGS * spacing;
-  // Never propose something the vault will reject: the range has to fit inside
-  // the owner's configured band around the TWAP.
-  if (half > maxDrift) half = Math.floor(maxDrift / spacing) * spacing;
-  const lower = alignDown(tick - half, spacing);
-  const upper = alignDown(tick + half, spacing);
+  if (half > maxDrift) half = maxDrift;
+  let lower = alignUp(t - half, spacing);
+  let upper = alignDown(t + half, spacing);
+  // The vault requires the range to CONTAIN the TWAP, not merely sit near it.
+  // Inward alignment can push a bound past t when half is close to spacing.
+  if (lower > t) lower = alignDown(t, spacing);
+  if (upper < t) upper = alignUp(t, spacing);
+  if (lower >= upper) { lower = alignDown(t, spacing); upper = lower + spacing; }
   return [lower, upper];
 }
 
@@ -194,7 +219,11 @@ async function decide(v, pool, npm) {
   const spacing = Number(await pool.tickSpacing());
   const tick = Number((await pool.slot0()).tick);
   const drift = Number(await v.maxTickDrift());
-  const [lower, upper] = desiredRange(tick, spacing, drift);
+  // Range built on the TWAP, because that is what the vault validates against.
+  // The off-centre test below stays on spot, because whether the position is
+  // actually earning fees is a question about where trading happens now.
+  const tw = await twapTick(pool, Number(await v.twapWindow()));
+  const [lower, upper] = desiredRange(tw, spacing, drift);
 
   const posId = await v.positionId();
   if (posId === 0n) return { act: true, exec: false, lower, upper, why: "no position yet" };

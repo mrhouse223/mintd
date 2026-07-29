@@ -12,14 +12,14 @@
       "token": "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       "createdAt": 1784844341,
       "usdtIs0": true,
-      "allTime": "539256836931"
+      "allTime": "539835298215"
     },
     "0x63ccf0c040845aa59a3b0898b28bf6c090850c2b": {
       "kind": "v3",
       "token": "0x9a9cBd346a64a57b6c44047AfC4B0170fB46Dc88",
       "createdAt": 1784850213,
       "usdtIs0": true,
-      "allTime": "22015264516"
+      "allTime": "22020308099"
     },
     "0x2fc0d2d303460410c4be77905a69e379586bc8c7": {
       "kind": "v3",
@@ -159,7 +159,7 @@
       "token": "0x67b1c700b0B76a6857Cf3010Cf389a500A5cc133",
       "createdAt": 1784970264,
       "usdtIs0": false,
-      "allTime": "41623590258"
+      "allTime": "41626777297"
     },
     "0x7404e2c3ad036425483678e6b4d63b400acf7696": {
       "kind": "v3",
@@ -858,13 +858,13 @@
       "kind": "v2",
       "token": "0x8817D05f2560189F3697028f639Dbb4C68688400",
       "usdtIs0": true,
-      "allTime": "724781363"
+      "allTime": "725781363"
     },
     "0x1f3002eea8b1b22f7fd67280e305ecea540c71be": {
       "kind": "v2",
       "token": "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       "usdtIs0": true,
-      "allTime": "5314169530"
+      "allTime": "5325427433"
     },
     "0x5b4fb979aa7ff810a15641bdc4e30f3f40254a25": {
       "kind": "v2",
@@ -879,5 +879,5 @@
       "allTime": "140152759"
     }
   },
-  "lastBlock": 33497656
+  "lastBlock": 33499884
 }
