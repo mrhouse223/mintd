@@ -66,31 +66,30 @@ sub("x account",
   subs.push(`removed ${removed} Telegram link(s) (1)`);
 }
 
+// -------------------------------------------------------------------- discord
+{
+  const xAnchorEnd = s.indexOf("</a>", s.indexOf('<a class="themebtn" href="https://x.com/arcswapdotvip"')) + 4;
+  if (xAnchorEnd < 4) throw new Error("build-money: could not find the X anchor to insert Discord after");
+  const discord = '\n  <a class="themebtn" href="https://discord.gg/EynUpkhge" target="_blank" rel="noopener" title="Discord">'
+    + '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+    + '<path d="M20.3 4.6A16.6 16.6 0 0 0 16.2 3.4l-.3.7a12.3 12.3 0 0 1 3.6 1.2 11.9 11.9 0 0 0-9-.4 12.4 12.4 0 0 1 2.1-.8l-.3-.7A16.6 16.6 0 0 0 3.7 4.6C1.6 8.1 1 11.6 1.3 15a16.8 16.8 0 0 0 5.1 2.6l.6-1a10 10 0 0 1-1.6-.8l.4-.3a12 12 0 0 0 10.4 0l.4.3a10 10 0 0 1-1.6.8l.6 1A16.8 16.8 0 0 0 22.7 15c.4-4-.6-7.5-2.4-10.4zM8.7 13.2c-1 0-1.8-.9-1.8-1.9s.8-1.9 1.8-1.9 1.8.9 1.8 1.9-.8 1.9-1.8 1.9zm6.6 0c-1 0-1.8-.9-1.8-1.9s.8-1.9 1.8-1.9 1.8.9 1.8 1.9-.8 1.9-1.8 1.9z"/>'
+    + '</svg></a>';
+  s = s.slice(0, xAnchorEnd) + discord + s.slice(xAnchorEnd);
+  subs.push("added the Discord link (1)");
+}
+
 // ------------------------------------------------------------------ chains
 // Arc only. A chain switcher offering Stable would send someone to a different
 // product on a different chain from a site that is meant to be one thing.
-sub("default chain", 'return "stable";', 'return "arc-testnet";');
-sub("NET fallback", "CHAINS[CHAIN_KEY] || CHAINS.stable", "CHAINS[CHAIN_KEY] || CHAINS['arc-testnet']");
+sub("default chain", 'return "stable";', 'return "arc-mainnet";');
+sub("NET fallback", "CHAINS[CHAIN_KEY] || CHAINS.stable", "CHAINS[CHAIN_KEY] || CHAINS['arc-mainnet']");
 
-// Point at MintdLaunchpad, the fully fixed pad, and drop the earlier ones.
-// ArcLaunchpad carried the dead-prevrandao brick vector, and the v1 pad held a
-// throwaway $MINTD from bring-up; surfacing either would imply an Arc MINTD
-// exists (it does not) or route launches through the old code. Fresh start on
-// the secure factory, so the community's first coin is genuinely token #0.
-sub("arc pad", `      pad: "0xcF22a3E32dE43787881b9a87B5424E34F3BF65E6",
-      oldPad: "0xd6fdA9A0Fd4b4ee724ab0c0B958a712E5bb37E96",`,
-  `      pad: "0x6C8C1Ec953D64e01BEF454A5946A1Aae87914cfD",
-      oldPad: null,`);
-
-// Metadata registry follows the pad.
-sub("arc registry", `meta: "0x09c419226e83A91323FDC170144526D8C4a39B75",`,
-  `meta: "0x923FEFeD25E79bec3d5b127494e5955eDCBFC721",`);
-
-// MINTR is deployed on Arc but is not part of this product yet.
-sub("arc features",
-  "features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true, screener: true, bridge: false, agent: false },",
-  "features: { launch: true, swap: true, earn: true, mintr: false, gold: false, locker: true, burn: true, screener: true, bridge: true, holders: false, agent: true, mintdStat: false },");
-
+// The arc pad, registry and features substitutions used to live here. They
+// rewrote the arc-TESTNET entry, which the slice below now discards, so they
+// were doing nothing except waiting to break when that entry moves. The
+// arc-mainnet entry carries its own addresses and its own features directly in
+// frontend/index.html, which is the right place for them: one chain, one
+// definition, no rewriting a different chain's block to produce it.
 // The burn PAGE (the Furnace) works on Arc and stays. The burn STAT counts
 // MINTD sent to the dead address, and there is no MINTD on Arc, so the tile is
 // suppressed separately from the feature.
@@ -99,12 +98,18 @@ sub("burn stat tile", 'const tiles = { stMintrTvl: "mintr", stBurn: "burn" };',
 
 // Drop Stable from the registry entirely so nothing can switch into it.
 const stableStart = s.indexOf("  stable: {");
-const arcStart = s.indexOf('  "arc-testnet": {');
-if (stableStart === -1 || arcStart === -1 || arcStart < stableStart) {
-  throw new Error("build-money: could not locate the CHAINS entries");
+const mainStart = s.indexOf('  "arc-mainnet": {');
+const testStart = s.indexOf('  "arc-testnet": {');
+const chainsEnd = s.indexOf("\n};", testStart);
+if (stableStart === -1 || mainStart === -1 || testStart === -1 || chainsEnd === -1
+    || !(stableStart < mainStart && mainStart < testStart)) {
+  throw new Error("build-money: could not locate the CHAINS entries in the expected order");
 }
-s = s.slice(0, stableStart) + s.slice(arcStart);
-subs.push("removed the stable chain entry (1)");
+// Drop stable from the front and arc-testnet from the tail, leaving arc-mainnet
+// as the only chain. A testnet one click from a site that bridges real USDC is
+// how someone sends money to a throwaway chain by mistake.
+s = s.slice(0, stableStart) + s.slice(mainStart, testStart) + s.slice(chainsEnd + 1);
+subs.push("kept arc-mainnet only, dropped stable and arc-testnet (1)");
 
 // ------------------------------------------------------------------- theme
 // arcswap is blue and white, taken from its mark, with a real dark variant so

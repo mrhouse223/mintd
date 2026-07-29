@@ -1204,6 +1204,7 @@
   <div class="spacer"></div>
   <input class="search" id="search" placeholder="⌕  Name, ticker, or contract" oninput="mirrorSearch(this.value)" />
   <a class="themebtn" href="https://x.com/arcswapdotvip" target="_blank" title="X">𝕏</a>
+  <a class="themebtn" href="https://discord.gg/EynUpkhge" target="_blank" rel="noopener" title="Discord"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.3 4.6A16.6 16.6 0 0 0 16.2 3.4l-.3.7a12.3 12.3 0 0 1 3.6 1.2 11.9 11.9 0 0 0-9-.4 12.4 12.4 0 0 1 2.1-.8l-.3-.7A16.6 16.6 0 0 0 3.7 4.6C1.6 8.1 1 11.6 1.3 15a16.8 16.8 0 0 0 5.1 2.6l.6-1a10 10 0 0 1-1.6-.8l.4-.3a12 12 0 0 0 10.4 0l.4.3a10 10 0 0 1-1.6.8l.6 1A16.8 16.8 0 0 0 22.7 15c.4-4-.6-7.5-2.4-10.4zM8.7 13.2c-1 0-1.8-.9-1.8-1.9s.8-1.9 1.8-1.9 1.8.9 1.8 1.9-.8 1.9-1.8 1.9zm6.6 0c-1 0-1.8-.9-1.8-1.9s.8-1.9 1.8-1.9 1.8.9 1.8 1.9-.8 1.9-1.8 1.9z"/></svg></a>
   
   <div class="chainwrap" id="chainPill"></div>
   <span id="faucetSlot"></span>
@@ -1918,7 +1919,7 @@
         <div class="feecard" id="brQuoteBox" style="margin-bottom:12px">
           <div class="feerow"><span>Platform fee</span><b id="brFee">–</b></div>
           <div class="feerow"><span>You receive on Arc</span><b id="brGet">–</b></div>
-          <div class="feerow"><span>Arc gas to claim</span><b>paid by mintd</b></div>
+          <div class="feerow"><span>Arc gas to claim</span><b>paid by arcswap</b></div>
         </div>
 
         <button class="btn" id="brGo" onclick="brBridge()" style="width:100%">Connect wallet</button>
@@ -1937,7 +1938,7 @@
         setter, so it can never be raised or redirected, and the figure above comes
         from that contract rather than from this page.
         Delivery on Arc needs one transaction that costs Arc gas you do not have
-        yet, so our relayer submits it and pays for it. If we ever stop,
+        yet, so the arcswap relayer submits it and pays for it. If we ever stop,
         <b>anyone can submit it instead, including you</b>: the transfer is not
         ours to hold and the recipient cannot be changed by whoever sends it.
       </div>
@@ -2335,51 +2336,47 @@ const LC = window.LOCAL_CONFIG || null;
 // that reads a nonexistent contract renders as a broken page rather than an
 // absent one.
 const CHAINS = {
-  "arc-testnet": {
-    key: "arc-testnet", label: "Arc Testnet", short: "Arc",
-    testnet: true,
-    // Not offered to ordinary visitors: it is a testnet whose tokens are
-    // worthless, and surfacing it next to the live chain invites someone to
-    // trade there by mistake. Operators see it once their wallet is connected.
-    gated: true,
+  "arc-mainnet": {
+    key: "arc-mainnet", label: "Arc", short: "Arc",
     chain: {
-      chainId: "0x4cef52", chainName: "Arc Testnet",
+      chainId: "0x13b2", chainName: "Arc",
       nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-      rpcUrls: ["https://rpc.testnet.arc.network"], blockExplorerUrls: ["https://testnet.arcscan.app"],
+      rpcUrls: ["https://5042.rpc.thirdweb.com"], blockExplorerUrls: ["https://arc.exploreme.pro"],
     },
+    // Every address below was read off the chain, not copied from another
+    // deployment: Uniswap V3 is NOT at its canonical addresses on Arc. The
+    // factory came from reading factory() on four live pools, the position
+    // manager from whatever emits IncreaseLiquidity, and USDC is the gas token
+    // as an ERC-20 at 6 decimals against 18 natively.
     addr: {
-      router: "0xDf982D7119dD6a5Ec266aE69f6D6537C90F3680a",
-      quoter: "0xa13559d6cD9A2b36aeF70cb0742820a3fd8934FE",
-      npm: "0xe4c473Eea2dF9e6Aa3db7b97695117FF31c0Fbfc",
+      factory: "0xf0db7b58379503491d857dB50AC9ece64c653918",
+      npm: "0x39654A85A4C05127f5Fd6ED22CAeC077A0fB1377",
+      // UNCONFIRMED. A swap entrypoint whose factory() matches, but the busier
+      // entrypoints look like aggregators and thirdweb's RPC was too flaky to
+      // finish decoding live calldata against the SwapRouter02 ABI. Nothing is
+      // allowed to depend on it until that is done, which is why swap is off.
+      router: null,
+      quoter: null,
       usdt0: "0x3600000000000000000000000000000000000000",
     },
     mintd: {
-      // v2: 80/20 creator split, 5% dev buy cap, pre-initialized pools rejected.
-      // v1 (0xd6fdA9A0…) stays live and its tokens keep v1 terms; it is listed
-      // as oldPad so existing launches still load.
-      pad: "0x6C8C1Ec953D64e01BEF454A5946A1Aae87914cfD",
+      // Not deployed yet. $ARCS launches from ArcSwapLaunchpad once it is, and
+      // a null pad keeps Discover and Launch hidden rather than broken.
+      pad: null,
       oldPad: null,
       mintd: null,
-      mintr: "0x3e1184203B9c1760654CbEFCd111ce1185Ae57be",
+      mintr: null,
       synth: null, mgld: null,
-      locker: "0xAcc8EA03ea4722F23aE0b40Ac707e3fAAa8F6a6A",
-      v3locker: "0x8530b966C12E2d2493f712be9d5Cf39f364DD3B7",
-      meta: "0x923FEFeD25E79bec3d5b127494e5955eDCBFC721",
-      mintswapFactory: "0x5481A9aBAC5747252Dda1f40A269A2D48Af2b8Db",
-      mintswapRouter: "0x7de1C45839C56f8CC3252C5F394b3410393d996d",
-      furnace: "0x17E5C63ab0Ff682e5C1Cb2e391870d1a57104C5F",
-      // AgentVaultFactory. Immutable, no owner, no setters: the position
-      // manager and router every vault it creates will approve tokens to are
-      // fixed at its construction, which is what makes isVault() worth reading.
-      agentFactory: "0x42D58A7dFB4235F25F8ef6Bf84753B4F9A6531be",
-      // Read-only view helper. Collapses ~15 reads per vault into one call,
-      // which is what makes the page survive a community-sized vault list on a
-      // chain that rate limits bursts.
-      agentLens: "0x2adb4D409349637Fd53f2d9453C5Bae919519B72",
-      // Base -> Arc USDC over Circle CCTP. `router` is our immutable fee router
-      // on Base and is null until it is deployed; the UI reports that instead of
-      // offering a broken button. Every other value here was read off chain:
-      // CCTP domains from localDomain(), not from a doc.
+      locker: null,
+      v3locker: null,
+      meta: null,
+      mintswapFactory: null,
+      mintswapRouter: null,
+      furnace: null,
+      agentFactory: null,
+      agentLens: null,
+      // Base to Arc USDC over Circle CCTP. The router is live on Base; nothing
+      // here needs an Arc router, because CCTP mints natively.
       arcBridge: {
         router: "0xEAD1eB5e6464e8EABEC893A02c83073A84c3e217",
         baseChainId: 8453,
@@ -2388,34 +2385,16 @@ const CHAINS = {
         baseDomain: 6,
         arcDomain: 26,
       },
-      // The community testing venue. A dedicated pair because Arc MINTD is
-      // fixed supply and USDC comes from a rate-limited faucet, which left the
-      // real pool holding 24 USDC: too thin for one honest tester, since a
-      // one-sided 5 USDC vault would swap ~2.5 against 24 and revert.
-      // 0.30% tier so AgentVault's default 100bps slippage actually fills; on
-      // the 1% MINTD pool the fee alone consumes the whole allowance.
-      agentTest: {
-        pool: "0x8a1a16D2652Ca79c57a0A6ac6Fa1Df64AC54a70B",
-        tokens: ["0x3520cc582507fF49a7E24907779f39b948CabbA5",   // tETH, 18dec, token0
-                 "0x7257dACd2F485A10Af65E26D78653d4ba8D236D5"],  // tUSD, 6dec, token1
-        numeraire: "0x7257dACd2F485A10Af65E26D78653d4ba8D236D5", // value the vault in tUSD
-        keeper: "0xfe93602C1d76834b6370833B9ce7C86939B5D97f",
-      },
     },
-    // No gold engine and no MINTD token on Arc yet, so those pages are hidden
-    // rather than shown broken.
-    // No bridge to a testnet: funds come from the faucet, and offering a
-    // bridge here invites someone to send real money to a throwaway chain.
-    features: { launch: true, swap: true, earn: true, mintr: false, gold: false, locker: true, burn: true, screener: true, bridge: true, holders: false, agent: true, mintdStat: false },
-    statsFile: null,   // no indexer running against Arc yet
-    faucet: "https://faucet.circle.com",
-    // Arc accepts batches and then rate limits them: a batch of 8 returns one
-    // result and seven "request limit reached". Promise.all in the token
-    // loader therefore lost 7 of every 8 reads, and the per-token catch
-    // swallowed it, so a launched token simply never appeared. One per batch.
+    // Bridge first, deliberately. Everything else stays off until the contract
+    // it needs is deployed and its wiring verified: launch and screener need the
+    // pad, swap needs a confirmed router, agent needs the factory. Shipping a
+    // tab that half works is worse than not shipping it.
+    features: { launch: false, swap: false, earn: false, mintr: false, gold: false, locker: false, burn: false, screener: false, bridge: true, holders: false, agent: false, mintdStat: false },
+    statsFile: null,
+    faucet: null,
     batchMaxCount: 1,
-    // Arc is far more permissive here; 5000 is comfortable.
-    logSpan: 5000,
+    logSpan: 500,
   },
 };
 
@@ -2425,9 +2404,9 @@ const CHAINS = {
 let CHAIN_KEY = (() => {
   if (LC) return "local";
   try { const s = localStorage.getItem("chainKey"); if (s && CHAINS[s]) return s; } catch {}
-  return "arc-testnet";
+  return "arc-mainnet";
 })();
-let NET = CHAINS[CHAIN_KEY] || CHAINS['arc-testnet'];
+let NET = CHAINS[CHAIN_KEY] || CHAINS['arc-mainnet'];
 let CHAIN = LC ? LC.chain : NET.chain;
 let ADDR = LC ? LC.addr : NET.addr;
 

@@ -1918,7 +1918,7 @@
         <div class="feecard" id="brQuoteBox" style="margin-bottom:12px">
           <div class="feerow"><span>Platform fee</span><b id="brFee">–</b></div>
           <div class="feerow"><span>You receive on Arc</span><b id="brGet">–</b></div>
-          <div class="feerow"><span>Arc gas to claim</span><b>paid by mintd</b></div>
+          <div class="feerow"><span>Arc gas to claim</span><b>paid by arcswap</b></div>
         </div>
 
         <button class="btn" id="brGo" onclick="brBridge()" style="width:100%">Connect wallet</button>
@@ -1937,7 +1937,7 @@
         setter, so it can never be raised or redirected, and the figure above comes
         from that contract rather than from this page.
         Delivery on Arc needs one transaction that costs Arc gas you do not have
-        yet, so our relayer submits it and pays for it. If we ever stop,
+        yet, so the arcswap relayer submits it and pays for it. If we ever stop,
         <b>anyone can submit it instead, including you</b>: the transfer is not
         ours to hold and the recipient cannot be changed by whoever sends it.
       </div>
@@ -2389,6 +2389,66 @@ const CHAINS = {
     // uses its own batchMaxCount 1 provider.
     batchMaxCount: 20,
     // Hard cap: anything wider returns "maximum [from, to] blocks distance: 500".
+    logSpan: 500,
+  },
+  "arc-mainnet": {
+    key: "arc-mainnet", label: "Arc", short: "Arc",
+    chain: {
+      chainId: "0x13b2", chainName: "Arc",
+      nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+      rpcUrls: ["https://5042.rpc.thirdweb.com"], blockExplorerUrls: ["https://arc.exploreme.pro"],
+    },
+    // Every address below was read off the chain, not copied from another
+    // deployment: Uniswap V3 is NOT at its canonical addresses on Arc. The
+    // factory came from reading factory() on four live pools, the position
+    // manager from whatever emits IncreaseLiquidity, and USDC is the gas token
+    // as an ERC-20 at 6 decimals against 18 natively.
+    addr: {
+      factory: "0xf0db7b58379503491d857dB50AC9ece64c653918",
+      npm: "0x39654A85A4C05127f5Fd6ED22CAeC077A0fB1377",
+      // UNCONFIRMED. A swap entrypoint whose factory() matches, but the busier
+      // entrypoints look like aggregators and thirdweb's RPC was too flaky to
+      // finish decoding live calldata against the SwapRouter02 ABI. Nothing is
+      // allowed to depend on it until that is done, which is why swap is off.
+      router: null,
+      quoter: null,
+      usdt0: "0x3600000000000000000000000000000000000000",
+    },
+    mintd: {
+      // Not deployed yet. $ARCS launches from ArcSwapLaunchpad once it is, and
+      // a null pad keeps Discover and Launch hidden rather than broken.
+      pad: null,
+      oldPad: null,
+      mintd: null,
+      mintr: null,
+      synth: null, mgld: null,
+      locker: null,
+      v3locker: null,
+      meta: null,
+      mintswapFactory: null,
+      mintswapRouter: null,
+      furnace: null,
+      agentFactory: null,
+      agentLens: null,
+      // Base to Arc USDC over Circle CCTP. The router is live on Base; nothing
+      // here needs an Arc router, because CCTP mints natively.
+      arcBridge: {
+        router: "0xEAD1eB5e6464e8EABEC893A02c83073A84c3e217",
+        baseChainId: 8453,
+        baseRpc: "https://mainnet.base.org",
+        baseUsdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        baseDomain: 6,
+        arcDomain: 26,
+      },
+    },
+    // Bridge first, deliberately. Everything else stays off until the contract
+    // it needs is deployed and its wiring verified: launch and screener need the
+    // pad, swap needs a confirmed router, agent needs the factory. Shipping a
+    // tab that half works is worse than not shipping it.
+    features: { launch: false, swap: false, earn: false, mintr: false, gold: false, locker: false, burn: false, screener: false, bridge: true, holders: false, agent: false, mintdStat: false },
+    statsFile: null,
+    faucet: null,
+    batchMaxCount: 1,
     logSpan: 500,
   },
   "arc-testnet": {
