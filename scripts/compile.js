@@ -53,6 +53,7 @@ for (const rel of [
   "contracts/AgentVaultFactory.sol",
   "contracts/AgentLens.sol",
   "contracts/BridgeFeeRouter.sol",
+  "contracts/ArcSwapLaunchpad.sol",
 ]) {
   sources[rel] = { content: fs.readFileSync(path.join(root, rel), "utf8") };
 }
