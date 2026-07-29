@@ -242,7 +242,7 @@
     letter-spacing: .02em; padding: 4px 9px; border-radius: 999px;
     background: rgba(0,0,0,.62); color: #fff; backdrop-filter: blur(6px); }
   .ctag.grad { background: var(--gold); color: #241a00; }
-  .ctag.plat { background: var(--green); color: #fff; }
+  .ctag.plat { background: var(--gold); color: #241a00; }
   .cbody { padding: 11px 4px 0; }
   /* one line each: a long name must never make one card taller than its row */
   .cname { font-weight: 800; font-size: 14.5px; white-space: nowrap;
@@ -2514,7 +2514,7 @@ function priceFromSqrtScale(sqrtP, tokenIs0, scale) {
 function parseMeta(uri) { try { const m = JSON.parse(uri); return typeof m === "object" ? m : {}; } catch { return /^https?:/.test(uri) ? { image: uri } : {}; } }
 // Token metadata is attacker-controlled input, sanitize before any HTML use.
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const safeImg = (u) => (typeof u === "string" && (/^(https:\/\/|data:image\/)[^"'<>\s]*$/i.test(u) || /^[a-z0-9._-]+\.(png|jpe?g|webp|svg|gif)$/i.test(u))) ? u : "";
+const safeImg = (u) => (typeof u === "string" && (/^(https:\/\/|data:image\/)[^"'<>\s]*$/i.test(u) || /^\/?[a-z0-9._-]+\.(png|jpe?g|webp|svg|gif)$/i.test(u))) ? u : "";
 const safeLink = (u) => (typeof u === "string" && /^https:\/\/[^"'<>\s]*$/i.test(u)) ? u : "";
 
 /* --------------------------------------------- image upload (stored onchain) */
