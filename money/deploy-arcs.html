@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deploy ArcSwapLaunchpad</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+<style>
+  :root { --bg:#0a0e14; --panel:#111823; --line:#212c3a; --ink:#eef3fa; --dim:#8a9ab0;
+          --blue:#4d94f0; --ok:#35c184; --bad:#f0685c; --warn:#e6bf52;
+          --mono: ui-monospace,"SF Mono",Menlo,monospace; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:24px;margin:0 0 6px}
+  .lede{color:var(--dim);font-size:14px;max-width:70ch}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:18px}
+  .row{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+  .row:last-child{border-bottom:0}
+  .row b{font-family:var(--mono);font-variant-numeric:tabular-nums;word-break:break-all;text-align:right}
+  button{font:inherit;font-weight:640;padding:12px 18px;border-radius:10px;border:1px solid var(--line);
+         background:var(--blue);color:#04121f;cursor:pointer}
+  button.ghost{background:transparent;color:var(--ink)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .warn{background:rgba(230,191,82,.1);border:1px solid var(--warn);color:var(--warn);
+        border-radius:10px;padding:12px 14px;font-size:13px;margin-top:14px}
+  .log{font-family:var(--mono);font-size:12.5px;white-space:pre-wrap;background:#070b11;
+       border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:14px;max-height:340px;overflow:auto}
+  .ok{color:var(--ok)} .bad{color:var(--bad)} .dim{color:var(--dim)} .w{color:var(--warn)}
+  a{color:var(--blue)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Deploy ArcSwapLaunchpad to Arc mainnet</h1>
+  <p class="lede">
+    This page exists because no Arc mainnet RPC available to the deploy scripts can answer a read:
+    <code>eth_getTransactionCount</code> and <code>eth_gasPrice</code> both fail, so a transaction cannot even be
+    built server-side. Your wallet has a working endpoint, so it does the work here. That also restores the two
+    safety steps that were otherwise impossible: confirming the router before deploying, and reading every
+    immutable back afterwards.
+  </p>
+
+  <div class="card">
+    <div class="row"><span>Chain</span><b>Arc mainnet &middot; 5042</b></div>
+    <div class="row"><span>owner</span><b id="pOwner"></b></div>
+    <div class="row"><span>positionManager <span class="dim">(verified on chain)</span></span><b id="pNpm"></b></div>
+    <div class="row"><span>swapRouter <span class="w">(UNCONFIRMED)</span></span><b id="pRouter"></b></div>
+    <div class="row"><span>quoteToken <span class="dim">USDC</span></span><b id="pQuote"></b></div>
+    <div class="row"><span>buyback + ops recipient</span><b id="pFee"></b></div>
+    <div class="row"><span>creationFee</span><b>1 USDC <span class="dim">(1e18 native)</span></b></div>
+    <div class="row"><span>creatorShareBps</span><b>8000 <span class="dim">= 80/20</span></b></div>
+    <div class="row"><span>buybackShareBps</span><b>0 <span class="dim">no burn, no buyback</span></b></div>
+    <div class="row"><span>devBuyCapBps</span><b>500 <span class="dim">= 5%</span></b></div>
+    <div class="row"><span>startPriceQuote1e18</span><b>3e12 <span class="dim">= $3,000 mcap on 1B</span></b></div>
+    <div class="row"><span>mintr</span><b>0x0 <span class="dim">absent on Arc</span></b></div>
+  </div>
+
+  <div class="warn">
+    <b>Step 1 confirms the router before anything is deployed.</b> <code>swapRouter</code> is
+    <b>immutable</b>. If the address is wrong, every launch's dev buy reverts and the launchpad is bricked
+    permanently, so this checks it against the position manager's own factory first and will refuse to enable
+    deployment if they disagree.
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+    <button id="bConnect">1. Connect wallet</button>
+    <button id="bCheck" class="ghost" disabled>2. Confirm router</button>
+    <button id="bDeploy" disabled>3. Deploy</button>
+    <button id="bVerify" class="ghost" disabled>4. Read back</button>
+  </div>
+
+  <div class="log" id="log">Waiting.</div>
+</div>
+
+<script>
+const ARGS = {
+  owner:        "0x64838C341956FcE51FA6575c5F593D0415f23E72",
+  npm:          "0x39654A85A4C05127f5Fd6ED22CAeC077A0fB1377",
+  router:       "0x53BF6B0684Ec7eF91e1387Da3D1a1769bC5A6F77",
+  quote:        "0x3600000000000000000000000000000000000000",
+  factory:      "0xf0db7b58379503491d857dB50AC9ece64c653918",
+  creationFee:  "1000000000000000000",
+  creatorShare: 8000,
+  buybackShare: 0,
+  devCap:       500,
+  startPrice:   "3000000000000",
+  mintr:        "0x0000000000000000000000000000000000000000",
+  mintrPrice:   0,
+};
+const CHAIN_HEX = "0x13b2";
+for (const [id, v] of [["pOwner",ARGS.owner],["pNpm",ARGS.npm],["pRouter",ARGS.router],
+                       ["pQuote",ARGS.quote],["pFee",ARGS.owner]]) {
+  document.getElementById(id).textContent = v;
+}
+const logEl = document.getElementById("log");
+let first = true;
+function log(msg, cls) {
+  if (first) { logEl.textContent = ""; first = false; }
+  const s = document.createElement("span");
+  if (cls) s.className = cls;
+  s.textContent = msg + "\n";
+  logEl.appendChild(s);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+let provider, signer, art, deployed = null;
+
+document.getElementById("bConnect").onclick = async () => {
+  try {
+    if (!window.ethereum) return log("No wallet found in this browser.", "bad");
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    // Arc must be the active chain, or the deploy lands somewhere else entirely.
+    try {
+      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN_HEX }] });
+    } catch { log("Could not switch to Arc automatically; switch manually and reconnect.", "w"); }
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = await provider.getSigner();
+    const net = await provider.getNetwork();
+    if (net.chainId !== 5042n) return log(`Wrong chain: ${net.chainId}. Switch to Arc mainnet (5042).`, "bad");
+    log(`connected ${await signer.getAddress()} on chain ${net.chainId}`, "ok");
+    const bal = await provider.getBalance(await signer.getAddress());
+    log(`gas balance ${ethers.formatEther(bal)} (USDC, 18-dec native)`);
+    if ((await signer.getAddress()).toLowerCase() !== ARGS.owner.toLowerCase()) {
+      log("NOTE: the connected wallet is not the intended owner. The owner argument is fixed above and does not have to be the deployer, but check that is what you want.", "w");
+    }
+    art = await (await fetch("deploy-arcs.json")).json();
+    log(`artifact loaded, ${art.bytecode.length / 2} bytes of creation code`);
+    document.getElementById("bCheck").disabled = false;
+  } catch (e) { log("connect failed: " + (e.shortMessage || e.message), "bad"); }
+};
+
+document.getElementById("bCheck").onclick = async () => {
+  try {
+    log("checking the router...");
+    const code = await provider.getCode(ARGS.router);
+    if (code === "0x") return log("REFUSING: router address has no code on Arc.", "bad");
+    log(`router has ${(code.length - 2) / 2} bytes of code`);
+    // The decisive test: a real SwapRouter must point at the SAME Uniswap factory
+    // the position manager uses, or the launchpad would mint liquidity in one
+    // universe and trade in another.
+    const r = new ethers.Contract(ARGS.router, ["function factory() view returns (address)"], provider);
+    const n = new ethers.Contract(ARGS.npm, ["function factory() view returns (address)"], provider);
+    const [rf, nf] = [await r.factory(), await n.factory()];
+    log(`router.factory()          ${rf}`);
+    log(`positionManager.factory() ${nf}`);
+    if (rf.toLowerCase() !== nf.toLowerCase()) {
+      return log("REFUSING: router and position manager disagree on the factory. A launch would mint liquidity in one pool and trade in another.", "bad");
+    }
+    if (rf.toLowerCase() !== ARGS.factory.toLowerCase()) {
+      log(`WARNING: factory ${rf} differs from the one discovered from live pools (${ARGS.factory}).`, "w");
+    }
+    log("router and position manager agree on the factory", "ok");
+    // Selector presence tells us it is the SwapRouter02 shape the contract calls.
+    const sel = ethers.id("exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))").slice(2, 10);
+    if (code.includes(sel)) log(`exactInputSingle selector 0x${sel} present: matches the shape the launchpad calls`, "ok");
+    else log(`WARNING: exactInputSingle selector 0x${sel} NOT found in the router bytecode. The launchpad calls exactly this signature; a mismatch means every dev buy reverts.`, "w");
+    const q = new ethers.Contract(ARGS.quote, ["function decimals() view returns (uint8)","function symbol() view returns (string)"], provider);
+    log(`quote token: ${await q.symbol()} with ${await q.decimals()} decimals as an ERC-20`);
+    document.getElementById("bDeploy").disabled = false;
+    log("checks passed. Deployment enabled.", "ok");
+  } catch (e) { log("check failed: " + (e.shortMessage || e.message), "bad"); }
+};
+
+document.getElementById("bDeploy").onclick = async () => {
+  try {
+    document.getElementById("bDeploy").disabled = true;
+    const CF = new ethers.ContractFactory(art.abi, art.bytecode, signer);
+    log("sending deployment; confirm in your wallet...");
+    const c = await CF.deploy(
+      ARGS.owner, ARGS.npm, ARGS.router, ARGS.quote, ARGS.owner, ARGS.owner,
+      ARGS.creationFee, ARGS.creatorShare, ARGS.buybackShare, ARGS.devCap,
+      ARGS.startPrice, ARGS.mintr, ARGS.mintrPrice
+    );
+    log(`tx ${c.deploymentTransaction().hash}`);
+    await c.waitForDeployment();
+    deployed = await c.getAddress();
+    log(`DEPLOYED ${deployed}`, "ok");
+    log(`explorer https://arc.exploreme.pro/address/${deployed}`);
+    document.getElementById("bVerify").disabled = false;
+  } catch (e) {
+    log("deploy failed: " + (e.shortMessage || e.message), "bad");
+    document.getElementById("bDeploy").disabled = false;
+  }
+};
+
+document.getElementById("bVerify").onclick = async () => {
+  try {
+    if (!deployed) return;
+    const c = new ethers.Contract(deployed, art.abi, provider);
+    const got = {
+      owner: await c.owner(), positionManager: await c.positionManager(),
+      swapRouter: await c.swapRouter(), quoteToken: await c.quoteToken(),
+      buybackRecipient: await c.buybackRecipient(), opsRecipient: await c.opsRecipient(),
+      creationFee: (await c.creationFee()).toString(),
+      creatorShareBps: (await c.creatorShareBps()).toString(),
+      buybackShareBps: (await c.buybackShareBps()).toString(),
+      startPriceQuote1e18: (await c.startPriceQuote1e18()).toString(),
+      mintr: await c.mintr(),
+    };
+    const want = {
+      owner: ARGS.owner, positionManager: ARGS.npm, swapRouter: ARGS.router, quoteToken: ARGS.quote,
+      buybackRecipient: ARGS.owner, opsRecipient: ARGS.owner, creationFee: ARGS.creationFee,
+      creatorShareBps: String(ARGS.creatorShare), buybackShareBps: String(ARGS.buybackShare),
+      startPriceQuote1e18: ARGS.startPrice, mintr: ARGS.mintr,
+    };
+    let bad = 0;
+    for (const k of Object.keys(want)) {
+      const same = String(got[k]).toLowerCase() === String(want[k]).toLowerCase();
+      if (!same) bad++;
+      log(`${same ? "match  " : "DIFFERS"} ${k}: ${got[k]}`, same ? null : "bad");
+    }
+    if (bad) log(`${bad} field(s) differ. DO NOT USE THIS ADDRESS; redeploy.`, "bad");
+    else log("every immutable matches what was intended. Send me the address.", "ok");
+  } catch (e) { log("verify failed: " + (e.shortMessage || e.message), "bad"); }
+};
+</script>
+</body>
+</html>
