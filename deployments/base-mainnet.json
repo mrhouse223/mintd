@@ -1,0 +1,18 @@
+{
+  "chain": "base-mainnet",
+  "chainId": 8453,
+  "contracts": {
+    "BridgeFeeRouter": "0xEAD1eB5e6464e8EABEC893A02c83073A84c3e217",
+    "USDC": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "CCTP_TokenMessengerV2": "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d",
+    "CCTP_MessageTransmitterV2": "0x81D40F21F12A8F0E3252Bccb954D722d4c464B64"
+  },
+  "cctpDomain": 6,
+  "bridge": {
+    "destination": "arc-mainnet",
+    "destinationDomain": 26,
+    "feeBps": 100,
+    "feeRecipient": "0x64838C341956FcE51FA6575c5F593D0415f23E72",
+    "note": "feeBps and feeRecipient are immutable in the deployed bytecode; feeBps is capped at 100 by a constant checked in the constructor."
+  }
+}
