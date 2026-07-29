@@ -52,12 +52,12 @@ sub("NET fallback", "CHAINS[CHAIN_KEY] || CHAINS.stable", "CHAINS[CHAIN_KEY] || 
 // the secure factory, so the community's first coin is genuinely token #0.
 sub("arc pad", `      pad: "0xcF22a3E32dE43787881b9a87B5424E34F3BF65E6",
       oldPad: "0xd6fdA9A0Fd4b4ee724ab0c0B958a712E5bb37E96",`,
-  `      pad: "0xf4c529a260eAD908e433fcA805CAf923645D8D9e",
+  `      pad: "0x6C8C1Ec953D64e01BEF454A5946A1Aae87914cfD",
       oldPad: null,`);
 
 // Metadata registry follows the pad.
 sub("arc registry", `meta: "0x09c419226e83A91323FDC170144526D8C4a39B75",`,
-  `meta: "0xF156fc983EdD51c01C8d2d7aAE8E9f153472cF8f",`);
+  `meta: "0x923FEFeD25E79bec3d5b127494e5955eDCBFC721",`);
 
 // MINTR is deployed on Arc but is not part of this product yet.
 sub("arc features",
