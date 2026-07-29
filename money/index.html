@@ -2250,6 +2250,10 @@ const CHAINS = {
       // manager and router every vault it creates will approve tokens to are
       // fixed at its construction, which is what makes isVault() worth reading.
       agentFactory: "0x42D58A7dFB4235F25F8ef6Bf84753B4F9A6531be",
+      // Read-only view helper. Collapses ~15 reads per vault into one call,
+      // which is what makes the page survive a community-sized vault list on a
+      // chain that rate limits bursts.
+      agentLens: "0x2adb4D409349637Fd53f2d9453C5Bae919519B72",
       // The community testing venue. A dedicated pair because Arc MINTD is
       // fixed supply and USDC comes from a rate-limited faucet, which left the
       // real pool holding 24 USDC: too thin for one honest tester, since a
@@ -3096,7 +3100,7 @@ const AGENT_NPM_ABI = [
 ];
 const AGENT_MODES = ["Paused", "Propose only", "Timelocked", "Autonomous"];
 
-let agVaults = null, agHistory = null, agFailed = [];
+let agVaults = null, agHistory = null, agFailed = [], agTotal = 0;
 
 function agFactory() { return NET.mintd && NET.mintd.agentFactory; }
 
@@ -3122,16 +3126,15 @@ function agPrice(tick, d0, d1) {
   return p.toPrecision(4);
 }
 
-/// Retry a chain read that collided with rate limiting.
+/// Retry a read that collided with rate limiting.
 ///
-/// Arc accepts a burst and then rate limits it, and this page's reads land
-/// while the app's own token loader is still going, so they come back as a bare
-/// "Failed to fetch". Every read on this page goes through here. An earlier
-/// version retried only the per-vault reads and left the factory call bare,
-/// which meant a hiccup one level up produced "Could not read the factory" and
-/// no list at all, while the level below it was carefully resilient.
-async function agRetry(fn, attempts = 5) {
-  const backoff = [0, 700, 1600, 3000, 5000];
+/// Kept, but it is now insurance rather than the strategy. Retrying per-read
+/// was the strategy once, and it was the wrong one: fifteen sequential reads
+/// per vault against a rate limiter, each retried five times, is a thundering
+/// herd that makes the thing it is recovering from worse. The page now issues
+/// two calls total, so this almost never fires.
+async function agRetry(fn, attempts = 4) {
+  const backoff = [0, 800, 2000, 4000];
   let last = null;
   for (let i = 0; i < Math.min(attempts, backoff.length); i++) {
     if (backoff[i]) await new Promise((r) => setTimeout(r, backoff[i]));
@@ -3140,51 +3143,53 @@ async function agRetry(fn, attempts = 5) {
   throw last;
 }
 
-/// Read one vault's live state. Sequential by design: Arc accepts a batch and
-/// then rate limits it, returning one result and errors for the rest, so a
-/// Promise.all here loses most of its reads (gotcha 1).
-async function agReadVault(a) {
-  const v = new ethers.Contract(a, AGENT_VAULT_ABI, rp);
-  const rec = { address: a };
-  rec.owner = await v.owner();
-  rec.agent = await v.agent();
-  rec.pool = await v.pool();
-  rec.mode = Number(await v.mode());
-  rec.positionId = (await v.positionId()).toString();
-  rec.checkpoint = (await v.valueCheckpoint()).toString();
-  rec.inToken0 = await v.valueInToken0();
-  const t0 = await v.token0(), t1 = await v.token1();
-  rec.t0 = await agToken(t0);
-  rec.t1 = await agToken(t1);
+const AGENT_LENS_ABI = [
+  "function vaults(address factory, uint256 start, uint256 count) view returns (tuple(address vault,address owner,address agent,address pool,uint8 mode,uint256 positionId,uint256 checkpoint,bool valueInToken0,tuple(address addr,string symbol,uint8 decimals,bool decimalsOk) token0,tuple(address addr,string symbol,uint8 decimals,bool decimalsOk) token1,uint24 fee,int24 tick,uint16 observationCardinality,int24 tickLower,int24 tickUpper,uint128 liquidity,uint256 value,bool valueOk,int24 maxTickDrift,uint256 maxSlippageBps,uint256 lossToleranceBps,uint256 reviewWindow,uint32 twapWindow,uint256 cooldown,bool proposalOpen,int24 proposalLower,int24 proposalUpper)[] out, uint256 total)",
+];
+const AG_PAGE = 24;
+
+function agLens() { return NET.mintd && NET.mintd.agentLens; }
+
+/// Map one lens row onto the shape the renderers already expect.
+function agRowToRec(r) {
+  const tok = (t) => {
+    // decimalsOk false means the token did not answer decimals(). Refuse to
+    // guess: 18 assumed for a 6-decimal token is a 1,000,000x error on screen,
+    // which has already happened here once through a swallowed call.
+    if (!t.decimalsOk) throw new Error("token " + t.addr + " has no readable decimals()");
+    return { addr: t.addr, sym: t.symbol, dec: Number(t.decimals) };
+  };
+  const rec = {
+    address: r.vault,
+    owner: r.owner,
+    agent: r.agent,
+    pool: r.pool,
+    mode: Number(r.mode),
+    positionId: r.positionId.toString(),
+    checkpoint: r.checkpoint.toString(),
+    inToken0: r.valueInToken0,
+    t0: tok(r.token0),
+    t1: tok(r.token1),
+    fee: Number(r.fee),
+    tick: Number(r.tick),
+    card: Number(r.observationCardinality),
+    value: r.valueOk ? r.value.toString() : null,
+    maxTickDrift: Number(r.maxTickDrift),
+    maxSlippageBps: Number(r.maxSlippageBps),
+    lossToleranceBps: Number(r.lossToleranceBps),
+    reviewWindow: Number(r.reviewWindow),
+    twapWindow: Number(r.twapWindow),
+    cooldown: Number(r.cooldown),
+    proposalOpen: r.proposalOpen,
+    proposalLower: Number(r.proposalLower),
+    proposalUpper: Number(r.proposalUpper),
+  };
   rec.num = rec.inToken0 ? rec.t0 : rec.t1;
-  // valueNow reverts when the pool cannot produce a TWAP. That is a real state
-  // for a fresh pool, not a fault, and a vault refusing to report a number it
-  // cannot stand behind is the correct behaviour. Distinguished from a failed
-  // read, which retries.
-  try { rec.value = (await v.valueNow()).toString(); } catch { rec.value = null; }
-  const pool = new ethers.Contract(rec.pool, AGENT_POOL_ABI, rp);
-  rec.tick = Number((await pool.slot0())[1]);
-  rec.fee = Number(await pool.fee());
   if (rec.positionId !== "0") {
-    const npm = new ethers.Contract(await v.npm(), AGENT_NPM_ABI, rp);
-    const p = await npm.positions(rec.positionId);
-    rec.lower = Number(p[5]); rec.upper = Number(p[6]); rec.liq = p[7].toString();
+    rec.lower = Number(r.tickLower);
+    rec.upper = Number(r.tickUpper);
+    rec.liq = r.liquidity.toString();
     rec.inRange = rec.tick >= rec.lower && rec.tick < rec.upper;
-  }
-  // Policy and pending proposal are read only for the connected owner. Six more
-  // sequential calls per vault is real latency on a chain that rate limits, and
-  // nobody but the owner can act on any of it.
-  if (wallet && rec.owner && wallet.toLowerCase() === rec.owner.toLowerCase()) {
-    rec.maxTickDrift = Number(await v.maxTickDrift());
-    rec.maxSlippageBps = Number(await v.maxSlippageBps());
-    rec.lossToleranceBps = Number(await v.lossToleranceBps());
-    rec.reviewWindow = Number(await v.reviewWindow());
-    rec.twapWindow = Number(await v.twapWindow());
-    rec.cooldown = Number(await v.cooldown());
-    const pr = await v.proposal();
-    rec.proposalOpen = pr.open;
-    rec.proposalLower = Number(pr.lower);
-    rec.proposalUpper = Number(pr.upper);
   }
   return rec;
 }
@@ -3197,59 +3202,43 @@ async function agLoad(force) {
   }
   if (agVaults && !force) { agPaint(); return; }
   // Rendered up front, not after the vault reads. Creating a vault does not
-  // depend on the list, and on a chain that rate limits the reads can take
-  // twenty seconds, during which the whole panel would sit blank for no reason.
+  // depend on the list, and the panel sitting blank while the chain is read
+  // makes the page look broken when it is merely busy.
   agRenderCreate();
   box.innerHTML = `<div class="empty">Reading the factory…</div>`;
   try {
-    // Live from the chain, one call at a time. Arc accepts batches and then
-    // rate limits them, so a Promise.all here loses most of its reads and the
-    // page silently shows fewer vaults than exist (gotcha 1).
-    const f = new ethers.Contract(agFactory(), AGENT_FACTORY_ABI, rp);
-    const n = Number(await agRetry(() => f.vaultCount()));
-    const addrs = [];
-    for (let i = 0; i < n; i += 100) addrs.push(...await agRetry(() => f.allVaultsSlice(i, 100)));
+    if (!agLens()) throw new Error("no AgentLens configured for this chain");
+    // ONE call for the whole page. Reading each vault field by field took about
+    // fifteen requests per vault, which on a chain that rate limits turned a
+    // handful of vaults into a request storm that never finished. Community
+    // testing multiplies the vault count, which is exactly when it has to work.
+    const lens = new ethers.Contract(agLens(), AGENT_LENS_ABI, rp);
+    const res = await agRetry(() => lens.vaults(agFactory(), 0, AG_PAGE));
+    const rows = res[0] || res.out || [];
+    agTotal = Number(res[1] !== undefined ? res[1] : res.total);
 
-    const out = [];
-    const failed = [];
-    for (const a of addrs) {
-      // Retried, and never silently dropped. Arc accepts a burst and then rate
-      // limits it, so a vault read that collides with the app's own startup
-      // traffic fails transiently. Swallowing that turned a temporary error
-      // into "no vaults yet", which reads as an empty product rather than a
-      // hiccup, and is exactly how the first version of this page shipped.
-      let rec = null, lastErr = null;
-      try { rec = await agRetry(() => agReadVault(a)); } catch (e) { lastErr = e; }
-      if (rec) out.push(rec);
-      else failed.push({ address: a, err: (lastErr && (lastErr.shortMessage || lastErr.message)) || "unreadable" });
+    const out = [], failed = [];
+    for (const r of rows) {
+      try { out.push(agRowToRec(r)); }
+      catch (e) { failed.push({ address: r.vault, err: e.message }); }
     }
+    agVaults = out;
     agFailed = failed;
 
-    agVaults = out;
-
-    // History is the one thing the browser cannot rebuild: reconstructing it
-    // means scanning logs against a 500-block cap on a chain making four
-    // blocks a second. The indexer banks it instead.
+    // History is the one thing the chain cannot hand over cheaply:
+    // reconstructing it means scanning logs against a 500-block cap on a chain
+    // making four blocks a second. The indexer banks it instead.
     try {
-      const r = await fetch("/agent-data.json" + (force ? "?t=" + Date.now() : ""), { cache: force ? "reload" : "default" });
-      if (r.ok) agHistory = await r.json();
+      const rr = await fetch("/agent-data.json" + (force ? "?t=" + Date.now() : ""), { cache: force ? "reload" : "default" });
+      if (rr.ok) agHistory = await rr.json();
     } catch { agHistory = null; }
 
     agPaint();
   } catch (e) {
-    box.innerHTML = `<div class="empty">Could not read the factory: ${esc(e.shortMessage || e.message)}</div>`;
+    box.innerHTML = `<div class="empty">Could not read the vaults: ${esc(e.shortMessage || e.message)}</div>`;
   }
 }
 
-// Its own ABI rather than the shared ERC20_ABI, which has no decimals() entry.
-// Reading through that one threw, and an earlier version of this swallowed the
-// throw and fell back to 18. On Arc, USDC is 18-decimal natively and 6 as an
-// ERC-20, so the fallback rendered 3.997599 USDC as 0.000000000003997599: the
-// dual-decimal trap in CLAUDE.md gotcha 6, arriving through a silent catch.
-const AGENT_ERC20_ABI = [
-  "function symbol() view returns (string)",
-  "function decimals() view returns (uint8)",
-];
 const agTokCache = {};
 async function agToken(addr) {
   if (agTokCache[addr]) return agTokCache[addr];
@@ -3548,7 +3537,10 @@ function agPaint() {
     ? "history to block " + nf(agHistory.lastScanned, 0) : "live";
 
   let rebs = 0, cost = 0n, costDec = null, costSym = "";
-  let val = 0, valSym = "";
+  // Totalled PER NUMERAIRE. Vaults do not share one: this list has a tUSD vault
+  // and a USDC one, and adding them produced "5,003.9976 USDC", a number that
+  // is not denominated in anything. Different units never go into one sum.
+  const byUnit = {};
   for (const v of list) {
     for (const e of agEvents(v.address)) {
       if (e.name !== "Rebalanced") continue;
@@ -3556,9 +3548,14 @@ function agPaint() {
       cost += BigInt(e.args[3]) - BigInt(e.args[2]);
       costDec = v.num.dec; costSym = v.num.sym;
     }
-    if (v.value !== null) { val += Number(v.value) / Math.pow(10, v.num.dec); valSym = v.num.sym; }
+    if (v.value !== null) {
+      byUnit[v.num.sym] = (byUnit[v.num.sym] || 0) + Number(v.value) / Math.pow(10, v.num.dec);
+    }
   }
-  $("agValue").textContent = list.length ? nf(val, 4) + (valSym ? " " + valSym : "") : "–";
+  const units = Object.entries(byUnit).sort((a, b) => b[1] - a[1]);
+  $("agValue").textContent = units.length
+    ? units.map(([sym, amt]) => nf(amt, 4) + " " + sym).join(" + ")
+    : "–";
   $("agRebs").textContent = rebs;
   const cEl = $("agCost");
   if (costDec === null) { cEl.textContent = "–"; cEl.style.color = ""; }

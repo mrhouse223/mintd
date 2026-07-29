@@ -50,6 +50,7 @@ for (const rel of [
   "contracts/MintdLaunchpad.sol",
   "contracts/AgentVault.sol",
   "contracts/AgentVaultFactory.sol",
+  "contracts/AgentLens.sol",
 ]) {
   sources[rel] = { content: fs.readFileSync(path.join(root, rel), "utf8") };
 }
