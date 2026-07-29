@@ -61,6 +61,11 @@ interface ITokenMessengerV2 {
         uint256 maxFee,
         uint32 minFinalityThreshold
     ) external;
+    function localMessageTransmitter() external view returns (address);
+}
+
+interface IMessageTransmitter {
+    function localDomain() external view returns (uint32);
 }
 
 contract BridgeFeeRouter {
@@ -101,6 +106,16 @@ contract BridgeFeeRouter {
         // would let every bridge silently take the fee and burn nothing.
         require(_usdc.code.length > 0 && _messenger.code.length > 0, "not contract");
         require(_feeBps <= MAX_FEE_BPS, "fee too high");
+        // Cross-checked against the messenger rather than trusted from a deploy
+        // script. A domain equal to the local one would burn on this chain to
+        // mint on this chain, and every immutable here is unfixable afterwards.
+        // Note localDomain() lives on the MessageTransmitter, NOT on the
+        // TokenMessenger: calling it on the messenger reverts, which would have
+        // bricked this constructor.
+        uint32 localDomain = IMessageTransmitter(
+            ITokenMessengerV2(_messenger).localMessageTransmitter()
+        ).localDomain();
+        require(_destinationDomain != localDomain, "domain is local");
         usdc = IERC20(_usdc);
         messenger = ITokenMessengerV2(_messenger);
         feeRecipient = _feeRecipient;
@@ -112,9 +127,18 @@ contract BridgeFeeRouter {
     /// @param amount Total USDC to take from the caller, fee inclusive.
     /// @param mintRecipient Destination address, left-padded into bytes32.
     ///
-    /// @dev `mintRecipient` is checked non-zero. CCTP would happily burn to a
-    /// zero recipient and the USDC would be unrecoverable on both chains, which
-    /// is the one mistake here that cannot be undone by anybody.
+    /// @dev `mintRecipient` must be a CANONICAL left-padded EVM address: the
+    /// address in the low 160 bits, upper 96 bits zero. A non-zero check alone
+    /// is not enough, and the difference is a total loss of the transfer.
+    ///
+    /// `bytes32(bytes20(addr))` in Solidity and `zeroPadBytes` in ethers both
+    /// right-pad, one word away from the correct `zeroPadValue`. Such a value is
+    /// non-zero, so it would pass a zero check, and CCTP validates nothing:
+    /// `Message.bytes32ToAddress` simply truncates to the low 160 bits. That
+    /// yields the address's last 8 bytes followed by 12 zero bytes, an address
+    /// nobody controls. The burn succeeds on this chain, Circle attests, and the
+    /// mint SUCCEEDS on the destination into that dead address. No revert
+    /// anywhere, nothing surfaced to the user, and no refund exists.
     function bridge(uint256 amount, bytes32 mintRecipient) external returns (uint256) {
         return _bridge(msg.sender, amount, mintRecipient);
     }
@@ -127,6 +151,7 @@ contract BridgeFeeRouter {
     /// places `msg.sender` is read.
     function _bridge(address payer, uint256 amount, bytes32 mintRecipient) internal returns (uint256 bridgedAmount) {
         require(amount > 0, "amount");
+        require(uint256(mintRecipient) >> 160 == 0, "recipient encoding");
         require(mintRecipient != bytes32(0), "recipient");
 
         uint256 fee = (amount * feeBps) / 10_000;

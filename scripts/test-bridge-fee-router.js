@@ -26,7 +26,7 @@ async function deployReverts(fn, name) {
   catch { check(true, name); }
 }
 
-const ARC_DOMAIN = 26, FEE_BPS = 100;
+const ARC_DOMAIN = 26, BASE_DOMAIN = 6, FEE_BPS = 100;
 
 async function main() {
   const g = ganache.provider({
@@ -45,8 +45,15 @@ async function main() {
   await usdc.waitForDeployment();
   const USDC = await usdc.getAddress();
 
+  // The transmitter is where localDomain() lives, mirroring real CCTP: the
+  // router's constructor reads it THROUGH the messenger.
+  const mtArt = build("MockMessageTransmitter");
+  const mt = await new ethers.ContractFactory(mtArt.abi, mtArt.bytecode, deployer).deploy(BASE_DOMAIN);
+  await mt.waitForDeployment();
+  const MT = await mt.getAddress();
+
   const mmArt = build("MockTokenMessenger");
-  const mm = await new ethers.ContractFactory(mmArt.abi, mmArt.bytecode, deployer).deploy(USDC);
+  const mm = await new ethers.ContractFactory(mmArt.abi, mmArt.bytecode, deployer).deploy(USDC, MT);
   await mm.waitForDeployment();
   const MM = await mm.getAddress();
 
@@ -70,6 +77,10 @@ async function main() {
     "a zero fee recipient is rejected");
   await deployReverts(() => RF.deploy(USDC, OTHER, FEETO, FEE_BPS, ARC_DOMAIN),
     "an EOA as messenger is rejected, so a typo cannot burn nothing while charging");
+  // Cross-checked against the messenger's own transmitter, not trusted from the
+  // deploy script. Burning here to mint here would be a pure loss.
+  await deployReverts(() => RF.deploy(USDC, MM, FEETO, FEE_BPS, BASE_DOMAIN),
+    "a destination domain equal to the local one cannot be deployed");
   // No admin surface at all: the fee and its destination are unreachable.
   const fns = rArt.abi.filter((x) => x.type === "function").map((x) => x.name);
   check(!fns.some((n) => /^set|owner|admin|transferOwnership|upgrade/i.test(n)),
@@ -109,6 +120,27 @@ async function main() {
     "a zero amount is rejected");
   await reverts(() => router.connect(user).bridge(U(1000), ethers.ZeroHash, { gasLimit: 300000 }),
     "a zero mint recipient is rejected, because that burn would be unrecoverable on both chains");
+
+  // The finding from the security review, and the reason a non-zero check was
+  // not enough. zeroPadBytes RIGHT-pads: one word away from zeroPadValue, still
+  // non-zero, and CCTP truncates it to an address nobody controls. The burn and
+  // the mint would BOTH succeed and the funds would be gone with no error.
+  const rightPadded = ethers.zeroPadBytes(USER, 32);
+  check(rightPadded !== ethers.zeroPadValue(USER, 32),
+    "the right-padded encoding really is a different value from the canonical one",
+    `right ${rightPadded}`);
+  check(rightPadded !== ethers.ZeroHash, "and it is non-zero, so a zero check would let it through");
+  await reverts(() => router.connect(user).bridge(U(1000), rightPadded, { gasLimit: 300000 }),
+    "a RIGHT-padded recipient is rejected, which a non-zero check alone would have burned");
+  // Dirty upper bits with a valid low 20 bytes: CCTP would truncate and deliver
+  // correctly, but it is not a shape any honest caller produces, so it is out.
+  const dirtyUpper = "0x" + "ff".repeat(12) + USER.slice(2).toLowerCase();
+  await reverts(() => router.connect(user).bridge(U(1000), dirtyUpper, { gasLimit: 300000 }),
+    "non-zero upper bits are rejected even though CCTP would truncate them away");
+  // And the canonical form still works, so the check is not simply refusing all.
+  const okBefore = await mm.calls();
+  await (await router.connect(user).bridge(U(100), ethers.zeroPadValue(USER, 32), { gasLimit: 500000 })).wait();
+  check((await mm.calls()) - okBefore === 1n, "the canonical encoding is still accepted");
   // 1 unit of 6-dec USDC: the 1% fee rounds to 0, so it bridges rather than
   // charging for nothing. The guard is against the reverse.
   const tiny = await router.quote(1n);

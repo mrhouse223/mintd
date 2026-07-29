@@ -25,8 +25,15 @@ contract MockTokenMessenger {
     uint256 public calls;
     bool public shouldRevert;
     address public immutable token;
+    /// Mirrors the real layout: the local domain is reachable only through the
+    /// message transmitter, so the router's constructor check is exercised for
+    /// real rather than against a convenience shortcut.
+    address public immutable localMessageTransmitter;
 
-    constructor(address _token) { token = _token; }
+    constructor(address _token, address _transmitter) {
+        token = _token;
+        localMessageTransmitter = _transmitter;
+    }
 
     function setShouldRevert(bool v) external { shouldRevert = v; }
 
@@ -47,4 +54,11 @@ contract MockTokenMessenger {
         last = Call(amount, destinationDomain, mintRecipient, burnToken, destinationCaller, maxFee, minFinalityThreshold);
         calls++;
     }
+}
+
+/// Minimal stand-in for Circle's MessageTransmitter, which is the only place
+/// localDomain() actually lives.
+contract MockMessageTransmitter {
+    uint32 public immutable localDomain;
+    constructor(uint32 d) { localDomain = d; }
 }
