@@ -2357,6 +2357,17 @@ const LC = window.LOCAL_CONFIG || null;
 const CHAINS = {
   "arc-mainnet": {
     key: "arc-mainnet", label: "Arc", short: "Arc", brand: "arcswap.vip",
+    // Not offered in mintd.fun's chain switcher. Arc is a separate product on a
+    // separate domain now, and a visitor who came here for the launchpad on
+    // Stable should not be one click from a different site's chain, contracts
+    // and token. The entry has to stay in this file because build-money.js
+    // generates arcswap from it by keeping this chain and dropping the others.
+    //
+    // Gating it leaves Stable as the only ungated chain, and chainPill removes
+    // itself entirely when fewer than two are visible, so mintd.fun shows no
+    // switcher at all. arcswap is unaffected: its build has one chain, so the
+    // control was already empty there.
+    gated: true,
     chain: {
       chainId: "0x13b2", chainName: "Arc",
       nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
