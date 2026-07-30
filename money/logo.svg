@@ -1,33 +1,33 @@
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="arcswap">
-  <!-- arcswap mark: the bold "as" ligature from the supplied artwork. Blue on
-       white, matching the source, rather than the transparent monoline this
-       replaced: the supplied logo IS blue-on-white, and every container that
-       shows it already rounds its own corners.
-       #1a73e8 is not picked by eye, it is the exact brand blue the arcswap
-       palette sets in build-money.js, so mark and UI cannot drift apart. -->
-  <title>arcswap</title>
-  <rect width="512" height="512" fill="#ffffff"/>
-  <!-- Stroke 46, measured off the source rather than guessed: its ring wall is
-       about 0.42 of the ring's counter, which at this ring size is 46, and the
-       's' carries the same weight because a lighter 's' beside a heavy 'a' reads
-       as two logos spliced together.
-       46 is also the ceiling, not a style choice. An earlier pass used 62, and
-       at that weight the 's' has only (220 - 3*46) / 2 of vertical room left for
-       its two counters: both closed to slivers and the letter read as a blob.
-       Stroke, s height and counter size are one constraint, not three. -->
-  <g fill="none" stroke="#1a73e8" stroke-width="46" stroke-linecap="round" stroke-linejoin="round">
-    <!-- 'a': the ring, plus the stem standing on its right edge. The stem's
-         centre sits half a stroke inside the ring's outer edge so their right
-         sides align instead of the stem bulging past it. -->
-    <circle cx="150" cy="266" r="82"/>
-    <path d="M232 148 L232 374"/>
-    <!-- 's': same weight, wider than it is tall so the counters stay open. The
-         join to the 'a' is an overlap rather than a seam, so the two letters
-         read as one mark the way the source does. -->
-    <path d="M448 198
-             C448 160 392 141 356 165
-             C320 189 329 231 375 250
-             C421 269 439 311 404 336
-             C366 363 308 343 299 305"/>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ArcSwap">
+  <!-- ArcSwap mark: white angular "A" whose crossbar is a swoosh, on a blue
+       tile, from the supplied artwork. Replaces the "as" monogram.
+       Full-bleed square rather than a rounded tile: the containers that show it
+       round their own corners, and arcswap now runs a squared-off treatment, so
+       a radius baked into the asset would fight the CSS.
+       #0e62c8 is the artwork's own blue, deeper than the #1a73e8 the UI uses for
+       accents. Deliberate: this is a logo tile, not a UI surface, and matching
+       the supplied mark matters more than matching a button. -->
+  <title>ArcSwap</title>
+  <rect width="512" height="512" fill="#0e62c8"/>
+  <g fill="#ffffff">
+    <!-- The A as a lambda: apex, down both legs to sharp points, back up the
+         inner edges to the counter's apex. The outer bottom points sit wider
+         than the inner ones so each leg tapers to a blade instead of ending
+         square, which is what makes the mark read as angular rather than blocky. -->
+    <path d="M256 58
+             L486 452
+             L364 452
+             L256 250
+             L148 452
+             L26 452
+             Z"/>
+    <!-- The swoosh, doing the crossbar's job. It has to run FLAT under the
+         counter before it lifts, or it reads as a separate tick floating beside
+         the letter rather than closing it, which is exactly how a steeper first
+         attempt failed. It overshoots the right leg the way the source does. -->
+    <path d="M146 332
+             C258 340 366 322 474 168
+             C436 306 302 366 146 332
+             Z"/>
   </g>
 </svg>

@@ -93,6 +93,15 @@ sub("hero headline",
 // The split is stated as 80/20 rather than "the majority". The percentage is
 // still read from the deployed pad when one exists, so the sentence cannot drift
 // from the contract; only the fallback text names 80 outright.
+// The badge's placeholder is a dash until the pad's creator share is read, and
+// on Arc that read needs a connected wallet, so an anonymous visitor saw
+// "CREATORS KEEP - OF FEES" directly above a blurb stating 80% as fact. The
+// blurb's static copy already commits to 80%; this makes the badge agree instead
+// of contradicting it. Still overwritten by the live value once it is read, so a
+// changed share corrects itself rather than lying.
+sub("hero share placeholder",
+  '<span id="heroShare">–</span>',
+  '<span id="heroShare">80%</span>');
 sub("hero blurb split, known",
   '`Creators claim ${share}% of every trading fee any time`',
   '`Creators claim ${share}% of every trading fee any time, and the remaining ${100 - share}% funds the protocol`');
@@ -231,6 +240,46 @@ sub("favicon", `<link rel="icon" type="image/png" href="/logo.png" />`,
     if (hits) { s = s.replace(re, to); n += hits; }
   }
   subs.push(`recoloured ${n} hardcoded green literal(s) to blue (1)`);
+}
+
+// ------------------------------------------------------- squared-off treatment
+// arcswap runs a squarer, flatter look than the launchpad's rounded one. This is
+// appended as the LAST rule in the stylesheet rather than editing the dozens of
+// radii in place: the values are spread across ~19 pill rules, a dozen card
+// rules and a handful of inline style attributes, and rewriting each one is both
+// a bigger diff and a permanent merge conflict with mintd.fun's own styling.
+//
+// !important is load-bearing here, not laziness. Several radii live in inline
+// style attributes in the markup, which beat any stylesheet rule on specificity,
+// so a plain rule silently loses to them.
+//
+// Status dots keep their circle deliberately. A squared live indicator does not
+// read as a design decision, it reads as a rendering fault.
+const SQUARE_CSS = `
+  /* arcswap: squared, flatter, more institutional than the launchpad's look */
+  :root { --radius: 2px; }
+  button, .btn, .chip, .badgepill, .sidetabs, .onb, .themebtn, .createbtn,
+  .bigsearch, .search, input, textarea, select, .amtbox, .gstep, .trade,
+  .stat, .hstat, .feecard, .chartcard, .lform, .tokhead, .gradcard, .seccard,
+  .mbox, .feerow, .tcard, .card, .avatar, .pill, .tokbtn, .gmono, .toast,
+  .empty, .cnt, .gnum, .modal, .panel, img {
+    border-radius: 2px !important;
+  }
+  /* a live indicator has to stay round */
+  .dot { border-radius: 50% !important; }
+  /* flat over glossy: the soft drop shadows and the diagonal gradient bands are
+     the other half of what reads as playful rather than professional */
+  .seccard, .mbox, .toast, .modal, .tokhead, .trade, .card, .tcard {
+    box-shadow: none !important;
+  }
+`;
+if (s.includes("</style>")) {
+  s = s.replace("</style>", SQUARE_CSS + "</style>");
+  subs.push("appended the squared-off style override (1)");
+} else {
+  // Never fail silently: a missing hook means the override shipped as nothing
+  // and the site would just look unchanged with no error anywhere.
+  throw new Error("no </style> to append the squared-off override to");
 }
 
 fs.writeFileSync(OUT, s);

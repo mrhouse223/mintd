@@ -1180,6 +1180,23 @@
     border: 1px solid var(--line);
     border-radius: 10px;
   }
+
+  /* arcswap: squared, flatter, more institutional than the launchpad's look */
+  :root { --radius: 2px; }
+  button, .btn, .chip, .badgepill, .sidetabs, .onb, .themebtn, .createbtn,
+  .bigsearch, .search, input, textarea, select, .amtbox, .gstep, .trade,
+  .stat, .hstat, .feecard, .chartcard, .lform, .tokhead, .gradcard, .seccard,
+  .mbox, .feerow, .tcard, .card, .avatar, .pill, .tokbtn, .gmono, .toast,
+  .empty, .cnt, .gnum, .modal, .panel, img {
+    border-radius: 2px !important;
+  }
+  /* a live indicator has to stay round */
+  .dot { border-radius: 50% !important; }
+  /* flat over glossy: the soft drop shadows and the diagonal gradient bands are
+     the other half of what reads as playful rather than professional */
+  .seccard, .mbox, .toast, .modal, .tokhead, .trade, .card, .tcard {
+    box-shadow: none !important;
+  }
 </style>
 </head>
 <body>
@@ -1222,7 +1239,7 @@
       <!-- heroShare starts blank, not "90%": the share differs per chain and a
            hardcoded default renders as a confident wrong number on Arc until
            the real value arrives. -->
-      <div class="badgepill"><span id="heroNet">STABLE MAINNET</span> · CREATORS KEEP <span id="heroShare">–</span> OF FEES</div>
+      <div class="badgepill"><span id="heroNet">STABLE MAINNET</span> · CREATORS KEEP <span id="heroShare">80%</span> OF FEES</div>
       <h1>The Pons of Arc Mainnet.<br /><span class="g">Launch a coin for 1 USDC.</span></h1>
       <p id="heroBlurb"></p>
       <div class="herobtns">
