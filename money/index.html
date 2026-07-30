@@ -1326,7 +1326,7 @@
       <div class="stat"><label>MARKET CAP</label><b id="sMcap">–</b><small id="sMcap2">&nbsp;</small></div>
       <div class="stat"><label>PRICE</label><b id="sPrice">–</b><small><span class="qsym">USDT0</span> per token</small></div>
       <div class="stat"><label>24H VOLUME</label><b id="sVol">–</b><small id="sVol2">&nbsp;</small></div>
-      <div class="stat"><label>TRADES</label><b id="sLiq">–</b><small>24h · LP permanently locked</small></div>
+      <div class="stat"><label>TRADES</label><b id="sLiq">–</b><small id="sLiqNote">24h</small></div>
     </div>
 
     <div class="gradcard">
@@ -3171,10 +3171,14 @@ function paintHeroBlurb() {
   // Only quote a percentage once it has actually been read. The placeholder
   // would otherwise print a confident, wrong number.
   const share = cfgLoaded && cfg && cfg.share ? Number(cfg.share) / 100 : null;
+  // "Every coin" was true only while every coin came from this launchpad. It is
+  // scoped to launched coins now, because a token listed here whose liquidity
+  // sits in a wallet would otherwise be covered by a promise nothing enforces.
+  // Each token page states its own custody, read from the position's owner.
   hb.textContent =
-    `Every coin trades on a bonding curve from its very first block. The curve lives inside a `
-    + `permanently locked ${sym} pool on Uniswap V3, so there is no migration and no LP withdrawal, `
-    + `ever. Coins graduate at 7,000 ${sym} in the pool. `
+    `Every coin launched here trades on a bonding curve from its very first block. The curve lives `
+    + `inside a ${sym} pool on Uniswap V3 that the launchpad has no code path to withdraw from, `
+    + `so its liquidity cannot be pulled or migrated. Coins graduate at 7,000 ${sym} in the pool. `
     + (share != null ? `Creators claim ${share}% of every trading fee any time, and the remaining ${100 - share}% funds the protocol` : `Creators claim 80% of every trading fee any time, and the remaining 20% funds the protocol`)
     + (devCapBps != null ? `, and no launch can dev-buy more than ${devCapBps / 100}% of supply` : "")
     // Gated on the burn feature, not merely on a platform token existing.
@@ -3323,6 +3327,71 @@ class ExplorerProvider extends ethers.AbstractProvider {
   }
   async _detectNetwork() { return ethers.Network.from(this.chain); }
 }
+/// Who actually holds a token's liquidity, read from the position NFT.
+///
+/// A launchpad that owns its own position cannot withdraw the liquidity, and
+/// that is the product. A position sitting in a wallet can be pulled at any
+/// time. The difference is the single most important thing on the page for
+/// somebody deciding whether to buy, so it is read from
+/// `positionManager.ownerOf` rather than assumed from which pad launched it.
+///
+/// Answers null when it cannot be determined, and the caller says so, because
+/// "we could not check" and "it is locked" must never render the same.
+const lpLockCache = {};
+const lpLockRetried = {};
+async function lpLockOwner(t) {
+  if (!t || !t.positionId || !ADDR.npm || !rp) return null;
+  const key = String(t.positionId);
+  if (key in lpLockCache) return lpLockCache[key];
+  try {
+    const npm = new ethers.Contract(ADDR.npm, NPM_ABI, rp);
+    const owner = await retryRead(() => npm.ownerOf(t.positionId));
+    return (lpLockCache[key] = owner);
+  } catch (e) {
+    // Deliberately NOT cached. A failure here is almost always transient (the
+    // first paint can race the provider coming up), and caching it pinned
+    // "custody unverified" for the whole session on a token whose liquidity was
+    // in fact locked. A wrong custody label is the one thing on this page that
+    // must never be sticky.
+    console.error("could not read the LP position owner", e.shortMessage || e.message);
+    return null;
+  }
+}
+async function paintLpLock(t, baseText) {
+  const el = $("gLbl");
+  if (!el) return;
+  // The base is passed in, not read back off the element. Reading it back made
+  // this append to its own previous output, and renderToken runs more than once
+  // per visit, so the custody sentence duplicated itself on screen.
+  const base = baseText != null ? baseText : (el.dataset.base || el.textContent);
+  el.dataset.base = base;
+  const owner = await lpLockOwner(t);
+  if (owner === null) {
+    el.textContent = base + " · LP custody unverified";
+    // Boot fires route() without awaiting init(), so the very first paint of a
+    // token page can beat the provider into existence and read nothing. One
+    // retry turns that into the right answer instead of a permanent "unverified"
+    // on a token whose liquidity is in fact locked. Bounded, and keyed per
+    // position so it cannot loop.
+    const k = String(t.positionId);
+    if (!lpLockRetried[k]) {
+      lpLockRetried[k] = true;
+      setTimeout(() => { paintLpLock(t, base); }, 1500);
+    }
+    return;
+  }
+  // Locked means the launchpad that created it still holds the position and has
+  // no code path to withdraw. Anything else is a wallet, including ours.
+  const locked = sameAddr(owner, t.padOf) || sameAddr(owner, padAddr()) || sameAddr(owner, V3_LOCKER_ADDR);
+  // Factual and short either way. The locked case is the launchpad's guarantee;
+  // the other states who holds it and stops there, rather than editorialising.
+  el.textContent = base + (locked
+    ? " · Liquidity locked in the launchpad, no withdraw path"
+    : ` · LP held by ${short(owner)}, not locked`);
+  const small = $("sLiqNote");
+  if (small) small.textContent = locked ? "24h · LP permanently locked" : "24h · LP not locked";
+}
+
 /// The chain's declared RPC, proved to answer before it is adopted.
 async function rpcRead() {
   const url = CHAIN.rpcUrls && CHAIN.rpcUrls[0];
@@ -7991,7 +8060,15 @@ async function renderToken(addr) {
   $("sLiq").textContent = cur.tx24 !== undefined ? nf(cur.tx24, 0) : nf(tradeLogs.filter((x) => x.addr === addr).length, 0);
   $("gPct").textContent = cur.prog.toFixed(2) + "%";
   $("gBar").style.width = cur.prog + "%";
-  $("gLbl").textContent = `Target ${nf(ethers.formatEther(gradTarget()), 0)} ${NET.chain.nativeCurrency.symbol} · Current pool ${nf(ethers.formatEther(cur.poolUsdt), 2)} ${NET.chain.nativeCurrency.symbol} · Locked liquidity never migrates`;
+  // The lock claim is now VERIFIED per token rather than asserted for all of
+  // them. It used to be printed unconditionally, which was true only because
+  // every token came from a launchpad that cannot withdraw liquidity. Once a
+  // token exists whose position sits in a wallet, an unconditional "locked
+  // liquidity never migrates" is a false statement about somebody's custody, on
+  // the page they read before buying. paintLpLock fills the rest in from chain.
+  const gBase = `Target ${nf(ethers.formatEther(gradTarget()), 0)} ${NET.chain.nativeCurrency.symbol} · Current pool ${nf(ethers.formatEther(cur.poolUsdt), 2)} ${NET.chain.nativeCurrency.symbol}`;
+  $("gLbl").textContent = gBase;
+  paintLpLock(cur, gBase);
   const myTrades = tradeLogs.filter((x) => x.addr === addr);
   if (cur.vol24 !== undefined) {
     $("sVol").textContent = fmtUsd(cur.vol24);
