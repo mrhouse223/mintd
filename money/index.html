@@ -2360,7 +2360,12 @@ const CHAINS = {
     chain: {
       chainId: "0x13b2", chainName: "Arc",
       nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-      rpcUrls: ["https://5042.rpc.thirdweb.com"], blockExplorerUrls: ["https://arc.exploreme.pro"],
+      // Answers eth_call and eth_chainId, accepts batches, and sends CORS "*",
+      // so the page reads the chain directly with no wallet. eth_getLogs is
+      // DISABLED on it, which is why charts and the trade feed still cannot
+      // load. Replaces the thirdweb endpoint, which errored on every method.
+      rpcUrls: ["https://real-pump-soon-trust-me-bro-again.poptyedev.com/b71fac7173778c3f6a9148c157b8b4f61d275b447b087327"],
+      blockExplorerUrls: ["https://arc.exploreme.pro"],
     },
     // Every address below was read off the chain, not copied from another
     // deployment: Uniswap V3 is NOT at its canonical addresses on Arc. The
@@ -2437,11 +2442,10 @@ const CHAINS = {
     statsFile: null,
     dexSlug: null,   // Dexscreener does not index Arc
     faucet: null,
-    // No public RPC answers this chain, so reads come from the visitor's wallet
-    // when one is connected (see walletRead) and otherwise from the block
-    // explorer's eth_call proxy (see ExplorerProvider). The path is same-origin
-    // and proxied upstream by money/netlify.toml, because the explorer sends no
-    // CORS header and a direct call from the page is blocked.
+    // Switches init to the ordered fallback: chain RPC, then wallet, then the
+    // explorer proxy. The flag keeps its old name because connect() and
+    // logProvider() branch on it. Arc has burned through three read paths in a
+    // single day, so none of them is trusted without a probe first.
     readViaWallet: true,
     // Trailing slash on purpose: Netlify's "/arcapi/*" splat does not reliably
     // match a bare "/arcapi", and upstream accepts "/api/?query" either way.
@@ -2450,7 +2454,10 @@ const CHAINS = {
     // false, so no code path tries to reach a contract that is not deployed;
     // these only add the tab and a "coming soon" panel. See applySoonViews().
     soon: ["earn", "locker", "burn", "pools"],
-    batchMaxCount: 1,
+    // This RPC answered a two-call batch cleanly, unlike Stable's, which rejects
+    // any batch outright. Kept small anyway: a cold load fires enough reads that
+    // an oversized batch is the first thing a rate limiter drops.
+    batchMaxCount: 8,
     logSpan: 500,
   },
 };
@@ -3316,9 +3323,36 @@ class ExplorerProvider extends ethers.AbstractProvider {
   }
   async _detectNetwork() { return ethers.Network.from(this.chain); }
 }
-function explorerRead() {
+/// The chain's declared RPC, proved to answer before it is adopted.
+async function rpcRead() {
+  const url = CHAIN.rpcUrls && CHAIN.rpcUrls[0];
+  if (!url) return null;
+  try {
+    const p = new ethers.JsonRpcProvider(url, parseInt(CHAIN.chainId, 16),
+      { staticNetwork: true, batchMaxCount: NET.batchMaxCount ?? 1 });
+    await p.getBlockNumber();
+    return p;
+  } catch (e) {
+    console.error("chain RPC unavailable:", e.shortMessage || e.message);
+    return null;
+  }
+}
+
+/// Proves the explorer is actually answering before adopting it. Constructing the
+/// provider always succeeds, so without this probe a dead upstream looked like a
+/// working read path: the banner stayed quiet and the grid just came up empty,
+/// which reads as "no coins" rather than "cannot reach the chain". The explorer's
+/// node auth failed exactly this way within an hour of shipping it.
+async function explorerRead() {
   if (!NET.explorerApi) return null;
-  try { return new ExplorerProvider(NET.explorerApi, parseInt(CHAIN.chainId, 16)); } catch { return null; }
+  try {
+    const p = new ExplorerProvider(NET.explorerApi, parseInt(CHAIN.chainId, 16));
+    await p.getBlockNumber();
+    return p;
+  } catch (e) {
+    console.error("explorer reads unavailable:", e.shortMessage || e.message);
+    return null;
+  }
 }
 let readsNeedWallet = false;
 let usingExplorer = false;
@@ -3352,12 +3386,15 @@ async function init() {
   applyChainUi();
   if (!padAddr()) return;
   if (NET.readViaWallet) {
-    // Wallet first when it is on this chain: it is faster, and it is the only
-    // one of the two that can serve logs. The explorer covers everyone else, so
-    // the coin list no longer needs a connected wallet to render at all.
-    rp = await walletRead();
+    // Ordered fallback, because every read path this chain has offered has died
+    // at least once: the public RPC first, then the visitor's wallet, then the
+    // block explorer's eth_call proxy. Each is PROBED rather than merely
+    // constructed, since all three fail at call time and not at setup, so a dead
+    // one otherwise looks like a chain with nothing launched on it.
+    rp = await rpcRead();
     usingExplorer = false;
-    if (!rp) { rp = explorerRead(); usingExplorer = !!rp; }
+    if (!rp) rp = await walletRead();
+    if (!rp) { rp = await explorerRead(); usingExplorer = !!rp; }
     readsNeedWallet = !rp;
     paintReadNotice();
     if (!rp) return; // connect() re-runs init once the wallet is on this chain
