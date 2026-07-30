@@ -2367,15 +2367,20 @@ const CHAINS = {
       // and diffed after deploy.
       pad: "0x7D1894CBbf12E086D1530C01B131A9F5F993DFC9",
       oldPad: null,
-      // $ARCS, the platform token: launchpad token #1, launched at a 2,000 USDC
-      // start. Verified on chain as ArcSwap/ARCS with a 1e9 supply and 18
-      // decimals. Token #0 is an earlier ARCS launched at 3,000 and is NOT this.
-      mintd: "0x7fe1b27a0f8DF41556b67Fe1EE59e40E8A50647E",
-      // Token #0: an earlier ARCS launched at a 3,000 USDC start, before the pad
-      // was reconfigured to 2,000. Two live coins sharing one symbol is a trap
-      // for anyone buying, so only the current one is listed. Hiding is display
-      // only; it still trades on chain and its liquidity is still locked.
-      hideTokens: ["0x570a08d9838A82b0237251a781139655B7Bca7ab"],
+      // $ARCS, the platform token. Verified on chain as ArcSwap/ARCS with a 1e9
+      // supply and 18 decimals, launched at a 2,000 USDC start with the creator
+      // taking a majority position through a follow-up market buy.
+      mintd: "0xeB4943B38193011F5D8bc06E1AacD84F9e4a9f9D",
+      // Earlier ARCS launches on the same pad, delisted so that one ticker maps
+      // to one coin: sharing a symbol across three live tokens is a trap for
+      // anyone buying by ticker. 0x570a is the 3,000 start; 0x7fe1 is the first
+      // 2,000 start and, unlike the other, has real holders and real liquidity.
+      // Hiding is display only: both still trade on chain and both still have
+      // permanently locked LP, so nothing here takes anything from a holder.
+      hideTokens: [
+        "0x570a08d9838A82b0237251a781139655B7Bca7ab",
+        "0x7fe1b27a0f8DF41556b67Fe1EE59e40E8A50647E",
+      ],
       mintr: null,
       synth: null, mgld: null,
       locker: null,
