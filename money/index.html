@@ -2367,7 +2367,10 @@ const CHAINS = {
       // and diffed after deploy.
       pad: "0x7D1894CBbf12E086D1530C01B131A9F5F993DFC9",
       oldPad: null,
-      mintd: null,
+      // $ARCS, the platform token: launchpad token #1, launched at a 2,000 USDC
+      // start. Verified on chain as ArcSwap/ARCS with a 1e9 supply and 18
+      // decimals. Token #0 is an earlier ARCS launched at 3,000 and is NOT this.
+      mintd: "0x7fe1b27a0f8DF41556b67Fe1EE59e40E8A50647E",
       mintr: null,
       synth: null, mgld: null,
       locker: null,
@@ -2396,6 +2399,9 @@ const CHAINS = {
     features: { launch: true, swap: false, earn: false, mintr: false, gold: false, locker: false, burn: false, screener: true, bridge: false, holders: false, agent: false, mintdStat: false },
     statsFile: null,
     faucet: null,
+    // No public RPC answers this chain, so every read rides the visitor's
+    // wallet. See walletRead().
+    readViaWallet: true,
     batchMaxCount: 1,
     logSpan: 500,
   },
@@ -2691,7 +2697,9 @@ function saveSettings() {
   if (!ethers.isAddress(a)) return toast("Invalid address", "err");
   localStorage.setItem("padAddr", a);
   $("settings").classList.remove("on");
-  init(); loadAll(); toast("Saved", "ok");
+  // Sequenced, not fired together: loadAll needs the provider and contract that
+  // init builds, and init is async.
+  init().then(loadAll); toast("Saved", "ok");
 }
 function paintThemeBtn() {
   const dark = document.documentElement.dataset.theme === "dark";
@@ -2962,7 +2970,11 @@ function paintHeroBlurb() {
     + `ever. Coins graduate at 7,000 ${sym} in the pool. `
     + (share != null ? `Creators claim ${share}% of every trading fee any time, and the remaining ${100 - share}% funds the protocol` : `Creators claim 80% of every trading fee any time, and the remaining 20% funds the protocol`)
     + (devCapBps != null ? `, and no launch can dev-buy more than ${devCapBps / 100}% of supply` : "")
-    + (NET.mintd.mintd ? ", and 100% of $MINTD token fees are burned." : ".");
+    // Gated on the burn feature, not merely on a platform token existing.
+    // Wiring $ARCS as Arc's platform token switched this sentence on and made
+    // the site claim a burn that nothing in the Arc deployment implements: the
+    // protocol share there is a plain transfer and buybackShareBps is 0.
+    + (NET.mintd.mintd && NET.features.burn ? ", and 100% of $MINTD token fees are burned." : ".");
 }
 
 // The v2 launchpad quotes in USDC and names its getters accordingly; v1 pads
@@ -3044,16 +3056,66 @@ function checkDevCap() {
   i.style.borderColor = over ? "var(--red)" : "";
 }
 
-function init() {
+// Arc mainnet has no reachable public RPC. Every endpoint tried either 500s
+// (thirdweb), answers "Invalid chain"/"Unknown network" (drpc, thirdweb's
+// per-chain host), or resolves to nothing, and the block explorer renders
+// server side so there is no client API to borrow either. The visitor's own
+// wallet does have a working Arc endpoint, so reads go through that.
+//
+// Guarded on chain id, and that guard is the whole point: a wallet sitting on
+// Ethereum would answer these calls with Ethereum's state, where the pad
+// address is an empty account, so every read returns "0x" and the site would
+// render a launchpad with no tokens and a zero fee as though that were true.
+async function walletRead() {
+  if (!window.ethereum) return null;
+  try {
+    const bp = new ethers.BrowserProvider(window.ethereum);
+    const n = await bp.getNetwork();
+    if (n.chainId !== BigInt(parseInt(CHAIN.chainId, 16))) return null;
+    return bp;
+  } catch { return null; }
+}
+let readsNeedWallet = false;
+
+// Says why the page is empty. Without this the site looks broken rather than
+// unconnected, which is the same failure the swallowed per-vault errors caused
+// on the agent page: a missing reason reads as "there is nothing here".
+function paintReadNotice() {
+  let el = $("readNotice");
+  if (!readsNeedWallet) { if (el) el.remove(); return; }
+  if (el) return;
+  el = document.createElement("div");
+  el.id = "readNotice";
+  el.style.cssText = "padding:10px 16px;text-align:center;font-size:13px;line-height:1.5;" +
+    "background:var(--card,#111823);border-bottom:1px solid var(--line,#212c3a);color:var(--dim,#8a9ab0)";
+  el.innerHTML = "<b>Connect your wallet to load " + NET.label + ".</b> " +
+    NET.label + " has no public RPC yet, so this site reads the chain through your wallet. " +
+    "Launching and trading work normally once connected.";
+  document.body.prepend(el);
+}
+
+async function init() {
   applyChainUi();
   if (!padAddr()) return;
-  // staticNetwork skips the eth_chainId round-trip on every call. Batching is
-  // kept small but ON: unbatched, a cold load fires 100+ separate requests and
-  // the public RPC rate-limits the burst (coins fail to load).
-  rp = rp || new ethers.JsonRpcProvider(CHAIN.rpcUrls[0], parseInt(CHAIN.chainId, 16),
-    { staticNetwork: true, batchMaxCount: (LC ? 20 : NET.batchMaxCount ?? 1) });
+  if (NET.readViaWallet) {
+    rp = await walletRead();
+    readsNeedWallet = !rp;
+    paintReadNotice();
+    if (!rp) return; // connect() re-runs init once the wallet is on this chain
+  } else {
+    // staticNetwork skips the eth_chainId round-trip on every call. Batching is
+    // kept small but ON: unbatched, a cold load fires 100+ separate requests and
+    // the public RPC rate-limits the burst (coins fail to load).
+    rp = rp || new ethers.JsonRpcProvider(CHAIN.rpcUrls[0], parseInt(CHAIN.chainId, 16),
+      { staticNetwork: true, batchMaxCount: (LC ? 20 : NET.batchMaxCount ?? 1) });
+  }
   pad = new ethers.Contract(padAddr(), PAD_ABI, rp);
-  quoterR = new ethers.Contract(ADDR.quoter, QUOTER_ABI, rp);
+  // Only when there is a quoter to point at. ethers throws "invalid value for
+  // Contract target" on a null address, and that threw out of init() before it
+  // read the pad at all, so on Arc the launch form kept its placeholder fee and
+  // share and no token ever loaded. Swap is the only thing that needs the
+  // quoter, and its tab is already off on chains where this is null.
+  quoterR = ADDR.quoter ? new ethers.Contract(ADDR.quoter, QUOTER_ABI, rp) : null;
   // sequential, not Promise.all: four simultaneous reads at boot is exactly
   // the burst that Arc drops, and losing this leaves the fee and share
   // showing their placeholder defaults.
@@ -3087,6 +3149,14 @@ async function connect() {
     wallet = signer.address;
     $("connectBtn").textContent = short(wallet);
     toast("Connected to " + NET.label, "ok"); // was hardcoded "Stable", wrong on Arc
+    // On a chain whose reads come from the wallet there was no read provider at
+    // all until this moment, so boot's init() bailed out. Re-run it, then load,
+    // or the site stays empty for the whole session after connecting.
+    if (NET.readViaWallet) {
+      logRp = null; // it was never built, and must come from the wallet too
+      await init();
+      if (rp) await loadAll();
+    }
     devNavSync();
     if ($("view-dev").classList.contains("on")) devLoad();
     if ($("view-holders").classList.contains("on")) hoPaint(); // fills in "your standing"
@@ -4005,7 +4075,7 @@ async function devLoad(force) {
     note.textContent = "";
     return;
   }
-  if (!pad) init();
+  if (!pad) await init(); // init is async now: unawaited, rp is still null below
   rows.innerHTML = `<div class="empty">Scanning…</div>`;
   note.textContent = "Reading pending fees. This simulates a claim per token, so it takes a moment.";
 
@@ -4121,7 +4191,11 @@ function tokBaseStore(pa, i, base) {
 let loadingAll = false;
 let loadAllPromise = null;
 async function loadAll() {
-  if (!pad) init();
+  if (!pad) await init();
+  // Not a misconfiguration, so do not accuse the visitor of one. The pad
+  // address is set and correct; there is simply no provider to read it with
+  // until a wallet is attached, which the banner already explains.
+  if (!pad && readsNeedWallet) return;
   if (!pad) return toast("Set the launchpad contract address in ⚙ first", "err");
   // Return the in-flight load rather than nothing. `await loadAll()` has to
   // mean "tokens are ready" or callers race it: boot fires one load, route()
@@ -4212,7 +4286,12 @@ async function loadAllInner() {
       const { addr, quote } = base;
       const t = { name: base.name, symbol: base.symbol, meta: parseMeta(base.uri) };
       const l = { pool: base.pool, creator: base.creator, positionId: BigInt(base.positionId), createdAt: base.createdAt };
-      const isMintr = quote.toLowerCase() === MINTR_ADDR.toLowerCase();
+      // MINTR_ADDR is null on a chain with no reserve token, which is every
+      // chain but Stable. `null.toLowerCase()` threw here and the catch below
+      // turned that into `null`, so on Arc EVERY token was dropped and the grid
+      // read as an empty launchpad. sameAddr exists for exactly this and is
+      // null-safe; this line was the one place that did the comparison by hand.
+      const isMintr = sameAddr(quote, MINTR_ADDR);
       const pool = new ethers.Contract(l.pool, POOL_ABI, rp);
       const tokenIs0 = BigInt(addr) < BigInt(quote);
       const qc = new ethers.Contract(quote, ERC20_ABI, rp);
@@ -4237,7 +4316,13 @@ async function loadAllInner() {
       return { addr, padOf: pa, quote, isMintr, pool: l.pool, creator: l.creator, positionId: l.positionId, createdAt: l.createdAt,
                tokenIs0, price, mcap, poolUsdt, prog: grad ? 100 : prog, grad,
                platform: sameAddr(addr, MINTD_ADDR), ...t };
-     } catch (e) { return null; } // one bad token never breaks the whole grid
+     } catch (e) {
+       // One bad token never breaks the whole grid, but a silent drop is how a
+       // null MINTR_ADDR emptied the entire grid on Arc with nothing logged.
+       // If every token lands here, this line is the only thing that says so.
+       console.error(`token ${i} on pad ${pa} dropped`, e.shortMessage || e.message);
+       return null;
+     }
     }));
     tokens = loaded.filter(Boolean);
 
@@ -5117,6 +5202,11 @@ function trimZeros(s, maxDp = 16) {
 // rejects the whole array. Sequential-only here, unaffected by the rest.
 let logRp = null;
 function logProvider() {
+  // Same reason as walletRead(): on Arc there is no public RPC to scan against,
+  // so log scanning has to ride the wallet's endpoint like every other read.
+  // `rp` is already the wallet-backed provider there, and it is batchMaxCount 1
+  // by nature, since a wallet answers one request at a time.
+  if (NET.readViaWallet) return rp;
   if (!logRp) logRp = new ethers.JsonRpcProvider(CHAIN.rpcUrls[0], parseInt(CHAIN.chainId, 16),
     { staticNetwork: true, batchMaxCount: 1 });
   return logRp;
