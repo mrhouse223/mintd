@@ -2431,6 +2431,8 @@ const CHAINS = {
       // supply and 18 decimals, launched at a 2,000 USDC start with the creator
       // taking a majority position through a follow-up market buy.
       mintd: "0xeB4943B38193011F5D8bc06E1AacD84F9e4a9f9D",
+      // $ARCS has its own coin artwork, separate from the site mark.
+      platformLogo: "/arcs.png",
       // Earlier ARCS launches on the same pad, delisted so that one ticker maps
       // to one coin: sharing a symbol across three live tokens is a trap for
       // anyone buying by ticker. 0x570a is the 3,000 start; 0x7fe1 is the first
@@ -2833,6 +2835,27 @@ let OLD_PAD = NET.mintd.oldPad;
 // legacy pad, no MINTD and no gold engine, and a bare .toLowerCase() on those
 // throws during module evaluation, which silently kills every declaration
 // after it.
+/// The platform TOKEN's avatar, which is not the same asset as the site's mark.
+/// arcswap's coin has its own artwork, so a chain can point this somewhere else;
+/// everywhere without one falls back to the site logo, which is what mintd.fun
+/// has always used. Kept separate so restyling the brand never silently
+/// restyles a traded token's icon.
+function coinLogo() { return (NET.mintd && NET.mintd.platformLogo) || "/logo.png"; }
+/// Falls back to the site mark if the coin artwork is not on the server.
+/// Pointing at a missing file would render the platform token with no icon at
+/// all, which is worse than the mark it replaces, and it would fail silently in
+/// eight places at once. Checked once at boot; the grid repaints if it loses.
+function checkCoinLogo() {
+  const src = NET.mintd && NET.mintd.platformLogo;
+  if (!src) return;
+  const probe = new Image();
+  probe.onerror = () => {
+    console.error(`coin artwork ${src} is missing; falling back to the site mark`);
+    NET.mintd.platformLogo = null;
+    try { renderCards(); } catch {}
+  };
+  probe.src = src;
+}
 function sameAddr(a, b) {
   return !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase();
 }
@@ -3065,6 +3088,7 @@ migrateHash();
 
 function applyChainUi() {
   chainPill();
+  checkCoinLogo();
   // Lets stylesheets target one chain. The token page's outlined treatment is
   // Stable-only by request, and a data attribute keeps that in CSS rather than
   // scattering conditionals through the render functions.
@@ -4911,7 +4935,7 @@ function renderCards() {
     // title left and broke alignment against every other card in the row.
     const initials = (t.symbol.slice(0, 2).replace(/[^\w]/g, "")
       || String(t.name).slice(0, 2).replace(/[^\w]/g, "") || "·").toUpperCase();
-    const imgSrc = t.platform ? "/logo.png" : safeImg(t.meta.image);
+    const imgSrc = t.platform ? coinLogo() : safeImg(t.meta.image);
     const av = imgSrc ? `<img src="${imgSrc}" loading="lazy" decoding="async" onerror="this.parentNode.textContent='${initials}'">` : initials;
     // A ticker identical to the name reads as a stutter and is the single
     // biggest cause of the title needing two lines.
@@ -5057,7 +5081,7 @@ function scRender() {
   el.innerHTML = list.map((t, i) => {
     const pts = scSeries(t.addr);
     const swaps = tradeLogs.filter((x) => sameAddr(x.addr, t.addr)).length;
-    const logo = t.meta && t.meta.image ? safeImg(t.meta.image) : (t.platform ? "/logo.png" : "");
+    const logo = t.meta && t.meta.image ? safeImg(t.meta.image) : (t.platform ? coinLogo() : "");
     const initials = (t.symbol || "?").slice(0, 2).toUpperCase();
     return `<div class="scrow" onclick="openToken('${t.addr}')">
       <span class="scrank">${i + 1}</span>
@@ -5287,7 +5311,7 @@ const tokenMetaCache = {};
 let MINTD_ADDR = NET.mintd.mintd;
 const TOKEN_LOGOS = {
   [ADDR.usdt0.toLowerCase()]: "https://stablescan.xyz/token/images/usdt0_64.png",
-  ...(MINTD_ADDR ? { [MINTD_ADDR.toLowerCase()]: "/logo.png" } : {}),
+  ...(MINTD_ADDR ? { [MINTD_ADDR.toLowerCase()]: coinLogo() } : {}),
   "0x872a3c280b846759187c9e57f62d1ed8407b135c": "/mgld.png", // $MGLD
   "0x8817d05f2560189f3697028f639dbb4c68688400": "/mintr.png", // $MINTR
 };
@@ -5298,14 +5322,14 @@ function swBaseList() {
   const pinned = [{ addr: ADDR.usdt0, sym: nc.symbol, name: nc.name, dec: 6 }];
   if (MINTSWAP.wgusdt) pinned.push({ addr: MINTSWAP.wgusdt, sym: "WgUSDT", name: "Wrapped gUSDT", dec: 18 });
   const plat = tokens.find((t) => t.platform);
-  if (plat) pinned.push({ addr: plat.addr, sym: plat.symbol, name: plat.name, dec: 18, logo: "/logo.png" });
+  if (plat) pinned.push({ addr: plat.addr, sym: plat.symbol, name: plat.name, dec: 18, logo: coinLogo() });
   if (typeof MINTR_ADDR !== "undefined" && MINTR_ADDR) pinned.push({ addr: MINTR_ADDR, sym: "MINTR", name: "Mintr Reserve", dec: 18, logo: "/mintr.png" });
   if (typeof MGLD_ADDR !== "undefined" && MGLD_ADDR) pinned.push({ addr: MGLD_ADDR, sym: "MGLD", name: "Mintd Gold", dec: 18, logo: "/mgld.png" });
   const list = [...pinned];
   // every launchpad coin carries its own artwork from onchain metadata
   for (const t of tokens) list.push({
     addr: t.addr, sym: t.symbol, name: t.name, dec: 18,
-    logo: t.platform ? "/logo.png" : safeImg(t.meta && t.meta.image),
+    logo: t.platform ? coinLogo() : safeImg(t.meta && t.meta.image),
   });
   for (const c of JSON.parse(localStorage.getItem("swCustoms") || "[]")) list.push(c);
   const seen = {};
@@ -6006,7 +6030,7 @@ async function loadPortfolio() {
   held.sort((a, b) => b.val - a.val);
   total += held.reduce((s, t) => s + t.val, 0);
   $("pfTokens").innerHTML = held.length ? held.map((t) => {
-    const av = t.meta && t.meta.image ? `<img src="${safeImg(t.meta.image)}" onerror="this.remove()">` : (t.platform ? `<img src="/logo.png" onerror="this.remove()">` : t.symbol.slice(0, 2));
+    const av = t.meta && t.meta.image ? `<img src="${safeImg(t.meta.image)}" onerror="this.remove()">` : (t.platform ? `<img src="${coinLogo()}" onerror="this.remove()">` : t.symbol.slice(0, 2));
     return `<div class="trade" style="display:flex;align-items:center;gap:12px;margin-bottom:8px;padding:12px 16px;cursor:pointer" onclick="openToken('${t.addr}')">
       <div class="avatar" style="width:36px;height:36px;font-size:12px">${av}</div>
       <div style="flex:1"><b>${esc(t.name)}</b> <span style="color:var(--green)">$${esc(t.symbol)}</span>
@@ -7704,7 +7728,7 @@ async function lkTokenInfo(addr) {
     info.sym = t.symbol; info.dec = 18;
     info.usd = Number(ethers.formatEther(t.price));
     info.label = t.name;
-    info.logo = t.platform ? "/logo.png" : safeImg(t.meta.image);
+    info.logo = t.platform ? coinLogo() : safeImg(t.meta.image);
     lkInfoCache[key] = info;
     return info;
   }
@@ -7959,7 +7983,7 @@ function paintTokenMeta() {
   const addr = cur.addr;
   $("tName").innerHTML = `${esc(cur.name)} <span>$${esc(cur.symbol)}</span>`;
   const tInitials = cur.symbol.slice(0, 2).replace(/[^\w]/g, "");
-  const tImgSrc = cur.platform ? "/logo.png" : safeImg(cur.meta.image);
+  const tImgSrc = cur.platform ? coinLogo() : safeImg(cur.meta.image);
   $("tAvatar").innerHTML = tImgSrc ? `<img src="${tImgSrc}" onerror="this.parentNode.textContent='${tInitials}'">` : tInitials;
   $("tDesc").textContent = cur.meta.description || "";
   $("tGradPill").style.display = cur.grad ? "" : "none";

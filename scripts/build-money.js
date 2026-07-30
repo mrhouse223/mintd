@@ -228,8 +228,8 @@ sub("legacy dark palette",
 sub("header logo",
   `<img src="/logo.png" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />`,
   `<img src="/logo.svg" alt="" style="width:34px;height:34px;border-radius:9px" onerror="this.style.display='none'" />`);
-sub("platform token avatar", `t.platform ? \`<img src="/logo.png" onerror="this.remove()">\``,
-  `t.platform ? \`<img src="/logo.svg" onerror="this.remove()">\``);
+// The platform token avatar is no longer rewritten here: coinLogo() resolves it
+// per chain from NET.mintd.platformLogo, so arcswap points at its own coin art.
 sub("favicon", `<link rel="icon" type="image/png" href="/logo.png" />`,
   `<link rel="icon" type="image/svg+xml" href="/logo.svg" />`);
 
