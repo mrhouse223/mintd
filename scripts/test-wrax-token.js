@@ -1,6 +1,6 @@
-// ARX token tests. Real ganache, real deployment, no mocks.
+// WRAX token tests. Real ganache, real deployment, no mocks.
 //
-//   node scripts/compile.js && node scripts/test-arx-token.js
+//   node scripts/compile.js && node scripts/test-wrax-token.js
 //
 // Every state-changing call passes an explicit gasLimit. CLAUDE.md records why:
 // eth_estimateGas reports the NET cost when a call clears storage and earns a
@@ -12,7 +12,7 @@ const { ethers } = require("ethers");
 const fs = require("fs");
 const path = require("path");
 
-const ART = path.join(__dirname, "..", "build", "ArxToken.json");
+const ART = path.join(__dirname, "..", "build", "WraxToken.json");
 const GAS = { gasLimit: 300000 };
 const SUPPLY = 100_000_000n * 10n ** 18n;
 
@@ -43,7 +43,7 @@ async function reverts(name, fn, why) {
 }
 
 (async () => {
-  if (!fs.existsSync(ART)) { console.log("build/ArxToken.json missing. Run node scripts/compile.js"); process.exit(1); }
+  if (!fs.existsSync(ART)) { console.log("build/WraxToken.json missing. Run node scripts/compile.js"); process.exit(1); }
   const art = JSON.parse(fs.readFileSync(ART, "utf8"));
 
   const server = ganache.server({ logging: { quiet: true }, wallet: { totalAccounts: 4, defaultBalance: 1000 } });
@@ -52,14 +52,14 @@ async function reverts(name, fn, why) {
   const [dep, alice, bob] = await Promise.all([0, 1, 2].map((i) => provider.getSigner(i)));
   const [depA, aliceA, bobA] = await Promise.all([dep, alice, bob].map((s) => s.getAddress()));
 
-  console.log("\nARX token");
+  console.log("\nWRAX token");
   const f = new ethers.ContractFactory(art.abi, art.bytecode, dep);
   const t = await (await f.deploy(SUPPLY, { gasLimit: 3_000_000 })).waitForDeployment();
   const addr = await t.getAddress();
 
   console.log("\n supply and metadata");
   eq("name", await t.name(), "ArcSwap");
-  eq("symbol", await t.symbol(), "ARX");
+  eq("symbol", await t.symbol(), "WRAX");
   eq("decimals", Number(await t.decimals()), 18);
   eq("totalSupply is 100M", (await t.totalSupply()).toString(), SUPPLY.toString());
   eq("deployer holds all of it", (await t.balanceOf(depA)).toString(), SUPPLY.toString());

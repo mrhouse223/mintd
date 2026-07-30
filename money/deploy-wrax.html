@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Deploy ARX and add its liquidity</title>
+<title>Deploy WRAX and add its liquidity</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
 <style>
   :root { --bg:#0a0e14; --panel:#111823; --line:#212c3a; --ink:#eef3fa; --dim:#8a9ab0;
@@ -32,16 +32,16 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Deploy ARX and add its liquidity</h1>
+  <h1>Deploy WRAX and add its liquidity</h1>
   <p class="lede">
-    Three transactions from the new deployer wallet: deploy the token, create the ARX/USDC pool at the
-    opening price, then mint the position. 80,000,000 ARX and 1,000 USDC go into the pool, 20,000,000 ARX
+    Three transactions from the new deployer wallet: deploy the token, create the WRAX/USDC pool at the
+    opening price, then mint the position. 80,000,000 WRAX and 1,000 USDC go into the pool, 20,000,000 WRAX
     stay in this wallet, and the position NFT is minted to this wallet.
   </p>
 
   <div class="warn">
     <b>The position is yours, not a contract's.</b> Nothing locks this liquidity and nothing here pretends
-    otherwise: the site reads each token's position owner on chain, so ARX's page will say the LP is held by
+    otherwise: the site reads each token's position owner on chain, so WRAX's page will say the LP is held by
     this address and not locked. That is the honest label and it is the one buyers will see.
   </div>
 
@@ -55,18 +55,18 @@
 
   <h2>2. Deploy the token</h2>
   <div class="card">
-    <div class="row"><span>Name / symbol</span><b>ArcSwap / ARX</b></div>
+    <div class="row"><span>Name / symbol</span><b>ArcSwap / WRAX</b></div>
     <div class="row"><span>Total supply</span><b>100,000,000</b></div>
     <div class="row"><span>Into the pool</span><b>80,000,000 <span class="dim">80%</span></b></div>
     <div class="row"><span>Kept in this wallet</span><b>20,000,000 <span class="dim">20%</span></b></div>
     <div class="row"><span>Opening price</span><b>0.0000125 USDC <span class="dim">1,250 FDV</span></b></div>
     <div class="row"><span>Token address</span><b id="tokenOut">not deployed</b></div>
-    <button id="bDeploy" disabled>Deploy ARX</button>
+    <button id="bDeploy" disabled>Deploy WRAX</button>
   </div>
 
   <h2>3. Create the pool and mint the position</h2>
   <div class="card">
-    <div class="row"><span>Pair</span><b>ARX / USDC · 1% fee tier</b></div>
+    <div class="row"><span>Pair</span><b>WRAX / USDC · 1% fee tier</b></div>
     <div class="row"><span>Range</span><b>full range <span class="dim">-887200 to 887200</span></b></div>
     <div class="row"><span>Pool</span><b id="poolOut">–</b></div>
     <div class="row"><span>Position</span><b id="posOut">–</b></div>
@@ -117,7 +117,7 @@ function log(m, cls) {
   logEl.appendChild(s); logEl.scrollTop = logEl.scrollHeight;
 }
 const $ = (id) => document.getElementById(id);
-let provider, signer, me, arx = null, pool = null, art = null;
+let provider, signer, me, wrax = null, pool = null, art = null;
 
 /// Integer square root. The price has to be exact, and Number loses precision
 /// well before 2^96, so this stays in BigInt the whole way.
@@ -136,8 +136,8 @@ function sqrtPriceX96(amount0, amount1) {
 function ordering(tokenA) {
   const aIsFirst = BigInt(tokenA) < BigInt(USDC);
   return aIsFirst
-    ? { token0: tokenA, token1: USDC, amount0: TO_POOL, amount1: USDC_IN, arxIs0: true }
-    : { token0: USDC, token1: tokenA, amount0: USDC_IN, amount1: TO_POOL, arxIs0: false };
+    ? { token0: tokenA, token1: USDC, amount0: TO_POOL, amount1: USDC_IN, wraxIs0: true }
+    : { token0: USDC, token1: tokenA, amount0: USDC_IN, amount1: TO_POOL, wraxIs0: false };
 }
 
 $("bConnect").onclick = async () => {
@@ -158,7 +158,7 @@ $("bConnect").onclick = async () => {
     log(`USDC (6-dec ERC-20 view) ${ethers.formatUnits(erc, 6)}`);
     log(`same balance as gas (18-dec) ${ethers.formatEther(native)}`);
     if (erc < USDC_IN) log(`WARNING: needs 1,000 USDC for the pool, plus gas on top.`, "w");
-    art = await (await fetch("/arx-artifact.json")).json();
+    art = await (await fetch("/wrax-artifact.json")).json();
     log(`artifact loaded, ${(art.bytecode.length - 2) / 2} bytes of bytecode`);
     $("bDeploy").disabled = false;
   } catch (e) { log("connect failed: " + (e.shortMessage || e.message), "bad"); }
@@ -168,21 +168,21 @@ $("bDeploy").onclick = async () => {
   try {
     $("bDeploy").disabled = true;
     const f = new ethers.ContractFactory(art.abi, art.bytecode, signer);
-    log("deploying ArxToken(100,000,000)…");
+    log("deploying WraxToken(100,000,000)…");
     const c = await f.deploy(SUPPLY, { gasLimit: 1200000 });
     log(`tx ${c.deploymentTransaction().hash}`);
     await c.waitForDeployment();
-    arx = await c.getAddress();
-    $("tokenOut").textContent = arx;
-    log(`ARX ${arx}`, "ok");
+    wrax = await c.getAddress();
+    $("tokenOut").textContent = wrax;
+    log(`WRAX ${wrax}`, "ok");
     // Read the token back rather than trusting the deploy: a wrong supply here
     // is unfixable, since there is no mint and no owner.
-    const t = new ethers.Contract(arx, ["function name() view returns (string)","function symbol() view returns (string)","function totalSupply() view returns (uint256)","function balanceOf(address) view returns (uint256)"], provider);
+    const t = new ethers.Contract(wrax, ["function name() view returns (string)","function symbol() view returns (string)","function totalSupply() view returns (uint256)","function balanceOf(address) view returns (uint256)"], provider);
     log(`name/symbol  ${await t.name()} / ${await t.symbol()}`);
     log(`totalSupply  ${ethers.formatUnits(await t.totalSupply(), 18)}`);
     log(`your balance ${ethers.formatUnits(await t.balanceOf(me), 18)}`);
-    const o = ordering(arx);
-    log(`token0 is ${o.arxIs0 ? "ARX" : "USDC"}, token1 is ${o.arxIs0 ? "USDC" : "ARX"}`);
+    const o = ordering(wrax);
+    log(`token0 is ${o.wraxIs0 ? "WRAX" : "USDC"}, token1 is ${o.wraxIs0 ? "USDC" : "WRAX"}`);
     $("bPool").disabled = false;
   } catch (e) { log("deploy failed: " + (e.shortMessage || e.message), "bad"); $("bDeploy").disabled = false; }
 };
@@ -190,7 +190,7 @@ $("bDeploy").onclick = async () => {
 $("bPool").onclick = async () => {
   try {
     $("bPool").disabled = true;
-    const o = ordering(arx);
+    const o = ordering(wrax);
     const sp = sqrtPriceX96(o.amount0, o.amount1);
     log(`sqrtPriceX96 ${sp}`);
     const npm = new ethers.Contract(NPM, NPM_ABI, signer);
@@ -217,12 +217,12 @@ $("bPool").onclick = async () => {
 $("bMint").onclick = async () => {
   try {
     $("bMint").disabled = true;
-    const o = ordering(arx);
-    const arxC = new ethers.Contract(arx, ERC20, signer);
+    const o = ordering(wrax);
+    const wraxC = new ethers.Contract(wrax, ERC20, signer);
     const usdcC = new ethers.Contract(USDC, ERC20, signer);
-    if ((await arxC.allowance(me, NPM)) < TO_POOL) {
-      log("approving ARX…");
-      await (await arxC.approve(NPM, TO_POOL, { gasLimit: 120000 })).wait();
+    if ((await wraxC.allowance(me, NPM)) < TO_POOL) {
+      log("approving WRAX…");
+      await (await wraxC.approve(NPM, TO_POOL, { gasLimit: 120000 })).wait();
     }
     if ((await usdcC.allowance(me, NPM)) < USDC_IN) {
       log("approving USDC…");
@@ -239,7 +239,7 @@ $("bMint").onclick = async () => {
       amount0Min: o.amount0 * 99n / 100n, amount1Min: o.amount1 * 99n / 100n,
       recipient: me, deadline: Math.floor(Date.now() / 1000) + 1800,
     };
-    log(`minting: ${ethers.formatUnits(TO_POOL, 18)} ARX + ${ethers.formatUnits(USDC_IN, 6)} USDC`);
+    log(`minting: ${ethers.formatUnits(TO_POOL, 18)} WRAX + ${ethers.formatUnits(USDC_IN, 6)} USDC`);
     const npm = new ethers.Contract(NPM, NPM_ABI, signer);
     const tx = await npm.mint(p, { gasLimit: 9000000 });
     log(`tx ${tx.hash}`);
@@ -258,13 +258,13 @@ $("bMint").onclick = async () => {
     const owner = await npm.ownerOf(tokenId);
     log(`position owner ${owner}  ${owner.toLowerCase() === me.toLowerCase() ? "(this wallet, as intended)" : "(NOT this wallet)"}`,
         owner.toLowerCase() === me.toLowerCase() ? "ok" : "bad");
-    const left = await arxC.balanceOf(me);
-    log(`ARX left in wallet ${ethers.formatUnits(left, 18)}  ${left === SUPPLY - TO_POOL ? "(exactly 20%)" : "(NOT 20%)"}`,
+    const left = await wraxC.balanceOf(me);
+    log(`WRAX left in wallet ${ethers.formatUnits(left, 18)}  ${left === SUPPLY - TO_POOL ? "(exactly 20%)" : "(NOT 20%)"}`,
         left === SUPPLY - TO_POOL ? "ok" : "w");
     log("");
-    log(`TOKEN ${arx}`, "ok");
+    log(`TOKEN ${wrax}`, "ok");
     log(`POOL  ${pool}`, "ok");
-    log("Send me those two and I will list ARX as the platform token.", "ok");
+    log("Send me those two and I will list WRAX as the platform token.", "ok");
   } catch (e) { log("mint failed: " + (e.shortMessage || e.message), "bad"); $("bMint").disabled = false; }
 };
 </script>

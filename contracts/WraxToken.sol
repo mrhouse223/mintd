@@ -2,35 +2,35 @@
 pragma solidity ^0.8.26;
 
 /// ----------------------------------------------------------------------------
-/// ARX, the arcswap platform token.
+/// WRAX, the arcswap platform token.
 ///
 /// WHY THIS IS NOT A LAUNCHPAD LAUNCH
 /// The launchpad mints a fixed 1,000,000,000 supply and puts every token of it
-/// into a position it then cannot withdraw from. ARX needs a 100,000,000 supply
+/// into a position it then cannot withdraw from. WRAX needs a 100,000,000 supply
 /// with 20% held back, which that path cannot express: there is no partial
 /// allocation and no way to keep any of the supply. So the token is deployed on
 /// its own and its liquidity is added by hand.
 ///
-/// The consequence is stated rather than buried: ARX's liquidity is NOT locked
+/// The consequence is stated rather than buried: WRAX's liquidity is NOT locked
 /// by any contract. The position is an ordinary Uniswap V3 NFT owned by whoever
 /// mints it, and it can be withdrawn at any time. The site reads that off chain
-/// per token, so ARX's page reports its real custody instead of inheriting the
+/// per token, so WRAX's page reports its real custody instead of inheriting the
 /// launchpad's guarantee.
 ///
 /// WHAT THIS CONTRACT CANNOT DO
 /// There is no owner, no mint, no burn-from, no pause, no blacklist, no fee on
 /// transfer and no upgrade path. The entire supply is created once, in the
 /// constructor, to the deployer. After that the contract only moves balances.
-/// That is deliberate: everything a holder has to trust about ARX should be
+/// That is deliberate: everything a holder has to trust about WRAX should be
 /// checkable by reading 60 lines, not by trusting an operator.
 ///
 /// A fee on transfer would also silently break the liquidity maths, because a
 /// V3 position assumes the amount sent is the amount received. Its absence is a
 /// correctness property, not only a fairness one.
 /// ----------------------------------------------------------------------------
-contract ArxToken {
+contract WraxToken {
     string public constant name = "ArcSwap";
-    string public constant symbol = "ARX";
+    string public constant symbol = "WRAX";
     uint8 public constant decimals = 18;
 
     /// 100,000,000 tokens. Fixed at deployment and unchangeable: there is no
