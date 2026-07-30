@@ -97,6 +97,23 @@ module.exports = {
     },
     {
       ...common,
+      // Records StableEarn's share price once a day so the Earn tab can state a
+      // MEASURED yield rather than repeat someone else's headline. Irreplaceable
+      // for the same reason as holder-ledger: Stable has no archive state, so a
+      // share price not captured while the chain was live cannot be read back,
+      // and a gap is a hole in the series forever.
+      //
+      // A one-shot, not a service. autorestart is off and cron_restart is what
+      // runs it, so pm2 shows it "stopped" between daily runs; that is correct
+      // and not a crash. It commits and pushes only frontend/stable-earn.json.
+      name: "stable-earn-snapshot",
+      script: "scripts/publish-stable-earn.sh",
+      interpreter: "bash",
+      autorestart: false,
+      cron_restart: "17 3 * * *",
+    },
+    {
+      ...common,
       name: "arb-keeper",
       script: "scripts/arb-keeper-multi.js",
       env: {
