@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Launch ArcSwap at 2k and take 51%</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+<style>
+  :root { --bg:#0a0e14; --panel:#111823; --line:#212c3a; --ink:#eef3fa; --dim:#8a9ab0;
+          --blue:#4d94f0; --ok:#35c184; --bad:#f0685c; --warn:#e6bf52;
+          --mono: ui-monospace,"SF Mono",Menlo,monospace; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:900px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:24px;margin:0 0 6px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin:24px 0 0}
+  .lede{color:var(--dim);font-size:14px;max-width:74ch}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:12px}
+  .row{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+  .row:last-child{border-bottom:0}
+  .row b{font-family:var(--mono);word-break:break-all;text-align:right}
+  label{display:block;font-size:12px;color:var(--dim);margin:12px 0 4px}
+  input{width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--line);
+        background:#070b11;color:var(--ink);font-family:var(--mono);font-size:14px}
+  button{font:inherit;font-weight:640;padding:12px 18px;border-radius:10px;border:1px solid var(--line);
+         background:var(--blue);color:#04121f;cursor:pointer;margin-top:12px}
+  button.ghost{background:transparent;color:var(--ink)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .warn{background:rgba(230,191,82,.1);border:1px solid var(--warn);color:var(--warn);
+        border-radius:10px;padding:12px 14px;font-size:13px;margin-top:12px}
+  .bad-box{background:rgba(240,104,92,.1);border:1px solid var(--bad);color:var(--bad);
+        border-radius:10px;padding:12px 14px;font-size:13px;margin-top:12px}
+  .log{font-family:var(--mono);font-size:12.5px;white-space:pre-wrap;background:#070b11;
+       border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:16px;max-height:420px;overflow:auto}
+  .ok{color:var(--ok)} .bad{color:var(--bad)} .dim{color:var(--dim)} .w{color:var(--warn)}
+  a{color:var(--blue)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Launch ArcSwap at a 2,000 start, then take 51%</h1>
+  <p class="lede">
+    The dev-buy cap is <b>immutable</b> at 5% of supply on the live pad, so 51% cannot be bought inside the
+    launch transaction. It does not need to be: the launch position runs from the launch tick to MAX_TICK, so
+    buying a fraction <i>f</i> of supply costs <code>startMcap &times; f/(1-f)</code> whether it happens in one
+    transaction or two. This page launches with a dev buy just under the cap, then buys the rest on the open
+    market until the wallet holds 51%.
+  </p>
+
+  <div class="warn">
+    <b>There is a window between the launch and the follow-up buy.</b> The token is public the moment it
+    launches, so anyone watching can buy before your second transaction lands. That does not cost you the
+    position, it just makes the remainder more expensive, because their buy moves the price up the same curve.
+    Send step 3 immediately after step 2.
+  </div>
+
+  <div class="bad-box">
+    <b>51% in one wallet is visible to everyone and reads as majority control.</b> Anyone can see a single
+    address holding a majority of supply, and it is the first thing a buyer checks. The liquidity is still
+    permanently locked in the launchpad and you cannot withdraw it, which is the part that protects holders,
+    but the concentration is real and worth stating publicly rather than being discovered.
+  </div>
+
+  <h2>1. Connect</h2>
+  <div class="card">
+    <div class="row"><span>Launchpad</span><b>0x7D1894CBbf12E086D1530C01B131A9F5F993DFC9</b></div>
+    <div class="row"><span>Required signer</span><b>0xD1E3636906Ceea0A67231dcb5a73719B02988023</b></div>
+    <div class="row"><span>Pad owner <span class="dim">read on connect</span></span><b id="ownerOut">?</b></div>
+    <div class="row"><span>Your USDC <span class="dim">need about 2,110</span></span><b id="balOut">?</b></div>
+    <button id="bConnect">Connect</button>
+  </div>
+
+  <h2>2. Set the 2,000 start, then launch</h2>
+  <div class="card">
+    <div class="row"><span>startPriceQuote1e18</span><b>2000000000000 <span class="dim">= 2,000 USDC mcap</span></b></div>
+    <div class="row"><span>Dev buy at launch</span><b id="devPlanned">4.8% of supply <span class="dim">under the 5% cap</span></b></div>
+    <div class="row"><span>Estimated cost of that buy</span><b id="devCost">?</b></div>
+    <label>Name</label>
+    <input id="fName" value="ArcSwap" />
+    <label>Symbol</label>
+    <input id="fSymbol" value="ARCS" />
+    <label>Metadata URI <span class="dim">(optional)</span></label>
+    <input id="fUri" value="" />
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button id="bSet" disabled>Set price to 2k</button>
+      <button id="bLaunch" disabled>Launch</button>
+    </div>
+  </div>
+
+  <h2>3. Buy up to 51%</h2>
+  <div class="card">
+    <div class="row"><span>Target</span><b>510,000,000 ARCS <span class="dim">51% of 1B</span></b></div>
+    <div class="row"><span>Held now</span><b id="heldOut">?</b></div>
+    <div class="row"><span>Still needed</span><b id="needOut">?</b></div>
+    <div class="row"><span>Estimated cost</span><b id="buyCost">?</b></div>
+    <p class="lede" style="font-size:12.5px;margin-top:10px">
+      Cost is derived from the pool's live token balance, not from a fixed table, so it stays correct after
+      other people trade. Run it more than once if a large buy lands between the quote and your transaction.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button id="bQuote" disabled class="ghost">Refresh quote</button>
+      <button id="bBuy" disabled>Buy to 51%</button>
+    </div>
+  </div>
+
+  <div class="log" id="log">Waiting.</div>
+</div>
+
+<script>
+const PAD    = "0x7D1894CBbf12E086D1530C01B131A9F5F993DFC9";
+const ROUTER = "0x53BF6B0684Ec7eF91e1387Da3D1a1769bC5A6F77";
+const USDC   = "0x3600000000000000000000000000000000000000";
+const SIGNER = "0xD1E3636906Ceea0A67231dcb5a73719B02988023";
+const CHAIN_HEX = "0x13b2";
+const TARGET_PRICE = 2000000000000n;   // 2,000 USDC mcap on a 1e9 supply
+const POOL_FEE = 10000;                // 1% tier, matches MintdLaunchpad.POOL_FEE
+const SUPPLY = 1000000000n;            // whole tokens
+const TARGET_PCT = 51n;
+const DEV_LAUNCH_BPS = 480n;           // 4.8%, deliberately under the immutable 500 cap
+
+const PAD_ABI = [
+  "function launch(string name_, string symbol_, string metadataURI_, uint256 minTokensOut) payable returns (address token)",
+  "function setConfig(uint256 _creationFee, uint256 _creatorShareBps, uint256 _buybackShareBps, uint256 _startPriceQuote1e18)",
+  "function creationFee() view returns (uint256)",
+  "function creatorShareBps() view returns (uint256)",
+  "function buybackShareBps() view returns (uint256)",
+  "function startPriceQuote1e18() view returns (uint256)",
+  "function devBuyCapBps() view returns (uint256)",
+  "function tokenCount() view returns (uint256)",
+  "function owner() view returns (address)",
+  "function launches(address) view returns (address token,address creator,address pool,address quote,uint256 positionId,uint64 createdAt,uint256 creatorFeesClaimedQuote,uint256 creatorFeesClaimedToken)",
+  "event TokenLaunched(address indexed token,address indexed creator,address pool,uint256 positionId,string name,string symbol,string metadataURI)",
+];
+const ERC20 = [
+  "function balanceOf(address) view returns (uint256)",
+  "function approve(address,uint256) returns (bool)",
+  "function allowance(address,address) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
+  "function name() view returns (string)",
+  "function totalSupply() view returns (uint256)",
+];
+// Router02's struct has no deadline field. That is the variant whose
+// exactInputSingle selector 0x04e45aaf was confirmed present in this router's
+// bytecode; the deadline variant is a different selector and would revert.
+const ROUTER_ABI = [
+  "function exactInputSingle((address tokenIn,address tokenOut,uint24 fee,address recipient,uint256 amountIn,uint256 amountOutMinimum,uint160 sqrtPriceLimitX96)) payable returns (uint256 amountOut)",
+];
+
+const logEl = document.getElementById("log");
+let first = true;
+function log(m, cls) {
+  if (first) { logEl.textContent = ""; first = false; }
+  const s = document.createElement("span");
+  if (cls) s.className = cls;
+  s.textContent = m + "\n";
+  logEl.appendChild(s); logEl.scrollTop = logEl.scrollHeight;
+}
+const $ = (id) => document.getElementById(id);
+const fmt = (n, d = 2) => Number(n).toLocaleString(undefined, { maximumFractionDigits: d });
+
+let provider, signer, me, pad, cfg = null, token = null, pool = null, lastQuote = null;
+
+/* --------------------------------------------------------------- curve math
+   The launch position spans the launch tick to MAX_TICK and holds the entire
+   supply, so it is a pure single-sided range: L = SUPPLY * sqrt(Pa), and the
+   token still in the pool is L / sqrt(P). Rearranged, buying the pool down from
+   `have` tokens to `want` tokens costs L^2 * (1/want - 1/have), with
+   L^2 = SUPPLY^2 * Pa = SUPPLY * startMcap.
+   Everything is done in floats deliberately: this is a quote shown to a human,
+   and the actual amounts sent are derived from it with a margin. */
+function poolCostToBuy(startMcapUsdc, poolTokensNow, tokensToBuy) {
+  const L2 = startMcapUsdc * Number(SUPPLY);
+  const after = poolTokensNow - tokensToBuy;
+  if (after <= 0) return Infinity;           // the range runs to MAX_TICK: never all of it
+  return L2 * (1 / after - 1 / poolTokensNow);
+}
+// The 1% pool fee is charged on the way IN, so the input must be grossed up.
+const grossUp = (net) => net / 0.99;
+
+async function readCfg() {
+  cfg = {
+    fee: await pad.creationFee(),
+    creator: await pad.creatorShareBps(),
+    buyback: await pad.buybackShareBps(),
+    price: await pad.startPriceQuote1e18(),
+    cap: await pad.devBuyCapBps(),
+    count: await pad.tokenCount(),
+  };
+  cfg.startMcap = Number(ethers.formatUnits(cfg.price, 18)) * Number(SUPPLY);
+  log(`creationFee          ${ethers.formatEther(cfg.fee)} USDC`);
+  log(`creatorShareBps      ${cfg.creator}`);
+  log(`startPriceQuote1e18  ${cfg.price}  = ${fmt(cfg.startMcap)} USDC mcap`);
+  log(`devBuyCapBps         ${cfg.cap}  (immutable, no setter)`);
+  log(`tokenCount           ${cfg.count}`);
+  // The planned dev buy in the launch tx, sized off the cap actually on chain
+  const bps = DEV_LAUNCH_BPS < cfg.cap ? DEV_LAUNCH_BPS : (cfg.cap * 96n) / 100n;
+  cfg.devBps = bps;
+  const f = Number(bps) / 10000;
+  cfg.devCost = grossUp(cfg.startMcap * f / (1 - f));
+  $("devPlanned").innerHTML = `${Number(bps) / 100}% of supply <span class="dim">cap is ${Number(cfg.cap) / 100}%</span>`;
+  $("devCost").textContent = fmt(cfg.devCost) + " USDC";
+  return cfg;
+}
+
+$("bConnect").onclick = async () => {
+  try {
+    if (!window.ethereum) return log("No wallet in this browser.", "bad");
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    try { await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN_HEX }] }); } catch {}
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = await provider.getSigner();
+    const net = await provider.getNetwork();
+    if (net.chainId !== 5042n) return log(`Wrong chain: ${net.chainId}. Switch to Arc mainnet (5042).`, "bad");
+    me = await signer.getAddress();
+    log(`connected ${me}`, "ok");
+    if (me.toLowerCase() !== SIGNER.toLowerCase()) log(`Not the required signer ${SIGNER}.`, "w");
+    pad = new ethers.Contract(PAD, PAD_ABI, signer);
+    const owner = await pad.owner();
+    $("ownerOut").textContent = owner;
+    const bal = await provider.getBalance(me);
+    $("balOut").textContent = fmt(ethers.formatEther(bal)) + " USDC";
+    log(`pad owner ${owner}`);
+    log(`balance   ${ethers.formatEther(bal)} USDC`);
+    await readCfg();
+    if (owner.toLowerCase() === me.toLowerCase()) $("bSet").disabled = false;
+    else log("This wallet does not own the pad, so setConfig will revert from it.", "w");
+    $("bLaunch").disabled = false;
+    // A launch may already have happened in an earlier session; pick it up so
+    // step 3 works without relaunching.
+    if (cfg.count > 0n) log(`note: the pad already has ${cfg.count} launch(es). Use step 3 directly if yours is among them.`, "w");
+  } catch (e) { log("connect failed: " + (e.shortMessage || e.message), "bad"); }
+};
+
+$("bSet").onclick = async () => {
+  try {
+    $("bSet").disabled = true;
+    await readCfg();
+    if (cfg.price === TARGET_PRICE) { log("already a 2,000 start; nothing to change.", "ok"); $("bSet").disabled = false; return; }
+    // Fee and both shares are re-sent exactly as read, so moving the price
+    // cannot quietly change the terms.
+    const tx = await pad.setConfig(cfg.fee, cfg.creator, cfg.buyback, TARGET_PRICE, { gasLimit: 300000 });
+    log(`setConfig tx ${tx.hash}`);
+    await tx.wait();
+    const after = await readCfg();
+    if (after.price !== TARGET_PRICE) log("PRICE DID NOT CHANGE. Do not launch.", "bad");
+    else if (after.fee !== cfg.fee || after.creator !== cfg.creator) log("WARNING: another field moved too.", "bad");
+    else log("start price is now 2,000 USDC and nothing else moved.", "ok");
+    $("bSet").disabled = false;
+  } catch (e) { log("setConfig failed: " + (e.shortMessage || e.message), "bad"); $("bSet").disabled = false; }
+};
+
+$("bLaunch").onclick = async () => {
+  try {
+    $("bLaunch").disabled = true;
+    const c = await readCfg();
+    if (c.price !== TARGET_PRICE) { log(`REFUSING: start price is ${c.price}, not 2e12. Run step 2 first.`, "bad"); $("bLaunch").disabled = false; return; }
+    if (c.creator !== 8000n) { log(`REFUSING: creatorShareBps is ${c.creator}, not 8000.`, "bad"); $("bLaunch").disabled = false; return; }
+    const name = $("fName").value.trim(), sym = $("fSymbol").value.trim(), uri = $("fUri").value.trim();
+    if (!name || !sym) { log("Name and symbol are required.", "bad"); $("bLaunch").disabled = false; return; }
+    // Dev buy sized under the cap. The contract checks tokens RECEIVED against
+    // maxDevBuyTokens and reverts over it, and the 1% fee means received is
+    // slightly less than this quote implies, so 4.8% cannot trip a 5% cap.
+    const devWei = ethers.parseEther(c.devCost.toFixed(6));
+    const value = c.fee + devWei;
+    const bal = await provider.getBalance(me);
+    if (bal < value) { log(`REFUSING: need ${ethers.formatEther(value)}, have ${ethers.formatEther(bal)}.`, "bad"); $("bLaunch").disabled = false; return; }
+    log(`launching "${name}" / ${sym} with a ${Number(c.devBps) / 100}% dev buy, sending ${ethers.formatEther(value)} USDC`);
+    const tx = await pad.launch(name, sym, uri, 0, { value, gasLimit: 9000000 });
+    log(`tx ${tx.hash}`);
+    const rec = await tx.wait();
+    log(`mined in block ${rec.blockNumber}, gas ${rec.gasUsed}`, "ok");
+    for (const l of rec.logs) {
+      if (l.address.toLowerCase() !== PAD.toLowerCase()) continue;
+      try { const p = pad.interface.parseLog(l); if (p.name === "TokenLaunched") { token = p.args.token; pool = p.args.pool; } } catch {}
+    }
+    if (!token) { log("launched but no TokenLaunched event in the receipt. Check the explorer.", "w"); return; }
+    log("");
+    log(`TOKEN  ${token}`, "ok");
+    log(`POOL   ${pool}`, "ok");
+    log("");
+    log("Now run step 3 immediately. Every block you wait is a block someone else can buy in.", "w");
+    $("bQuote").disabled = false; $("bBuy").disabled = false;
+    await quote();
+  } catch (e) { log("launch failed: " + (e.shortMessage || e.message), "bad"); $("bLaunch").disabled = false; }
+};
+
+async function quote() {
+  if (!token) { log("No token yet. Launch first, or paste one into the console as `token`.", "bad"); return null; }
+  const t = new ethers.Contract(token, ERC20, provider);
+  if (!pool) { const L = await pad.launches(token); pool = L.pool; log(`pool ${pool}`); }
+  const held = await t.balanceOf(me);
+  const inPool = await t.balanceOf(pool);
+  const heldTok = Number(ethers.formatUnits(held, 18));
+  const poolTok = Number(ethers.formatUnits(inPool, 18));
+  const target = Number(SUPPLY * TARGET_PCT / 100n);
+  const need = target - heldTok;
+  $("heldOut").textContent = `${fmt(heldTok, 0)} (${(heldTok / Number(SUPPLY) * 100).toFixed(2)}%)`;
+  $("needOut").textContent = need <= 0 ? "none, already at target" : fmt(need, 0);
+  if (need <= 0) { $("buyCost").textContent = "0"; log("already holding 51% or more.", "ok"); return { need: 0 }; }
+  if (need >= poolTok) {
+    $("buyCost").textContent = "impossible";
+    log(`REFUSING: need ${fmt(need, 0)} tokens but the pool only holds ${fmt(poolTok, 0)}.`, "bad");
+    log("The range runs to MAX_TICK, so the last of the pool costs unbounded amounts.", "bad");
+    return null;
+  }
+  const net = poolCostToBuy(cfg.startMcap, poolTok, need);
+  const gross = grossUp(net);
+  $("buyCost").textContent = fmt(gross) + " USDC";
+  lastQuote = { need, gross, poolTok, heldTok };
+  log(`quote: pool holds ${fmt(poolTok, 0)}, you hold ${fmt(heldTok, 0)}, need ${fmt(need, 0)} more`);
+  log(`       cost about ${fmt(gross)} USDC including the 1% pool fee`);
+  return lastQuote;
+}
+$("bQuote").onclick = () => quote().catch((e) => log("quote failed: " + (e.shortMessage || e.message), "bad"));
+
+$("bBuy").onclick = async () => {
+  try {
+    $("bBuy").disabled = true;
+    const q = await quote();
+    if (!q) { $("bBuy").disabled = false; return; }
+    if (q.need <= 0) { $("bBuy").disabled = false; return; }
+    // 3% headroom over the quote. The swap is exact-input, so overshooting buys
+    // slightly past 51% rather than failing, and undershooting means running
+    // this again at a worse price.
+    const amountIn6 = BigInt(Math.ceil(q.gross * 1.03 * 1e6));
+    const usdc = new ethers.Contract(USDC, ERC20, signer);
+    // USDC is 18-dec as the gas token and 6-dec as this ERC-20 over one
+    // balance. Approvals and swap amounts are the 6-dec view; treating the
+    // balance check as 18-dec here would be the 1,000,000x error.
+    const bal18 = await provider.getBalance(me);
+    if (bal18 / 1000000000000n < amountIn6) {
+      log(`REFUSING: need ${fmt(Number(amountIn6) / 1e6)} USDC, have ${fmt(ethers.formatEther(bal18))}.`, "bad");
+      $("bBuy").disabled = false; return;
+    }
+    const cur = await usdc.allowance(me, ROUTER);
+    if (cur < amountIn6) {
+      log(`approving ${fmt(Number(amountIn6) / 1e6)} USDC to the router`);
+      const at = await usdc.approve(ROUTER, amountIn6, { gasLimit: 120000 });
+      log(`approve tx ${at.hash}`);
+      await at.wait();
+    }
+    const router = new ethers.Contract(ROUTER, ROUTER_ABI, signer);
+    log(`swapping ${fmt(Number(amountIn6) / 1e6)} USDC for ARCS`);
+    // Explicit gasLimit: a swap that crosses initialised ticks estimates badly,
+    // and this one crosses many.
+    const tx = await router.exactInputSingle({
+      tokenIn: USDC, tokenOut: token, fee: POOL_FEE, recipient: me,
+      amountIn: amountIn6, amountOutMinimum: 0, sqrtPriceLimitX96: 0,
+    }, { gasLimit: 2000000 });
+    log(`swap tx ${tx.hash}`);
+    await tx.wait();
+    log("swap mined. re-reading holdings:", "ok");
+    const after = await quote();
+    if (after && after.need > 0) log("still short. Run Buy again to close the gap.", "w");
+    else log("target reached.", "ok");
+    $("bBuy").disabled = false;
+  } catch (e) {
+    log("buy failed: " + (e.shortMessage || e.message), "bad");
+    $("bBuy").disabled = false;
+  }
+};
+</script>
+</body>
+</html>
