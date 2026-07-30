@@ -99,6 +99,12 @@ sub("hero headline",
 // blurb's static copy already commits to 80%; this makes the badge agree instead
 // of contradicting it. Still overwritten by the live value once it is read, so a
 // changed share corrects itself rather than lying.
+// "Furnace" is the launchpad's name for it. arcswap calls it the Burner, and the
+// placeholder page already says Burner, so the tab has to match or the two read
+// as different features.
+sub("burner tab label",
+  '</svg> Furnace</button>',
+  '</svg> Burner</button>');
 sub("hero share placeholder",
   '<span id="heroShare">–</span>',
   '<span id="heroShare">80%</span>');

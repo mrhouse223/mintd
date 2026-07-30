@@ -2317,7 +2317,7 @@
         <button id="nav-locker" onclick="go('locker')"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> Locker</button>
         
         <button id="nav-portfolio" onclick="go('portfolio')"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="1.5"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg> Portfolio</button>
-        <button id="nav-burn" onclick="go('burn')"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3c1.5 3 4.5 4.2 4.5 8a4.5 4.5 0 0 1-9 0C7.5 8 9 6.5 12 3z"/><path d="M12 21c-3 0-5.5-2-5.5-4.5"/><path d="M12 21c3 0 5.5-2 5.5-4.5"/></svg> Furnace</button>
+        <button id="nav-burn" onclick="go('burn')"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3c1.5 3 4.5 4.2 4.5 8a4.5 4.5 0 0 1-9 0C7.5 8 9 6.5 12 3z"/><path d="M12 21c-3 0-5.5-2-5.5-4.5"/><path d="M12 21c3 0 5.5-2 5.5-4.5"/></svg> Burner</button>
         <button id="nav-docs" onclick="go('docs')"><svg class="ic" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg> Docs</button>
         <button id="nav-holders" onclick="go('holders')"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg> Holders</button>
         <button id="nav-dev" onclick="go('dev')" style="display:none"><svg class="ic" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg> Dev</button>
@@ -2437,6 +2437,10 @@ const CHAINS = {
     // No public RPC answers this chain, so every read rides the visitor's
     // wallet. See walletRead().
     readViaWallet: true,
+    // Navigation entries that exist as placeholders. Their feature flags stay
+    // false, so no code path tries to reach a contract that is not deployed;
+    // these only add the tab and a "coming soon" panel. See applySoonViews().
+    soon: ["earn", "locker", "burn"],
     batchMaxCount: 1,
     logSpan: 500,
   },
@@ -2868,6 +2872,7 @@ async function route() {
     swFill(); swQuickFill();
   } else if (h === "earn") {
     showView("earn");
+    if (isSoon("earn")) return; // placeholder tab: no contracts to read
     if (!tokens.length && padAddr()) await loadAll();
     loadFarm(); loadFeePools(); loadPools();
   } else if (h === "pools") {
@@ -2886,6 +2891,7 @@ async function route() {
     brRender();
   } else if (h === "locker") {
     showView("locker");
+    if (isSoon("locker")) return; // placeholder tab: no contracts to read
     if (!tokens.length && padAddr()) await loadAll(); // prices for locked launchpad tokens
     lkInit();
   } else if (h === "screener") {
@@ -2894,6 +2900,7 @@ async function route() {
     scRender();
   } else if (h === "burn") {
     showView("burn");
+    if (isSoon("burn")) return; // placeholder tab: no contracts to read
     if (!tokens.length && padAddr()) await loadAll(); // supply the burn leaderboard
     fuInit();
   } else if (h === "docs") {
@@ -2932,10 +2939,15 @@ function applyChainUi() {
                 "nav-mintr": "mintr", "nav-synth": "gold", "nav-locker": "locker", "nav-burn": "burn",
                 "nav-screener": "screener", "nav-bridge": "bridge", "nav-holders": "holders",
                 "nav-agent": "agent" };
+  // A "soon" tab is shown even though its feature is off. The feature flag still
+  // reads false everywhere else, so nothing tries to talk to a contract that is
+  // not deployed; only the nav entry and a placeholder view are added.
+  const soon = new Set(NET.soon || []);
   for (const [id, feat] of Object.entries(map)) {
     const b = $(id);
-    if (b) b.style.display = NET.features[feat] === false ? "none" : "";
+    if (b) b.style.display = (NET.features[feat] === false && !soon.has(feat)) ? "none" : "";
   }
+  applySoonViews();
   const f = $("faucetSlot");
   if (f) f.innerHTML = faucetLink();
   // Headline tiles for things this chain does not have. A "$MINTR TVL" of $2
@@ -2976,6 +2988,46 @@ function applyChainUi() {
 // data-chain="arc-testnet" (comma-separated for several). Prefix with ! to
 // invert. A block for a chain you are not on is removed from the flow, not
 // just dimmed, so the docs read continuously either way.
+/// Tabs that exist in the navigation but have no contracts behind them yet.
+///
+/// The view's real markup is REPLACED, not merely left alone. Those panels read
+/// addresses that are null on this chain, and the loaders behind them
+/// (loadFarm, lkInit, fuInit) would run against nothing: a farm rendering zero
+/// APR and an empty locker read as a broken product rather than an unreleased
+/// one. route() also returns early for these, so no loader fires at all.
+const SOON_VIEW = { earn: "view-earn", locker: "view-locker", burn: "view-burn" };
+const SOON_COPY = {
+  earn: {
+    title: "Farms",
+    blurb: "Stake LP tokens to earn rewards. This needs the MintSwap router, factory and reward contracts deployed on Arc, which has not happened yet.",
+  },
+  locker: {
+    title: "Locker",
+    blurb: "Time-locked token custody: extend-only, with no admin route to locked funds. The locker contract is not deployed on Arc yet.",
+  },
+  burn: {
+    title: "Burner",
+    blurb: "Turns protocol revenue into buys of the platform token and sends them to a dead address, with no admin path to the funds. Nothing about burning is wired on Arc yet: the launchpad's protocol share is currently a plain transfer.",
+  },
+};
+function isSoon(feat) { return (NET.soon || []).includes(feat); }
+function applySoonViews() {
+  for (const feat of (NET.soon || [])) {
+    const v = $(SOON_VIEW[feat]), c = SOON_COPY[feat];
+    if (!v || !c || v.dataset.soonPainted) continue;
+    // Inline styles rather than card classes: this has to render correctly even
+    // if the surrounding stylesheet is restyled, and the squared treatment
+    // already overrides radii globally.
+    v.innerHTML = `
+      <div style="background:var(--panel);border:1px solid var(--line);padding:56px 28px;text-align:center;margin-top:18px">
+        <div class="badgepill" style="display:inline-block;margin-bottom:16px">COMING SOON</div>
+        <h2 style="margin:0 0 12px;font-size:26px">${esc(c.title)}</h2>
+        <p style="max-width:62ch;margin:0 auto;color:var(--dim);font-size:14.5px;line-height:1.6">${esc(c.blurb)}</p>
+      </div>`;
+    v.dataset.soonPainted = "1";
+  }
+}
+
 function applyChainCopy() {
   const set = (cls, val) => document.querySelectorAll("." + cls).forEach((e) => { e.textContent = val; });
   const explorer = (NET.chain.blockExplorerUrls && NET.chain.blockExplorerUrls[0]) || "";
