@@ -38,8 +38,9 @@
 <div class="wrap">
   <h1>Set the 2,000 USDC start, then launch ARCSWAP</h1>
   <p class="lede">
-    The start price is owner-settable, so moving from 3,000 to 2,000 needs no redeploy. Connect the owner
-    wallet, set the config, then launch. Driven from the wallet because no reachable Arc RPC answers reads.
+    The start price is owner-settable, so moving from 3,000 to 2,000 needs no redeploy. Connect, set the
+    config, then launch. Driven from the wallet because no reachable Arc RPC answers reads, so the page
+    cannot tell you who owns the pad until a wallet is attached.
   </p>
 
   <div class="warn">
@@ -48,11 +49,21 @@
     retroactively changes for it.
   </div>
 
-  <h2>1. Connect the owner wallet</h2>
+  <h2>1. Connect the signer</h2>
   <div class="card">
     <div class="row"><span>Launchpad</span><b>0x7D1894CBbf12E086D1530C01B131A9F5F993DFC9</b></div>
-    <div class="row"><span>Required signer <span class="dim">owner</span></span><b>0x64838C341956FcE51FA6575c5F593D0415f23E72</b></div>
+    <div class="row"><span>Required signer</span><b>0xD1E3636906Ceea0A67231dcb5a73719B02988023</b></div>
+    <div class="row"><span>Pad owner <span class="dim">read on connect</span></span><b id="ownerOut">?</b></div>
     <button id="bConnect">Connect</button>
+    <div id="xferBox" style="display:none">
+      <div class="warn" style="margin-top:14px">
+        The connected wallet owns the pad but the required signer does not, so
+        <b>setConfig would revert from the required signer.</b> Either set the price from this
+        wallet, or hand ownership over first. Handing it over is one-way: this wallet loses
+        setConfig, setFeeRecipients and every other owner power on the pad.
+      </div>
+      <button id="bXfer" class="ghost">Transfer ownership to the required signer</button>
+    </div>
   </div>
 
   <h2>2. Set the start price to a 2,000 USDC market cap</h2>
@@ -87,7 +98,7 @@
 
 <script>
 const PAD = "0x7D1894CBbf12E086D1530C01B131A9F5F993DFC9";
-const OWNER = "0x64838C341956FcE51FA6575c5F593D0415f23E72";
+const SIGNER = "0xD1E3636906Ceea0A67231dcb5a73719B02988023";
 const CHAIN_HEX = "0x13b2";
 const TARGET_PRICE = 2000000000000n; // 2,000 USDC mcap on 1B supply
 const PAD_ABI = [
@@ -100,6 +111,7 @@ const PAD_ABI = [
   "function devBuyCapBps() view returns (uint256)",
   "function tokenCount() view returns (uint256)",
   "function owner() view returns (address)",
+  "function transferOwnership(address _owner)",
   "function MAX_CREATION_FEE() view returns (uint256)",
   "event TokenLaunched(address indexed token,address indexed creator,address pool,uint256 positionId,string name,string symbol,string metadataURI)",
 ];
@@ -145,19 +157,51 @@ document.getElementById("bConnect").onclick = async () => {
     if (net.chainId !== 5042n) return log(`Wrong chain: ${net.chainId}. Switch to Arc mainnet (5042).`, "bad");
     const me = await signer.getAddress();
     log(`connected ${me}`, "ok");
+    if (me.toLowerCase() !== SIGNER.toLowerCase()) {
+      log(`This is not the required signer ${SIGNER}. Switch accounts in the wallet.`, "w");
+    }
     pad = new ethers.Contract(PAD, PAD_ABI, signer);
+    // owner() decides what is actually possible here, not the address printed
+    // on the page. There is no reachable Arc mainnet RPC to check it in advance.
     const onChainOwner = await pad.owner();
+    document.getElementById("ownerOut").textContent = onChainOwner;
     log(`pad owner ${onChainOwner}`);
-    if (onChainOwner.toLowerCase() !== me.toLowerCase()) {
-      log("This wallet is NOT the owner. setConfig will revert. Launching still works from any wallet.", "w");
-    } else {
+    const iAmOwner = onChainOwner.toLowerCase() === me.toLowerCase();
+    const signerIsOwner = onChainOwner.toLowerCase() === SIGNER.toLowerCase();
+    if (signerIsOwner) log("the required signer owns the pad, so it can set the price", "ok");
+    if (iAmOwner) {
       document.getElementById("bSet").disabled = false;
+      if (!signerIsOwner) document.getElementById("xferBox").style.display = "block";
+    } else {
+      log("This wallet does NOT own the pad, so setConfig will revert from it. Launching works from any wallet.", "w");
     }
     log("");
     log("current config, read off the pad:");
     await readCfg();
     document.getElementById("bLaunch").disabled = false;
   } catch (e) { log("connect failed: " + (e.shortMessage || e.message), "bad"); }
+};
+
+document.getElementById("bXfer").onclick = async () => {
+  const b = document.getElementById("bXfer");
+  try {
+    b.disabled = true;
+    log(`transferOwnership(${SIGNER})`);
+    const tx = await pad.transferOwnership(SIGNER, { gasLimit: 200000 });
+    log(`tx ${tx.hash}`);
+    await tx.wait();
+    const now = await pad.owner();
+    document.getElementById("ownerOut").textContent = now;
+    if (now.toLowerCase() !== SIGNER.toLowerCase()) return log(`OWNER DID NOT CHANGE, still ${now}`, "bad");
+    log(`owner is now ${now}. Reconnect as that account to set the price.`, "ok");
+    // This wallet just gave up setConfig, so leaving the button live would only
+    // produce a revert.
+    document.getElementById("bSet").disabled = true;
+    document.getElementById("xferBox").style.display = "none";
+  } catch (e) {
+    log("transferOwnership failed: " + (e.shortMessage || e.message), "bad");
+    b.disabled = false;
+  }
 };
 
 document.getElementById("bSet").onclick = async () => {
