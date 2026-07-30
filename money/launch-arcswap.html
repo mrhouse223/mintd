@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Set 2k start &amp; launch ARCSWAP</title>
+<title>Set 2k start &amp; launch ArcSwap</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
 <style>
   :root { --bg:#0a0e14; --panel:#111823; --line:#212c3a; --ink:#eef3fa; --dim:#8a9ab0;
@@ -36,7 +36,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Set the 2,000 USDC start, then launch ARCSWAP</h1>
+  <h1>Set the 2,000 USDC start, then launch ArcSwap</h1>
   <p class="lede">
     The start price is owner-settable, so moving from 3,000 to 2,000 needs no redeploy. Connect, set the
     config, then launch. Driven from the wallet because no reachable Arc RPC answers reads, so the page
@@ -83,14 +83,14 @@
   <h2>3. Launch</h2>
   <div class="card">
     <label>Name</label>
-    <input id="fName" value="ARCSWAP" />
+    <input id="fName" value="ArcSwap" />
     <label>Symbol</label>
     <input id="fSymbol" value="ARCS" />
     <label>Metadata URI <span class="dim">(optional)</span></label>
     <input id="fUri" value="" placeholder="https://... or blank" />
     <label>Dev buy in USDC <span class="dim">on top of the 1 USDC fee, capped at 5% of supply. 0 for none.</span></label>
     <input id="fDev" value="0" />
-    <button id="bLaunch" disabled>Launch ARCSWAP</button>
+    <button id="bLaunch" disabled>Launch ArcSwap</button>
   </div>
 
   <div class="log" id="log">Waiting.</div>
