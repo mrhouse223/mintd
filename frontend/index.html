@@ -1196,6 +1196,7 @@
     <button id="nav-launch" onclick="go('launch')">Launch</button>
     <button id="nav-mintswap" onclick="go('mintswap')">Swap</button>
     <button id="nav-earn" onclick="go('earn')">Earn</button>
+    <button id="nav-pools" onclick="go('pools')" style="display:none">Pools</button>
     <button id="nav-screener" onclick="go('screener')">Screener</button>
     <button id="nav-mintr" onclick="go('mintr')">MINTR</button>
     <button id="nav-synth" onclick="go('synth')">Gold</button>
@@ -1816,7 +1817,7 @@
     <div class="heroC" style="margin:26px auto 18px;max-width:900px">
       <div class="badgepill">LIVE ONCHAIN · <span class="chainpill">STABLE</span></div>
       <h1 style="font-size:40px">Mint<span class="g">screener.</span></h1>
-      <p>Every coin launched through mintd on this chain, priced from its own pool. Charts are built from onchain swaps, not an indexer, so a coin appears the moment it trades.</p>
+      <p>Every coin launched through <span class="brand">mintd.fun</span> on this chain, priced from its own pool. Charts are built from onchain swaps, not an indexer, so a coin appears the moment it trades.</p>
     </div>
     <div class="chips" id="scSort" style="margin-bottom:14px">
       <button class="chip on" data-s="mcap">Market cap</button>
@@ -2016,7 +2017,7 @@
       <div id="pfTokens"><div class="empty">Connect wallet to view your holdings.</div></div>
       <div style="font-weight:800;font-size:14px;margin:20px 2px 8px">Staked farm positions</div>
       <div id="pfFarms"><div class="empty">–</div></div>
-      <div style="font-weight:800;font-size:14px;margin:20px 2px 8px">Liquidity positions (MintSwap)</div>
+      <div data-chain="stable" style="font-weight:800;font-size:14px;margin:20px 2px 8px">Liquidity positions (MintSwap)</div>
       <div id="pfLps"><div class="empty">–</div></div>
     </div>
   </section>
@@ -2381,7 +2382,7 @@ const CHAINS = {
     },
     // holders: the standing board only exists for MINTD on Stable, which is
     // the only token the ledger indexes.
-    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, screener: true, holders: true, agent: false },
+    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, pools: false, screener: true, holders: true, agent: false },
     statsFile: "stats.json",
     // Dexscreener's chain slug. Only Stable is indexed by them: a token
     // lookup for the live ARCS returns pairs:null and the "arc" slug 400s, so
@@ -2472,7 +2473,7 @@ const CHAINS = {
     // it needs is deployed and its wiring verified: launch and screener need the
     // pad, swap needs a confirmed router, agent needs the factory. Shipping a
     // tab that half works is worse than not shipping it.
-    features: { launch: true, swap: false, earn: false, mintr: false, gold: false, locker: false, burn: false, screener: true, bridge: true, holders: false, agent: false, mintdStat: false },
+    features: { launch: true, swap: false, earn: false, mintr: false, gold: false, locker: false, burn: false, pools: false, screener: true, bridge: true, holders: false, agent: false, mintdStat: false },
     statsFile: null,
     dexSlug: null,   // Dexscreener does not index Arc
     faucet: null,
@@ -2482,7 +2483,7 @@ const CHAINS = {
     // Navigation entries that exist as placeholders. Their feature flags stay
     // false, so no code path tries to reach a contract that is not deployed;
     // these only add the tab and a "coming soon" panel. See applySoonViews().
-    soon: ["earn", "locker", "burn"],
+    soon: ["earn", "locker", "burn", "pools"],
     batchMaxCount: 1,
     logSpan: 500,
   },
@@ -2557,7 +2558,7 @@ const CHAINS = {
     // rather than shown broken.
     // No bridge to a testnet: funds come from the faucet, and offering a
     // bridge here invites someone to send real money to a throwaway chain.
-    features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true, screener: true, bridge: false, agent: false },
+    features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true, pools: false, screener: true, bridge: false, agent: false },
     statsFile: null,   // no indexer running against Arc yet
     dexSlug: null,   // Dexscreener does not index Arc testnet
     faucet: "https://faucet.circle.com",
@@ -3001,6 +3002,10 @@ async function route() {
     if (!tokens.length && padAddr()) await loadAll();
     loadFarm(); loadFeePools(); loadPools();
   } else if (h === "pools") {
+    // On a chain where Pools is a placeholder tab it gets its own view. Without
+    // this the retirement redirect below sends it to Earn, so clicking Pools
+    // would show the Farms placeholder instead.
+    if (isSoon("pools")) { showView("pools"); return; }
     // Pools page retired: liquidity now lives on the Earn tab (zap in per pool)
     showView("earn");
     if (!tokens.length && padAddr()) await loadAll();
@@ -3063,6 +3068,7 @@ function applyChainUi() {
   const map = { "nav-launch": "launch", "nav-mintswap": "swap", "nav-earn": "earn",
                 "nav-mintr": "mintr", "nav-synth": "gold", "nav-locker": "locker", "nav-burn": "burn",
                 "nav-screener": "screener", "nav-bridge": "bridge", "nav-holders": "holders",
+                "nav-pools": "pools",
                 "nav-agent": "agent" };
   // A "soon" tab is shown even though its feature is off. The feature flag still
   // reads false everywhere else, so nothing tries to talk to a contract that is
@@ -3120,15 +3126,19 @@ function applyChainUi() {
 /// (loadFarm, lkInit, fuInit) would run against nothing: a farm rendering zero
 /// APR and an empty locker read as a broken product rather than an unreleased
 /// one. route() also returns early for these, so no loader fires at all.
-const SOON_VIEW = { earn: "view-earn", locker: "view-locker", burn: "view-burn" };
+const SOON_VIEW = { earn: "view-earn", locker: "view-locker", burn: "view-burn", pools: "view-pools" };
 const SOON_COPY = {
   earn: {
     title: "Farms",
-    blurb: "Stake LP tokens to earn rewards. This needs the MintSwap router, factory and reward contracts deployed on Arc, which has not happened yet.",
+    blurb: "Stake LP tokens to earn a share of trading fees plus rewards. This needs the AMM router, factory and reward contracts deployed on Arc, which has not happened yet.",
   },
   locker: {
     title: "Locker",
     blurb: "Time-locked token custody: extend-only, with no admin route to locked funds. The locker contract is not deployed on Arc yet.",
+  },
+  pools: {
+    title: "Pools",
+    blurb: "Provide liquidity and earn a share of every trade in the pool. This needs the AMM factory and router deployed on Arc; today the only pools here are the permanently locked launchpad positions, which nobody can add to or withdraw from.",
   },
   burn: {
     title: "Burner",

@@ -90,24 +90,32 @@ sub("hero headline",
   '<h1>Launch on <span id="heroChain">Stable</span> for $1.<br /><span class="g">Earn fees instantly.</span></h1>',
   '<h1>The Pons of Arc Mainnet.<br /><span class="g">Launch a coin for 1 USDC.</span></h1>');
 
-// The split is stated as 80/20 rather than "the majority". The percentage is
-// still read from the deployed pad when one exists, so the sentence cannot drift
-// from the contract; only the fallback text names 80 outright.
-// The badge's placeholder is a dash until the pad's creator share is read, and
-// on Arc that read needs a connected wallet, so an anonymous visitor saw
-// "CREATORS KEEP - OF FEES" directly above a blurb stating 80% as fact. The
-// blurb's static copy already commits to 80%; this makes the badge agree instead
-// of contradicting it. Still overwritten by the live value once it is read, so a
-// changed share corrects itself rather than lying.
-// "Furnace" is the launchpad's name for it. arcswap calls it the Burner, and the
-// placeholder page already says Burner, so the tab has to match or the two read
-// as different features.
+// "Mintscreener" is a mintd portmanteau, and the one brand mention a plain text
+// sweep misses: the wordmark is split across two elements, so neither leaf node
+// contains the whole word. Named for the chain instead.
+sub("screener wordmark",
+  '<h1 style="font-size:40px">Mint<span class="g">screener.</span></h1>',
+  '<h1 style="font-size:40px">Arc<span class="g">screener.</span></h1>');
+
+// "Furnace" is the launchpad's name for it. arcswap calls it the Burner, and its
+// placeholder page says Burner, so the tab has to match or the two read as
+// different features.
 sub("burner tab label",
   '</svg> Furnace</button>',
   '</svg> Burner</button>');
+
+// The badge's placeholder is a dash until the pad's creator share is read, and on
+// Arc that read needs a connected wallet, so an anonymous visitor saw
+// "CREATORS KEEP - OF FEES" directly above a blurb stating 80% as fact. The
+// blurb's static copy already commits to 80%; this makes the badge agree rather
+// than contradict it, and the live value still overwrites it once read.
 sub("hero share placeholder",
   '<span id="heroShare">–</span>',
   '<span id="heroShare">80%</span>');
+
+// The split is stated as 80/20 rather than "the majority". The percentage is
+// still read from the deployed pad when one exists, so the sentence cannot drift
+// from the contract; only the fallback text names 80 outright.
 sub("hero blurb split, known",
   '`Creators claim ${share}% of every trading fee any time`',
   '`Creators claim ${share}% of every trading fee any time, and the remaining ${100 - share}% funds the protocol`');
