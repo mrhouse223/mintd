@@ -1409,6 +1409,49 @@
         <p>Provide liquidity to a MintSwap V2 pool, stake the LP token and earn $MINTD streamed every second. LP trading fees accrue to your position too. Unstake any time.</p>
       </div>
 
+      <!-- StableEarn. Someone else's vault, named as such: it is the largest
+           yield on this chain by a wide margin, and pretending otherwise helps
+           nobody, but a depositor who loses money there will hold this site
+           responsible because this is where they clicked. -->
+      <div class="trade" id="seCard" data-chain="stable" style="margin-bottom:22px;display:none">
+        <div class="mkthead" style="margin-bottom:10px">
+          <h3 style="margin:0">StableEarn</h3>
+          <div class="spacer"></div>
+          <span class="badgepill" style="font-size:10px">MORPHO · CURATED BY GAUNTLET</span>
+        </div>
+        <p class="finenote" style="margin:0 0 12px">
+          A USDT0 lending vault run by Morpho and curated by Gauntlet.
+          <b>mintd.fun does not operate, curate or insure it</b>, and deposits go straight to the vault
+          contract rather than through anything of ours. Shown here because it holds more than the whole
+          chain's trading liquidity combined.
+        </p>
+        <div class="feecard" style="margin-bottom:12px">
+          <div class="feerow"><span>Vault</span><b><a id="seLink" target="_blank" rel="noopener">–</a></b></div>
+          <div class="feerow"><span>Total deposits</span><b id="seTvl">–</b></div>
+          <div class="feerow"><span>Withdrawable now</span><b id="seLiq">–</b></div>
+          <div class="feerow"><span>Share price</span><b id="sePx">–</b></div>
+          <div class="feerow"><span>Yield, measured here</span><b id="seApy">–</b></div>
+        </div>
+        <div class="feecard" id="seMine" style="margin-bottom:12px;display:none">
+          <div class="feerow"><span>Your position</span><b id="sePos">–</b></div>
+          <div class="feerow"><span>Your shares</span><b id="seShares">–</b></div>
+        </div>
+        <div id="seCap" class="finenote" style="display:none;margin-bottom:12px;border-left:3px solid var(--gold);padding-left:12px">
+          <b>At capacity.</b> The vault is not accepting deposits right now, so a deposit would revert.
+          Withdrawals are unaffected. Its cap has been raised repeatedly, so this usually reopens.
+        </div>
+        <div class="amtbox" style="margin-bottom:10px">
+          <input id="seAmt" type="number" min="0" step="any" placeholder="0.0" oninput="seQuote()" />
+          <span id="seSym">USDT0</span>
+        </div>
+        <div class="qrow"><span>You receive</span><b id="seOut">–</b></div>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button class="btn" id="seDeposit" style="flex:1" onclick="seDo('deposit')">Deposit</button>
+          <button class="btn ghost" id="seWithdraw" style="flex:1" onclick="seDo('withdraw')">Withdraw</button>
+        </div>
+        <div class="finenote" style="margin-top:10px" id="seNote"></div>
+      </div>
+
       <div class="trade" style="margin-bottom:22px">
         <h3 style="margin-bottom:12px">Yield calculator</h3>
         <label style="font-size:10px;color:var(--dim);font-weight:800;display:block;margin-bottom:6px">POOL</label>
@@ -2387,6 +2430,15 @@ const CHAINS = {
       meta: "0x3286434ef8D5a829E5A737485A4DE91526e65174",
       mintswapFactory: "0x65E12569E20E8706A4a60fCAB13e9069B78F9f8E",
       mintswapRouter: "0xb9274bEdaDcf31136F54A9501232e642a35C6Eb7",
+      // StableEarn: Morpho Vault V2 curated by Gauntlet, a plain ERC-4626 whose
+      // asset is the same USDT0 this stack already handles. NOT ours. Read on
+      // chain before wiring: all four Morpho gates are the zero address, so it
+      // is permissionless rather than allowlisted, and maxDeposit reflects a
+      // supply cap that is frequently full.
+      stableEarn: {
+        vault: "0xb7Df8db22A5DBBFA9ebeb94b3910aec6a4f05c08",
+        asset: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+      },
       furnace: null,
       // FeeClaimAll: batch fee-claim trigger behind the /dev dashboard.
       // Holds nothing and has no owner, so it is safe to leave public.
@@ -3064,7 +3116,7 @@ async function route() {
     showView("earn");
     if (isSoon("earn")) return; // placeholder tab: no contracts to read
     if (!tokens.length && padAddr()) await loadAll();
-    loadFarm(); loadFeePools(); loadPools();
+    loadFarm(); loadFeePools(); loadPools(); seLoad();
   } else if (h === "pools") {
     // On a chain where Pools is a placeholder tab it gets its own view. Without
     // this the retirement redirect below sends it to Earn, so clicking Pools
@@ -3695,7 +3747,7 @@ async function connect() {
     if ($("view-bridge").classList.contains("on")) brRender();
     if (cur) refreshTrade();
     if ($("view-mintswap").classList.contains("on")) swBalance();
-    if ($("view-earn").classList.contains("on")) { loadFarm(); loadFeePools(); loadPools(); }
+    if ($("view-earn").classList.contains("on")) { loadFarm(); loadFeePools(); loadPools(); seLoad(); }
     if ($("view-pools").classList.contains("on")) { plBals(); loadPools(); }
     if ($("view-portfolio").classList.contains("on")) loadPortfolio();
     if ($("view-mintr").classList.contains("on")) mrBalance();
@@ -6358,6 +6410,155 @@ function farmCardHTML(f, i) {
       <div class="feenote" style="margin-top:8px">Type either amount and the other side auto-fills at the live pool ratio. You need both USDT0 and ${esc(f.symB)} in your wallet; the Zap above does it all from USDT0 alone.</div>
     </details>
   </div>`;
+}
+
+/* ------------------------------------------------------- StableEarn (ERC-4626)
+   Someone else's vault, routed to directly. There is no contract of ours in the
+   path: approve, then deposit, and redeem to leave. */
+const SE = NET.mintd && NET.mintd.stableEarn;
+const SE_ABI = [
+  "function asset() view returns (address)",
+  "function totalAssets() view returns (uint256)",
+  "function convertToAssets(uint256) view returns (uint256)",
+  "function convertToShares(uint256) view returns (uint256)",
+  "function previewDeposit(uint256) view returns (uint256)",
+  "function previewRedeem(uint256) view returns (uint256)",
+  "function maxDeposit(address) view returns (uint256)",
+  "function maxWithdraw(address) view returns (uint256)",
+  "function maxRedeem(address) view returns (uint256)",
+  "function balanceOf(address) view returns (uint256)",
+  "function deposit(uint256 assets,address receiver) returns (uint256)",
+  "function redeem(uint256 shares,address receiver,address owner) returns (uint256)",
+];
+let seState = null;
+
+/// Yield measured from the vault's own share price over time.
+///
+/// It cannot be read from the chain: Stable keeps no archive state, so a past
+/// eth_call fails outright, and Morpho's API does not cover chain 988. So this
+/// reads snapshots this project records itself, and shows nothing at all until
+/// there are two far enough apart to mean something. An unmeasured number is
+/// worse than no number on a page about yield.
+async function seApyFromSnapshots(pxNow) {
+  try {
+    const r = await fetch("/stable-earn.json", { cache: "no-store" });
+    if (!r.ok) return null;
+    const snaps = (await r.json()).snapshots || [];
+    if (snaps.length < 2) return null;
+    const first = snaps[0], last = { ts: Math.floor(Date.now() / 1000), px: Number(pxNow) };
+    const days = (last.ts - first.ts) / 86400;
+    if (days < 1) return null;                     // under a day is noise, not yield
+    const growth = last.px / Number(first.px);
+    if (!isFinite(growth) || growth <= 0) return null;
+    return { apy: (Math.pow(growth, 365 / days) - 1) * 100, days };
+  } catch { return null; }
+}
+
+async function seLoad() {
+  const card = $("seCard");
+  if (!card || !SE || !rp) return;
+  try {
+    const v = new ethers.Contract(SE.vault, SE_ABI, rp);
+    const [tvl, px, cap] = [
+      await retryRead(() => v.totalAssets()),
+      await retryRead(() => v.convertToAssets(10n ** 18n)),
+      await retryRead(() => v.maxDeposit(wallet || ethers.ZeroAddress)),
+    ];
+    seState = { tvl, px, cap, shares: 0n, mine: 0n, maxOut: 0n };
+    card.style.display = "";
+    $("seLink").textContent = short(SE.vault);
+    $("seLink").href = `${CHAIN.blockExplorerUrls[0]}/address/${SE.vault}`;
+    $("seTvl").textContent = fmtUsd(ethers.formatUnits(tvl, 6));
+    $("sePx").textContent = nf(ethers.formatUnits(px, 6), 6) + " USDT0 / share";
+    // Withdrawable liquidity is not totalAssets. Lending vaults lend most of it
+    // out, so implying the whole balance is available on demand is a lie the
+    // first person to try a large exit discovers.
+    try {
+      const idle = await retryRead(() => new ethers.Contract(SE.asset, ERC20_ABI, rp).balanceOf(SE.vault));
+      $("seLiq").textContent = fmtUsd(ethers.formatUnits(idle, 6));
+    } catch { $("seLiq").textContent = "–"; }
+
+    const a = await seApyFromSnapshots(px);
+    $("seApy").textContent = a ? `${a.apy.toFixed(2)}% over ${a.days.toFixed(1)}d` : "measuring";
+    $("seApy").title = a ? "Annualised from this vault's own share price, measured by mintd.fun"
+                         : "Needs at least a day of share-price history recorded here";
+
+    // Cap full is a normal state for this vault, not an error. Read it before
+    // offering the button rather than letting the wallet discover it.
+    const full = cap === 0n;
+    $("seCap").style.display = full ? "" : "none";
+    $("seDeposit").disabled = full;
+
+    if (wallet) {
+      const sh = await retryRead(() => v.balanceOf(wallet));
+      const owed = sh > 0n ? await retryRead(() => v.convertToAssets(sh)) : 0n;
+      const maxOut = await retryRead(() => v.maxWithdraw(wallet));
+      seState.shares = sh; seState.mine = owed; seState.maxOut = maxOut;
+      $("seMine").style.display = sh > 0n ? "" : "none";
+      $("sePos").textContent = fmtUsd(ethers.formatUnits(owed, 6));
+      $("seShares").textContent = nf(ethers.formatUnits(sh, 18), 6);
+      $("seWithdraw").disabled = sh === 0n;
+    } else {
+      $("seMine").style.display = "none";
+      $("seWithdraw").disabled = true;
+    }
+    seQuote();
+  } catch (e) {
+    console.error("StableEarn read failed", e.shortMessage || e.message);
+    card.style.display = "none";   // never render half a vault panel
+  }
+}
+
+function seQuote() {
+  if (!seState) return;
+  const raw = ($("seAmt").value || "").trim();
+  if (!raw) { $("seOut").textContent = "–"; return; }
+  let v; try { v = ethers.parseUnits(raw, 6); } catch { $("seOut").textContent = "–"; return; }
+  // Both directions go through the vault's own conversion. Doing the arithmetic
+  // here would mix 18-dec shares with a 6-dec asset, which is the 1,000,000x
+  // error CLAUDE.md documents.
+  const shares = (v * 10n ** 18n) / (seState.px || 1n);
+  $("seOut").textContent = `${nf(ethers.formatUnits(shares, 18), 6)} shares`;
+}
+
+async function seDo(kind) {
+  if (!SE) return;
+  if (!signer) return connect();
+  const raw = ($("seAmt").value || "").trim();
+  let amt; try { amt = ethers.parseUnits(raw, 6); } catch { return toast("Enter an amount", "err"); }
+  if (amt <= 0n) return toast("Enter an amount", "err");
+  const v = new ethers.Contract(SE.vault, SE_ABI, signer);
+  try {
+    if (kind === "deposit") {
+      const cap = await v.maxDeposit(wallet);
+      if (cap === 0n) return toast("The vault is at capacity and cannot take deposits", "err");
+      if (amt > cap) return toast(`Vault will only accept ${nf(ethers.formatUnits(cap, 6), 2)} USDT0 right now`, "err");
+      const t = new ethers.Contract(SE.asset, ERC20_ABI, signer);
+      if ((await t.balanceOf(wallet)) < amt) return toast("Not enough USDT0", "err");
+      // Approve exactly this deposit. The spender is a third-party contract, so
+      // an infinite allowance is a standing claim on the wallet.
+      if ((await t.allowance(wallet, SE.vault)) < amt) {
+        toast("Approving USDT0…");
+        await (await t.approve(SE.vault, amt, { gasLimit: 120000 })).wait();
+      }
+      toast("Depositing…");
+      await (await v.deposit(amt, wallet, { gasLimit: 900000 })).wait();
+      toast("Deposited into StableEarn", "ok");
+    } else {
+      const maxOut = await v.maxWithdraw(wallet);
+      if (maxOut === 0n) return toast("Nothing to withdraw", "err");
+      if (amt > maxOut) return toast(`Only ${nf(ethers.formatUnits(maxOut, 6), 2)} USDT0 is withdrawable right now`, "err");
+      // Redeem by shares so the last exit cannot leave dust behind: asking for
+      // an asset amount rounds against the caller.
+      const shares = await v.convertToShares(amt);
+      const have = await v.balanceOf(wallet);
+      toast("Withdrawing…");
+      await (await v.redeem(shares > have ? have : shares, wallet, wallet, { gasLimit: 900000 })).wait();
+      toast("Withdrawn from StableEarn", "ok");
+    }
+    $("seAmt").value = "";
+    seLoad();
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
 }
 
 async function loadFarm() {

@@ -1,0 +1,12 @@
+{
+ "vault": "0xb7Df8db22A5DBBFA9ebeb94b3910aec6a4f05c08",
+ "note": "share price measured by mintd.fun, one point per run",
+ "snapshots": [
+  {
+   "ts": 1785447264,
+   "px": "2012233",
+   "tvl": "30565610707468",
+   "capOpen": false
+  }
+ ]
+}
