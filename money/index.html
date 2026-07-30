@@ -2371,6 +2371,11 @@ const CHAINS = {
       // start. Verified on chain as ArcSwap/ARCS with a 1e9 supply and 18
       // decimals. Token #0 is an earlier ARCS launched at 3,000 and is NOT this.
       mintd: "0x7fe1b27a0f8DF41556b67Fe1EE59e40E8A50647E",
+      // Token #0: an earlier ARCS launched at a 3,000 USDC start, before the pad
+      // was reconfigured to 2,000. Two live coins sharing one symbol is a trap
+      // for anyone buying, so only the current one is listed. Hiding is display
+      // only; it still trades on chain and its liquidity is still locked.
+      hideTokens: ["0x570a08d9838A82b0237251a781139655B7Bca7ab"],
       mintr: null,
       synth: null, mgld: null,
       locker: null,
@@ -2677,6 +2682,11 @@ const EXTERNAL_TOKENS = [
     logo: "/usdt1.jpg", banner: "/usdt1-banner.jpg", telegram: "https://t.me/usdt1stable", x: "https://x.com/USDT1_to",
     createdAt: 1784936682, lockedPosition: 4279 }, // $USDT1, LP locked forever
 ];
+// Launchpad tokens deliberately kept off the site. Display only: the token still
+// exists on chain, its pool still trades, and its creator can still claim fees.
+// Nothing here can be enforced, so this is presentation, not a ban.
+const HIDDEN_TOKENS = new Set((NET.mintd.hideTokens || []).map((a) => String(a).toLowerCase()));
+function isHiddenToken(a) { return !!a && HIDDEN_TOKENS.has(String(a).toLowerCase()); }
 // Permanent Uniswap V3 position locker: holds LP forever, fees stay claimable
 // by the recorded beneficiary. Liquidity can never be withdrawn by anyone.
 let V3_LOCKER_ADDR = NET.mintd.v3locker;
@@ -4324,7 +4334,10 @@ async function loadAllInner() {
        return null;
      }
     }));
-    tokens = loaded.filter(Boolean);
+    // One filter point, not one per view. The grid, the screener, search and
+    // the portfolio all read this same array, so dropping it here keeps them
+    // from disagreeing about whether the token exists.
+    tokens = loaded.filter(Boolean).filter((t) => !isHiddenToken(t.addr));
 
     // featured tokens launched outside the launchpad (standalone USDT0 V3 pools)
     const ext = await Promise.all(EXTERNAL_TOKENS.map(async (e) => {
