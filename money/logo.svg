@@ -1,20 +1,33 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="arcswap">
-  <!-- arcswap mark: the "as" monogram from the supplied logo. Monoline with
-       round caps: a single-story 'a', bowl plus right stem, flowing into an 's'.
-       Vector so it stays sharp at any size and needs no raster asset.
-       Painted in the brand blue on a transparent ground so it sits correctly on
-       both the white and the dark theme. -->
+  <!-- arcswap mark: the bold "as" ligature from the supplied artwork. Blue on
+       white, matching the source, rather than the transparent monoline this
+       replaced: the supplied logo IS blue-on-white, and every container that
+       shows it already rounds its own corners.
+       #1a73e8 is not picked by eye, it is the exact brand blue the arcswap
+       palette sets in build-money.js, so mark and UI cannot drift apart. -->
   <title>arcswap</title>
-  <!-- Stroke 54 rather than 62. At 62 the s's two counters closed up entirely
-       and the letter read as a blob; the bowl radii here cannot carry that
-       weight. The a is unaffected, its bowl being far larger. -->
-  <g fill="none" stroke="#1a73e8" stroke-width="54" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="164" cy="300" r="88"/>
-    <path d="M252 212 L252 388"/>
-    <path d="M446 232
-             C446 194 392 178 358 200
-             C324 222 330 264 372 280
-             C414 296 426 340 394 364
-             C358 390 306 372 298 336"/>
+  <rect width="512" height="512" fill="#ffffff"/>
+  <!-- Stroke 46, measured off the source rather than guessed: its ring wall is
+       about 0.42 of the ring's counter, which at this ring size is 46, and the
+       's' carries the same weight because a lighter 's' beside a heavy 'a' reads
+       as two logos spliced together.
+       46 is also the ceiling, not a style choice. An earlier pass used 62, and
+       at that weight the 's' has only (220 - 3*46) / 2 of vertical room left for
+       its two counters: both closed to slivers and the letter read as a blob.
+       Stroke, s height and counter size are one constraint, not three. -->
+  <g fill="none" stroke="#1a73e8" stroke-width="46" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 'a': the ring, plus the stem standing on its right edge. The stem's
+         centre sits half a stroke inside the ring's outer edge so their right
+         sides align instead of the stem bulging past it. -->
+    <circle cx="150" cy="266" r="82"/>
+    <path d="M232 148 L232 374"/>
+    <!-- 's': same weight, wider than it is tall so the counters stay open. The
+         join to the 'a' is an overlap rather than a seam, so the two letters
+         read as one mark the way the source does. -->
+    <path d="M448 198
+             C448 160 392 141 356 165
+             C320 189 329 231 375 250
+             C421 269 439 311 404 336
+             C366 363 308 343 299 305"/>
   </g>
 </svg>

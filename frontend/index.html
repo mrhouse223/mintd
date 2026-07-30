@@ -2383,6 +2383,11 @@ const CHAINS = {
     // the only token the ledger indexes.
     features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, screener: true, holders: true, agent: false },
     statsFile: "stats.json",
+    // Dexscreener's chain slug. Only Stable is indexed by them: a token
+    // lookup for the live ARCS returns pairs:null and the "arc" slug 400s, so
+    // Arc gets null and every Dexscreener link and fetch is skipped there
+    // rather than pointed at the wrong chain's pair of the same address.
+    dexSlug: "stable",
     faucet: null,
     // Stable rejects any batch outright, so the shared provider batches only
     // because every call here is wrapped to tolerate it. Log scanning still
@@ -2457,6 +2462,7 @@ const CHAINS = {
     // tab that half works is worse than not shipping it.
     features: { launch: true, swap: false, earn: false, mintr: false, gold: false, locker: false, burn: false, screener: true, bridge: false, holders: false, agent: false, mintdStat: false },
     statsFile: null,
+    dexSlug: null,   // Dexscreener does not index Arc
     faucet: null,
     // No public RPC answers this chain, so every read rides the visitor's
     // wallet. See walletRead().
@@ -2537,6 +2543,7 @@ const CHAINS = {
     // bridge here invites someone to send real money to a throwaway chain.
     features: { launch: true, swap: true, earn: false, mintr: true, gold: false, locker: true, burn: true, screener: true, bridge: false, agent: false },
     statsFile: null,   // no indexer running against Arc yet
+    dexSlug: null,   // Dexscreener does not index Arc testnet
     faucet: "https://faucet.circle.com",
     // Arc accepts batches and then rate limits them: a batch of 8 returns one
     // result and seven "request limit reached". Promise.all in the token
@@ -2806,6 +2813,10 @@ let OLD_PAD = NET.mintd.oldPad;
 function sameAddr(a, b) {
   return !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase();
 }
+// The quote asset's ticker. The .qsym spans already do this in markup; anything
+// built in JS was hardcoded "USDT0", which read as USDT0 on Arc where the quote
+// is USDC. Same source of truth as set("qsym", ...) so the two cannot drift.
+function quoteTicker() { return NET.chain.nativeCurrency.symbol; }
 function allPads() {
   const list = [padAddr(), OLD_PAD].filter(Boolean);
   return list.filter((a, i) => list.findIndex((x) => sameAddr(x, a)) === i);
@@ -5936,7 +5947,7 @@ async function loadFeePools() {
       // fee APY from Dexscreener volume (best-effort)
       let feeApy = 0;
       try {
-        const d = await (await fetch("https://api.dexscreener.com/latest/dex/pairs/stable/" + pair)).json();
+        const d = await (await fetch(`https://api.dexscreener.com/latest/dex/pairs/${NET.dexSlug}/` + pair)).json();
         const px = (d.pairs || [])[0];
         if (px && poolUsd > 0) feeApy = (Number(px.volume?.h24 || 0) * 0.003 * 365) / poolUsd * 100;
       } catch {}
@@ -6108,7 +6119,7 @@ async function refreshFarmCard(f, i) {
   // fee APY from Dexscreener 24h volume on this pair (LP fee is 0.3%), best-effort
   let feeApr = 0;
   try {
-    const r = await fetch("https://api.dexscreener.com/latest/dex/pairs/stable/" + f.lp);
+    const r = await fetch(`https://api.dexscreener.com/latest/dex/pairs/${NET.dexSlug}/` + f.lp);
     const d = await r.json();
     const p = (d.pairs || [])[0];
     if (p && poolUsd > 0) feeApr = (Number(p.volume?.h24 || 0) * 0.003 * 365) / poolUsd * 100;
@@ -6466,7 +6477,7 @@ async function loadTopPools() {
       const res = await fetch("https://api.dexscreener.com/latest/dex/search?q=" + q);
       const d = await res.json();
       for (const p of d.pairs || []) {
-        if (p.chainId !== "stable") continue;
+        if (p.chainId !== NET.dexSlug) continue;
         const k = p.pairAddress.toLowerCase();
         if (seen[k]) continue;
         seen[k] = 1;
@@ -6849,11 +6860,16 @@ async function loadTvl() {
 let dexStatsLoaded = false;
 
 async function loadDexStats() {
+  // Nothing to ask for on a chain Dexscreener does not index, and asking under
+  // Stable's slug is worse than not asking: any Arc pool whose address also
+  // exists on Stable would come back and be matched to this token by address,
+  // overwriting its volume and price with a different chain's pair.
+  if (!NET.dexSlug) return;
   try {
     // batch pools 30 at a time, free public API, CORS-enabled
     for (let i = 0; i < tokens.length; i += 30) {
       const batch = tokens.slice(i, i + 30);
-      const res = await fetch("https://api.dexscreener.com/latest/dex/pairs/stable/" + batch.map((t) => t.pool).join(","));
+      const res = await fetch(`https://api.dexscreener.com/latest/dex/pairs/${NET.dexSlug}/` + batch.map((t) => t.pool).join(","));
       const data = await res.json();
       for (const p of data.pairs || []) {
         const t = tokens.find((x) => x.pool.toLowerCase() === p.pairAddress.toLowerCase());
@@ -7662,7 +7678,11 @@ function paintTokenMeta() {
   if (safeLink(cur.meta.x)) links.push(`<a class="btn ghost" target="_blank" href="${safeLink(cur.meta.x)}">X ↗</a>`);
   if (safeLink(cur.meta.telegram)) links.push(`<a class="btn ghost" target="_blank" href="${safeLink(cur.meta.telegram)}">Telegram ↗</a>`);
   if (safeLink(cur.meta.website)) links.push(`<a class="btn ghost" target="_blank" href="${safeLink(cur.meta.website)}">Website ↗</a>`);
-  links.push(`<a class="btn ghost" target="_blank" href="https://dexscreener.com/stable/${cur.pool}">Dexscreener ↗</a>`);
+  // The chain slug was hardcoded "stable", so on Arc this pointed every coin at
+  // Stable's site. A pool address that does not exist there shows an error page,
+  // and one that does exist there shows a completely unrelated pair as though it
+  // were this token. Omitted where the slug is null rather than guessed at.
+  if (NET.dexSlug) links.push(`<a class="btn ghost" target="_blank" href="https://dexscreener.com/${NET.dexSlug}/${cur.pool}">Dexscreener ↗</a>`);
   links.push(`<a class="btn ghost" target="_blank" href="${CHAIN.blockExplorerUrls[0]}/address/${addr}">Explorer ↗</a>`);
   if (cur.lockedPosition && V3_LOCKER_ADDR) {
     links.push(`<a class="btn ghost" style="border-color:var(--gold);color:var(--gold)" target="_blank" title="Liquidity permanently locked, verifiable onchain" href="${CHAIN.blockExplorerUrls[0]}/address/${V3_LOCKER_ADDR}"><svg class="ic" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> LP locked forever</a>`);
@@ -7950,7 +7970,7 @@ async function loadFees() {
         // collect returns (amount0, amount1) in pool token order
         const tokAmt = cur.tokenIs0 ? amounts[0] : amounts[1];
         const quoteAmt = (cur.tokenIs0 ? amounts[1] : amounts[0]) * D6;
-        $("feeCreator").innerHTML = `${nf(ethers.formatEther(quoteAmt), 4)} USDT0<small>+ ${nf(ethers.formatEther(tokAmt), 2)} $${cur.symbol}</small>`;
+        $("feeCreator").innerHTML = `${nf(ethers.formatEther(quoteAmt), 4)} ${quoteTicker()}<small>+ ${nf(ethers.formatEther(tokAmt), 2)} $${cur.symbol}</small>`;
         // anyone may trigger it; the locker always pays the beneficiary
         const none = quoteAmt === 0n && tokAmt === 0n;
         const btn = $("claimBtn");
@@ -7970,7 +7990,7 @@ async function loadFees() {
       );
       const tokAmt = cur.tokenIs0 ? a0 : a1, quoteAmt = (cur.tokenIs0 ? a1 : a0) * D6;
       const cr = (x) => (x * cfg.share) / 10000n;
-      $("feeCreator").innerHTML = `${nf(ethers.formatEther(cr(quoteAmt)), 4)} USDT0<small>+ ${nf(ethers.formatEther(cr(tokAmt)), 2)} $${cur.symbol}</small>`;
+      $("feeCreator").innerHTML = `${nf(ethers.formatEther(cr(quoteAmt)), 4)} ${quoteTicker()}<small>+ ${nf(ethers.formatEther(cr(tokAmt)), 2)} $${cur.symbol}</small>`;
       paintClaimBtn(owner, quoteAmt === 0n && tokAmt === 0n);
     } catch { $("feeCreator").textContent = "–"; $("claimBtn").disabled = true; $("claimBtn").textContent = "Fees unavailable"; }
     return;
@@ -7984,8 +8004,8 @@ async function loadFees() {
       { tokenId: cur.positionId, recipient: ownerPad, amount0Max: (1n << 128n) - 1n, amount1Max: (1n << 128n) - 1n },
       { from: ownerPad }
     );
-    // quote side is 6-dec USDT0 or 18-dec MINTR; normalize to 18-dec for display
-    const quoteSym = cur.isMintr ? "MINTR" : "USDT0";
+    // quote side is 6-dec USDT0/USDC or 18-dec MINTR; normalize to 18-dec here
+    const quoteSym = cur.isMintr ? "MINTR" : quoteTicker();
     const tokAmt = cur.tokenIs0 ? a0 : a1, quoteAmt = (cur.tokenIs0 ? a1 : a0) * (cur.isMintr ? 1n : D6);
     const cr = (x) => (x * cfg.share) / 10000n;
     $("feeCreator").innerHTML = `${nf(ethers.formatEther(cr(quoteAmt)), 4)} ${quoteSym}<small>+ ${nf(ethers.formatEther(cr(tokAmt)), 2)} $${cur.symbol}</small>`;

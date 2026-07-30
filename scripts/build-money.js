@@ -240,6 +240,16 @@ fs.writeFileSync(OUT, s);
 // brand mark is NOT: money/logo.svg and the icon PNGs rasterised from it are
 // money-specific and committed, and copying the launchpad's logo over them
 // would silently rebrand this site back on every build.
+//
+// This comment used to claim the PNGs were rasterised from money/logo.svg while
+// they were still byte-identical to the launchpad's green mark, so the arcswap
+// avatar and every installed-app icon were mintd's logo. They are now genuinely
+// generated from the SVG. To regenerate after editing money/logo.svg:
+//   for s in 512 192 180; do qlmanage -t -s $s -o /tmp/ic money/logo.svg; done
+// then copy the 512 over logo.png, icon-512.png and icon-maskable-512.png, the
+// 192 over icon-192.png, and the 180 over apple-touch-icon.png. Note that five
+// of the platform-avatar call sites reference /logo.png rather than the SVG, so
+// leaving the PNGs stale does not fail loudly, it just shows the old brand.
 const ASSETS = ["mintr.png", "mgld.png", "sw.js"];
 let copied = 0;
 for (const f of ASSETS) {
