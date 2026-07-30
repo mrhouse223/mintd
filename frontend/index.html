@@ -3333,7 +3333,11 @@ function paintHeroBlurb() {
     + `inside a ${sym} pool on Uniswap V3 that the launchpad has no code path to withdraw from, `
     + `so its liquidity cannot be pulled or migrated. Coins graduate at 7,000 ${sym} in the pool. `
     + (share != null ? `Creators claim ${share}% of every trading fee any time` : `Creators claim the majority of every trading fee any time`)
-    + (devCapBps != null ? `, and no launch can dev-buy more than ${devCapBps / 100}% of supply` : "")
+    // A cap of 10000 bps is not a cap. "No launch can dev-buy more than 100% of
+    // supply" is true of every launch that could ever exist, so it states a
+    // protection that does not exist and reads as a broken number. Mentioned
+    // only where it actually constrains something, which today is Arc at 5%.
+    + (devCapBps != null && devCapBps < 10000 ? `, and no launch can dev-buy more than ${devCapBps / 100}% of supply` : "")
     // Gated on the burn feature, not merely on a platform token existing.
     // Wiring $ARCS as Arc's platform token switched this sentence on and made
     // the site claim a burn that nothing in the Arc deployment implements: the
@@ -3397,7 +3401,11 @@ async function padDevCapQuote() {
 function paintDevCap() {
   const e = $("lDevCap");
   if (!e) return;
-  if (devCapBps == null) { e.style.display = "none"; return; }
+  // Same reasoning as the hero blurb: at 10000 bps there is no cap, and telling
+  // a creator "max dev buy is 100% of supply, sending more reverts the launch"
+  // describes a limit they cannot reach and a revert that cannot happen. Hidden
+  // rather than reworded, because there is nothing useful left to say.
+  if (devCapBps == null || devCapBps >= 10000) { e.style.display = "none"; return; }
   const sym = NET.chain.nativeCurrency.symbol;
   const pct = devCapBps / 100;
   e.style.display = "";
