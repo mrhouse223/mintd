@@ -199,6 +199,63 @@ higher risk and need a review before they can ship at all.
 6. Deploy factory and lens to Stable, run the keeper on a gas-only wallet.
 7. Enable the agent page.
 
+---
+
+## Market size, measured 2026-07-30
+
+Checked against Stable's own subgraph at info.swap.stable.xyz and the Morpho
+vault at hub.stable.xyz. This changes the case for the whole feature, so it is
+recorded before any code.
+
+**Chain-wide DEX TVL is $1.37m, and $1.18m of it is one pool that does not
+trade.** USDT0/sthUSD at the 0.01% tier holds 86% of the chain's liquidity and
+did $0.00 of volume in 24 hours, $1.98 in seven days. It is parked, not a market.
+
+That leaves roughly **$190k of actually-trading liquidity on the entire chain**,
+and the largest live pool is GREEN/USDT0 at $22.61k. Ours, USDT0/MINTD, is
+$11.19k. Chain-wide fees for the day were $6.04k.
+
+Meanwhile the Morpho vault curated by Gauntlet on the same chain holds
+**$30.53m at 7.00% net APY**, with zero performance and management fees. That is
+**161x the active DEX liquidity**. The money on Stable is in lending, not in
+pools.
+
+### What that does to the fee APR figures
+
+Computed from that page's own numbers:
+
+| Pool | TVL | 24h volume | est fee APR |
+|---|---|---|---|
+| USDT0/sthUSD 0.01% | $1,180,000 | $0 | 0% |
+| GREEN/USDT0 1% | $22,610 | $3.35 | 0% |
+| USDT0/MINTD 1% | $11,190 | $10,160 | 331% |
+| USDT0/FEFER 1% | $6,690 | $49,750 | **2714%** |
+| STABLEPAD/USDT0 1% | $5,750 | $3,210 | 204% |
+
+Those are correct arithmetic and useless as guidance. On a $6.7k pool one day of
+volume produces a four-figure APR that will not survive the week, and impermanent
+loss on a memecoin pair dominates it entirely. Publishing that table with an APR
+column is precisely the "easiest thing for a critic to disprove" that CLAUDE.md
+warns about, and worse than the TVL case because it implies a return.
+
+### Consequences for this plan
+
+1. **A chain-wide pools page has almost nothing to aggregate.** It would show
+   one idle $1.18m pool, then a cliff to $22k, then dust. The work is the same
+   whether the market is $190k or $190m.
+2. **Agent vaults cannot work well at this size.** The vault rebalances by
+   burning liquidity, swapping, and minting again. In a $6k pool that swap moves
+   the price against itself, and the TWAP-derived minimum output, which is the
+   control that makes the design safe, will correctly refuse to execute. A sound
+   vault on a pool this thin mostly declines to act.
+3. **The demand signal points at lending, not LP.** $30.53m chose 7% at zero
+   fees over any pool on the chain.
+
+Not an argument that the feature is wrong, and not a decision to make here. It
+is an argument that the chain-wide version is a large build for a market that
+does not exist yet, and that the honest version of the page would mostly
+communicate that there is nothing to earn.
+
 ## Open questions
 
 1. **Data source:** build the indexer, or consume MentoScan? My recommendation
