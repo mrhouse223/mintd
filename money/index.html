@@ -2435,9 +2435,15 @@ const CHAINS = {
     statsFile: null,
     dexSlug: null,   // Dexscreener does not index Arc
     faucet: null,
-    // No public RPC answers this chain, so every read rides the visitor's
-    // wallet. See walletRead().
+    // No public RPC answers this chain, so reads come from the visitor's wallet
+    // when one is connected (see walletRead) and otherwise from the block
+    // explorer's eth_call proxy (see ExplorerProvider). The path is same-origin
+    // and proxied upstream by money/netlify.toml, because the explorer sends no
+    // CORS header and a direct call from the page is blocked.
     readViaWallet: true,
+    // Trailing slash on purpose: Netlify's "/arcapi/*" splat does not reliably
+    // match a bare "/arcapi", and upstream accepts "/api/?query" either way.
+    explorerApi: "/arcapi/",
     // Navigation entries that exist as placeholders. Their feature flags stay
     // false, so no code path tries to reach a contract that is not deployed;
     // these only add the tab and a "coming soon" panel. See applySoonViews().
@@ -3245,30 +3251,89 @@ async function walletRead() {
     return bp;
   } catch { return null; }
 }
+/// Read-only Arc access with no wallet, through the block explorer's API.
+///
+/// The explorer answers eth_call and eth_blockNumber, which is everything the
+/// coin list needs: every figure on it comes from a view call. It does NOT
+/// answer eth_getLogs, so anything that scans logs (the trade feed, charts) has
+/// to degrade, and _perform throws a named error rather than returning empty so
+/// those callers report a failure instead of rendering "no trades" as if it were
+/// true.
+///
+/// Requests go to a same-origin path, proxied to the explorer by netlify.toml.
+/// The explorer sends no Access-Control-Allow-Origin header, so calling it
+/// directly from the page is blocked; the proxy makes the browser see it as
+/// same-origin. Read-only by construction: the upstream exposes only queries.
+class ExplorerProvider extends ethers.AbstractProvider {
+  constructor(base, chainId) {
+    super(ethers.Network.from(chainId));
+    this.base = base;
+    this.chain = chainId;
+  }
+  async _fetch(qs) {
+    const r = await fetch(this.base + "?" + qs);
+    const j = await r.json();
+    if (j.error) { const e = new Error(j.error.message || "explorer error"); e.code = j.error.code; throw e; }
+    return j.result;
+  }
+  async _perform(req) {
+    switch (req.method) {
+      case "chainId": return this.chain;
+      case "getBlockNumber": return Number(BigInt(await this._fetch("module=proxy&action=eth_blockNumber")));
+      case "call": {
+        const t = req.transaction;
+        return await this._fetch(`module=proxy&action=eth_call&to=${t.to}&data=${t.data || "0x"}&tag=latest`);
+      }
+      case "getCode":
+        return await this._fetch(`module=proxy&action=eth_getCode&address=${req.address}&tag=latest`);
+      default:
+        throw new Error(`the block explorer cannot serve ${req.method}; connect a wallet`);
+    }
+  }
+  async _detectNetwork() { return ethers.Network.from(this.chain); }
+}
+function explorerRead() {
+  if (!NET.explorerApi) return null;
+  try { return new ExplorerProvider(NET.explorerApi, parseInt(CHAIN.chainId, 16)); } catch { return null; }
+}
 let readsNeedWallet = false;
+let usingExplorer = false;
 
 // Says why the page is empty. Without this the site looks broken rather than
 // unconnected, which is the same failure the swallowed per-vault errors caused
 // on the agent page: a missing reason reads as "there is nothing here".
 function paintReadNotice() {
   let el = $("readNotice");
-  if (!readsNeedWallet) { if (el) el.remove(); return; }
-  if (el) return;
-  el = document.createElement("div");
-  el.id = "readNotice";
-  el.style.cssText = "padding:10px 16px;text-align:center;font-size:13px;line-height:1.5;" +
-    "background:var(--card,#111823);border-bottom:1px solid var(--line,#212c3a);color:var(--dim,#8a9ab0)";
-  el.innerHTML = "<b>Connect your wallet to load " + NET.label + ".</b> " +
-    NET.label + " has no public RPC yet, so this site reads the chain through your wallet. " +
-    "Launching and trading work normally once connected.";
-  document.body.prepend(el);
+  const wanted = readsNeedWallet || usingExplorer;
+  if (!wanted) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "readNotice";
+    el.style.cssText = "padding:10px 16px;text-align:center;font-size:13px;line-height:1.5;" +
+      "background:var(--card,#111823);border-bottom:1px solid var(--line,#212c3a);color:var(--dim,#8a9ab0)";
+    document.body.prepend(el);
+  }
+  el.innerHTML = readsNeedWallet
+    ? "<b>Connect your wallet to load " + NET.label + ".</b> " + NET.label +
+      " has no public RPC yet, so this site reads the chain through your wallet. " +
+      "Launching and trading work normally once connected."
+    // Reading through the explorer is the normal case for a visitor, so this is a
+    // statement of fact rather than a warning. It does say what is missing,
+    // because a chart that cannot load should have a reason on screen.
+    : "Browsing " + NET.label + " through the block explorer. Connect a wallet to launch or trade, " +
+      "and for price charts, which need log access the explorer does not provide.";
 }
 
 async function init() {
   applyChainUi();
   if (!padAddr()) return;
   if (NET.readViaWallet) {
+    // Wallet first when it is on this chain: it is faster, and it is the only
+    // one of the two that can serve logs. The explorer covers everyone else, so
+    // the coin list no longer needs a connected wallet to render at all.
     rp = await walletRead();
+    usingExplorer = false;
+    if (!rp) { rp = explorerRead(); usingExplorer = !!rp; }
     readsNeedWallet = !rp;
     paintReadNotice();
     if (!rp) return; // connect() re-runs init once the wallet is on this chain
@@ -3324,6 +3389,8 @@ async function connect() {
     // or the site stays empty for the whole session after connecting.
     if (NET.readViaWallet) {
       logRp = null; // it was never built, and must come from the wallet too
+      // Re-init even when the explorer already provided reads: the wallet can
+      // serve logs and the explorer cannot, so charts only work after this.
       await init();
       if (rp) await loadAll();
     }

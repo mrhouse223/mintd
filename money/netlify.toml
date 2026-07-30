@@ -18,6 +18,35 @@
   to = "/landing.html"
   status = 200
 
+# Arc reads for visitors with no wallet.
+#
+# No public Arc RPC exists: every endpoint tried either 500s, reports the chain
+# as unknown, or resolves to nothing. The block explorer's API does answer
+# eth_call, which is all the coin list needs, but it sends no
+# Access-Control-Allow-Origin header, so a browser cannot call it cross-origin.
+#
+# status 200 makes this a PROXY rather than a redirect: Netlify fetches upstream
+# server-side and returns the body from this origin, so the browser sees a
+# same-origin request and CORS never applies. It must come before the catch-all,
+# which would otherwise swallow it and hand back index.html.
+#
+# Read-only by construction. The upstream only exposes queries, so nothing here
+# can move funds, and a visitor's wallet is still what signs every transaction.
+[[redirects]]
+  from = "/arcapi/*"
+  to = "https://api.arc.exploreme.pro/api/:splat"
+  status = 200
+  force = true
+
+# The bare path, without which a request to "/arcapi" would fall through to the
+# catch-all and be answered with index.html: JSON.parse would then fail on HTML
+# and the coin list would look like an upstream outage.
+[[redirects]]
+  from = "/arcapi"
+  to = "https://api.arc.exploreme.pro/api"
+  status = 200
+  force = true
+
 # Clean URLs, same reasoning as the root config: the host must answer /vaults
 # and /docs with the app rather than a 404, and status 200 rather than 301 so
 # the URL stays as the visitor typed it.
