@@ -2459,13 +2459,20 @@ const CHAINS = {
         baseUsdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         baseDomain: 6,
         arcDomain: 26,
+        // Circle's MessageTransmitterV2 on Arc, confirmed on chain rather than
+        // copied from the docs: it IS a contract there and its transaction list
+        // shows real receiveMessage calls, so CCTP genuinely delivers to Arc.
+        // The recipient claims through this contract themselves. Our burn sets
+        // destinationCaller to zero, so submitting the mint is permissionless.
+        transmitter: "0x81D40F21F12A8F0E3252Bccb954D722d4c464B64",
+        iris: "https://iris-api.circle.com",
       },
     },
     // Bridge first, deliberately. Everything else stays off until the contract
     // it needs is deployed and its wiring verified: launch and screener need the
     // pad, swap needs a confirmed router, agent needs the factory. Shipping a
     // tab that half works is worse than not shipping it.
-    features: { launch: true, swap: false, earn: false, mintr: false, gold: false, locker: false, burn: false, screener: true, bridge: false, holders: false, agent: false, mintdStat: false },
+    features: { launch: true, swap: false, earn: false, mintr: false, gold: false, locker: false, burn: false, screener: true, bridge: true, holders: false, agent: false, mintdStat: false },
     statsFile: null,
     dexSlug: null,   // Dexscreener does not index Arc
     faucet: null,
@@ -3489,6 +3496,9 @@ const BR_ROUTER_ABI = [
   "function feeBps() view returns (uint256)",
   "function bridgeTo(uint256,address) returns (uint256)",
 ];
+const BR_TRANSMITTER_ABI = [
+  "function receiveMessage(bytes message, bytes attestation) returns (bool)",
+];
 const BR_USDC_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function allowance(address,address) view returns (uint256)",
@@ -3554,6 +3564,8 @@ function brRender() {
   btn.disabled = false;
   btn.textContent = wallet ? "Bridge to Arc" : "Connect wallet";
   brBalance(); brQuote();
+  // Pending burns are the first thing someone returning to this page needs.
+  brStatusPaint();
 }
 
 async function brBridge() {
@@ -3583,23 +3595,111 @@ async function brBridge() {
     const r = new ethers.Contract(c.router, BR_ROUTER_ABI, sg);
     const tx = await r.bridgeTo(amount, wallet, { gasLimit: 350000 });
     const rec = await tx.wait();
-    toast("Sent. Circle is attesting it now.", "ok");
-    brShowStatus(rec.hash);
+    toast("Burned on Base. Claim on Arc once Circle attests it.", "ok");
+    brShowStatus(rec.hash, amount);
   } catch (e) { toast(e.shortMessage || e.message, "err"); }
 }
 
-/// Honest about the wait. CCTP standard transfers need Base finality before
-/// Circle will attest, which is minutes, not seconds. Claiming otherwise would
-/// have people refreshing and assuming it broke.
-function brShowStatus(hash) {
-  $("brStatus").style.display = "";
-  $("brStage").textContent = "burned on Base";
-  $("brStatusBody").innerHTML = `
-    <div class="finenote" style="margin:0">
-      <div>Base transaction <a href="https://basescan.org/tx/${esc(hash)}" target="_blank" rel="noopener">${esc(hash.slice(0, 14))}…</a></div>
-      <div style="margin-top:8px">Circle attests the transfer once Base finalises it, which usually takes several minutes. Our relayer then submits the Arc side and pays that gas, so there is nothing further for you to sign.</div>
-      <div style="margin-top:8px">You can close this page. The transfer is held by Circle, not by us, and the recipient is already fixed to your address.</div>
-    </div>`;
+/// Pending burns survive a refresh. Without this a closed tab loses the only
+/// record of which Base transaction to claim, and the funds look gone: they are
+/// not, but the user has no handle on them.
+const BR_KEY = "brPending";
+function brLoad() { try { return JSON.parse(localStorage.getItem(BR_KEY) || "[]"); } catch { return []; } }
+function brSave(list) { try { localStorage.setItem(BR_KEY, JSON.stringify(list.slice(-20))); } catch {} }
+function brTrack(hash, amount) {
+  const list = brLoad();
+  if (!list.some((x) => x.hash.toLowerCase() === hash.toLowerCase())) {
+    list.push({ hash, amount: amount ? amount.toString() : null, ts: Math.floor(Date.now() / 1000) });
+    brSave(list);
+  }
+}
+function brForget(hash) { brSave(brLoad().filter((x) => x.hash.toLowerCase() !== hash.toLowerCase())); }
+
+/// Ask Circle whether the burn is attested yet. Public HTTPS, so this works from
+/// the browser even though no Arc RPC does.
+async function brAttestation(hash) {
+  const c = brCfg();
+  try {
+    const r = await fetch(`${c.iris}/v2/messages/${c.baseDomain}?transactionHash=${hash}`);
+    const j = await r.json();
+    const m = (j.messages || [])[0];
+    if (!m) return { state: "unknown" };
+    const ready = m.message && m.attestation && String(m.attestation).toLowerCase() !== "pending";
+    return { state: ready ? "ready" : (m.status || "pending"), message: m.message, attestation: m.attestation, why: m.delayReason };
+  } catch (e) { return { state: "error", why: e.message }; }
+}
+
+/// The mint, signed by the user on Arc.
+///
+/// This is deliberately NOT a server relayer. The relayer script exists but
+/// cannot work: no reachable Arc RPC answers, so a backend signer has nothing to
+/// submit through, while the visitor's wallet has a working Arc endpoint by
+/// definition. The previous copy here promised a relayer would pay the Arc gas
+/// and there was "nothing further for you to sign", which was untrue.
+async function brClaim(hash) {
+  const c = brCfg();
+  const att = await brAttestation(hash);
+  if (att.state !== "ready") return toast("Circle has not attested this transfer yet", "err");
+  if (!window.ethereum) return toast("No wallet found", "err");
+  try {
+    await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN.chainId }] });
+  } catch { return toast("Switch your wallet to Arc to claim", "err"); }
+  try {
+    const bp = new ethers.BrowserProvider(window.ethereum);
+    const sg = await bp.getSigner();
+    const t = new ethers.Contract(c.transmitter, BR_TRANSMITTER_ABI, sg);
+    // Simulate first: a replayed message reverts, and the revert reason is the
+    // only way to tell "already claimed" from a real failure.
+    try { await t.receiveMessage.staticCall(att.message, att.attestation); }
+    catch (e) {
+      const msg = (e.shortMessage || e.message || "").toLowerCase();
+      if (msg.includes("nonce") || msg.includes("used")) { brForget(hash); brStatusPaint(); return toast("Already claimed", "ok"); }
+      return toast("Claim would fail: " + (e.shortMessage || e.message), "err");
+    }
+    toast("Claiming on Arc…");
+    const tx = await t.receiveMessage(att.message, att.attestation, { gasLimit: 500000 });
+    await tx.wait();
+    brForget(hash);
+    brStatusPaint();
+    toast("Claimed. USDC is in your Arc wallet.", "ok");
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+function brShowStatus(hash, amount) {
+  brTrack(hash, amount);
+  brStatusPaint();
+}
+
+/// Renders every pending burn with its live Circle status.
+async function brStatusPaint() {
+  const box = $("brStatus"), body = $("brStatusBody");
+  if (!box || !body) return;
+  const list = brLoad();
+  if (!list.length) { box.style.display = "none"; return; }
+  box.style.display = "";
+  $("brStage").textContent = list.length === 1 ? "1 transfer pending" : `${list.length} transfers pending`;
+  body.innerHTML = list.map((x) => `
+    <div class="finenote" style="margin:0 0 10px" id="br-row-${esc(x.hash.slice(2, 12))}">
+      <div>Base tx <a href="https://basescan.org/tx/${esc(x.hash)}" target="_blank" rel="noopener">${esc(x.hash.slice(0, 14))}…</a>
+        ${x.amount ? ` · ${esc(nf(ethers.formatUnits(x.amount, 6), 2))} USDC` : ""}</div>
+      <div style="margin-top:6px" class="br-state">checking with Circle…</div>
+    </div>`).join("");
+  for (const x of list) {
+    const row = $("br-row-" + x.hash.slice(2, 12));
+    if (!row) continue;
+    const el = row.querySelector(".br-state");
+    const att = await brAttestation(x.hash);
+    if (att.state === "ready") {
+      el.innerHTML = `<b style="color:var(--green)">Ready to claim.</b> You sign one transaction on Arc and pay its gas, which is cents.
+        <button class="btn" style="margin-top:8px" onclick="brClaim('${esc(x.hash)}')">Claim on Arc</button>`;
+    } else if (att.state === "error") {
+      el.textContent = "Could not reach Circle just now. This does not affect the transfer; try again shortly.";
+    } else {
+      el.innerHTML = `Waiting on Circle's attestation <span class="dim">(${esc(att.state)}${att.why ? ", " + esc(att.why) : ""})</span>.
+        Nothing is lost while this is pending: the burn is permanent on Base and the recipient is fixed to your address,
+        so it stays claimable whenever the attestation appears.`;
+    }
+  }
 }
 
 // ============================================================ AGENT VAULTS
