@@ -2151,11 +2151,18 @@
           <div class="field"><label>LOGO</label>
             <input type="file" id="fImgFile" accept="image/*" style="display:none" onchange="pickImage(this,'logo')" />
             <button type="button" class="btn ghost" style="width:100%" id="fImgBtn" onclick="document.getElementById('fImgFile').click()"><svg class="ic" viewBox="0 0 24 24"><path d="M12 16V5"/><path d="M8 9l4-4 4 4"/><path d="M4 16v3h16v-3"/></svg> Upload image</button>
+            <div class="finenote" id="fImgNote" style="display:none;margin-top:6px"></div>
           </div>
           <div class="field"><label>BANNER (OPTIONAL)</label>
             <input type="file" id="fBanFile" accept="image/*" style="display:none" onchange="pickImage(this,'banner')" />
             <button type="button" class="btn ghost" style="width:100%" id="fBanBtn" onclick="document.getElementById('fBanFile').click()"><svg class="ic" viewBox="0 0 24 24"><path d="M12 16V5"/><path d="M8 9l4-4 4 4"/><path d="M4 16v3h16v-3"/></svg> Upload banner</button>
           </div>
+        </div>
+        <div class="finenote" style="margin:-4px 0 10px">
+          <b>For a sharp logo, paste a URL instead of uploading.</b> An uploaded image is stored onchain in
+          your token itself, which is permanent and needs no host, but the launch has to fit in one
+          transaction so it is compressed to 128 pixels square. Cards display at roughly 400, so an upload
+          looks soft. A hosted URL is used at full resolution.
         </div>
         <div class="frow">
           <div class="field"><label>LOGO URL (IF NO UPLOAD)</label><input id="fImg" placeholder="https://…" /></div>
@@ -2897,6 +2904,17 @@ async function pickImage(input, kind) {
     const dataUri = await compressImage(file, cfg.w, cfg.h, cfg.budget);
     uploads[kind] = dataUri;
     btn.textContent = `✓ ${file.name.slice(0, 18)} (${(dataUri.length / 1365).toFixed(1)} KB)`;
+    // Said at the moment it happens, not only in the note above. The creator has
+    // just handed over a large image and cannot see that it was reduced, and
+    // this is the last point where switching to a URL is free.
+    if (kind === "logo") {
+      const note = $("fImgNote");
+      if (note) {
+        note.style.display = "";
+        note.innerHTML = `Stored onchain at <b>${cfg.w}x${cfg.h}</b>. That is permanent and needs no host, but it `
+          + `will look soft on token pages. Paste a logo URL above instead if you want full resolution.`;
+      }
+    }
   } catch (e) {
     uploads[kind] = null;
     btn.innerHTML = '<svg class="ic" viewBox="0 0 24 24"><path d="M12 16V5"/><path d="M8 9l4-4 4 4"/><path d="M4 16v3h16v-3"/></svg> Upload ' + (kind === "logo" ? "image" : "banner");
