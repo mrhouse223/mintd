@@ -23,6 +23,8 @@ linearly over 30 days.
 | | |
 |---|---|
 | Buyer pays | 1,000 USDT0 |
+| Protocol fee (1%) | 10 USDT0 to the Safe |
+| Dev nets | 990 USDT0 |
 | Buyer receives | 20,000,000 MENTOS, released over 30 days |
 | Face value at t0 | $2,000 |
 | Discount | 50% |
@@ -127,7 +129,7 @@ locker).
 
 | Field | Notes |
 |---|---|
-| Token | v1: must be a launchpad token |
+| Token | v1: must be on the allowlist |
 | Amount | tokens escrowed, measured by balance delta on receipt |
 | Price | absolute, tokens per USDT0. UI shows the implied discount |
 | Sale window | open and close timestamps |
@@ -135,10 +137,40 @@ locker).
 | Vesting mode | per-second linear, or stepped every 10 minutes |
 | Per-wallet cap | see sniping below |
 
+The 1% protocol fee is not a per-bond field. It is contract-level and the dev
+cannot set or waive it.
+
 Note that **discount, period and APY are not three independent inputs.** Fixing
 any two determines the third. The dev sets discount and period; APY is derived
 and displayed. Offering all three as fields lets them disagree and there is no
 correct way to resolve that.
+
+## Protocol fee
+
+**1% of every bond purchase, to the Safe `0xE5F40204C8E921834C70B0E2631bE79F076B0e28`.**
+That matches the launchpad, whose `feeRecipient` is already the Safe, rather
+than MINTR and MintSynth, which route to `BuybackBurner`. Worth being deliberate
+about: bond fees will not buy and burn MINTD unless the recipient is later
+pointed at the burner, which is a one-call change if that is wanted.
+
+Three implementation points that are not cosmetic:
+
+- **Charged on the USDT0 leg only, never the token leg.** Taking a cut of the
+  escrowed tokens would change the amount being vested after buyers have already
+  priced the bond, and it would put protocol revenue in a memecoin rather than a
+  stablecoin.
+- **Taken at purchase, not at claim.** A fee skimmed off each vesting tranche
+  would have to divide 4,320 times and every division loses dust, which is
+  failure mode 6 below reintroduced deliberately. At purchase it is one
+  subtraction on one transfer.
+- **Deducted from the raise, not added on top.** A buyer paying for a bond
+  advertised at 1,000 USDT0 pays exactly 1,000; the dev nets 990. The alternative
+  (buyer pays 1,010) means the headline number is not what leaves the wallet,
+  and the discount the page advertises quietly stops being the discount received.
+
+Settable by the owner within a hard cap in the contract, the way
+`MintSynth.setFees` is bounded, so a compromised owner cannot raise it to 100%.
+Cap suggestion: 300 bps.
 
 ## How it can lose money
 
@@ -181,9 +213,6 @@ correct way to resolve that.
 
 ## Open decisions
 
-- Protocol fee on the raise, and whether it routes to `BuybackBurner` (which is
-  what MINTR and MintSynth already do) or to the Safe (which is what the
-  launchpad does).
 - Payout mode: pull-based accrual is assumed throughout. Genuine push payouts
   every 10 minutes are 4,320 transfers per holder per bond, which nobody wants
   to pay for. "Every 10 minutes" is therefore implemented as a stepped accrual
@@ -205,6 +234,9 @@ correct way to resolve that.
 - [ ] reentrant token cannot drain via claim
 - [ ] fee-on-transfer token escrows its true delta, not the stated amount
 - [ ] per-wallet cap holds across multiple purchases from one address
+- [ ] 1% fee lands at the Safe, dev nets exactly 99%, and the two sum to the
+      buyer's payment to the wei across a range of odd amounts
+- [ ] fee cap cannot be exceeded by the owner
 - [ ] explicit `gasLimit` on every state-changing call (gotcha 8)
 - [ ] ganache with real Uniswap V2, matching the other suites
 
@@ -214,7 +246,8 @@ correct way to resolve that.
 2. `/security-review` on `BondMarket`, blocking
 3. Deploy script plus dry run on ganache
 4. Verify on stablescan via `scripts/verify-core.js` (add to `CORE`)
-5. Read back on chain: creation fee, fee recipient, owner
+5. Read back on chain: creation fee, bond fee bps (100), fee recipient (the
+   Safe), owner
 6. Frontend: Bonds view, plus `features.bonds` gated to Stable
 
 ## Rollback
