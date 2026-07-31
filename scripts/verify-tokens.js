@@ -33,8 +33,28 @@ const PAD = "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0";
 const SRC = path.join(__dirname, "..", "contracts", "InstantLaunchpad.sol");
 const STATE = path.join(__dirname, "..", "data", "verified-tokens.json");
 
-// Must match scripts/compile.js exactly. A different optimizer setting or evm
-// version produces different bytecode and the verification is rejected.
+// EXPECT A PARTIAL MATCH, NOT A FULL ONE. This was investigated before running,
+// so do not re-litigate it:
+//
+// A deployed token's runtime bytecode matches a local compile everywhere except
+// its 32-byte immutable slot, which is normal, AND its trailing metadata hash,
+// which is not. Solidity hashes the whole compilation unit into every contract's
+// metadata, and compile.js compiles all contracts in ONE input, so that hash
+// moves whenever a source is added anywhere in the repo. It has gone from 20
+// sources to 36.
+//
+// Ruled out, in this order: source drift (InstantLaunchpad.sol has exactly one
+// commit and has never been edited), the source path, viaIR on and off,
+// optimizer runs, and all 13 historical revisions of compile.js recompiled from
+// git. None reproduces the deployed hash, so the deploy predates this repo's
+// first commit or used a different layout. It is not recoverable.
+//
+// Etherscan commonly still verifies when only the metadata differs, recording it
+// as a partial rather than full match. Whether it accepts ours is only knowable
+// by submitting one, which is why this script exists rather than more analysis.
+//
+// Must match scripts/compile.js otherwise. A different optimizer setting or evm
+// version changes the real code, not just the hash, and is rejected outright.
 const SETTINGS = {
   optimizer: { enabled: true, runs: 200 },
   viaIR: true,
