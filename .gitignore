@@ -25,3 +25,4 @@ holder-ledger.lock
 # so losing it costs one page of reads, unlike stats-cache.json.
 data/agent-vaults-*.json
 data/stable-earn-cap.json
+data/verified-tokens.json
