@@ -2781,9 +2781,20 @@ let cfg = { share: 8000n, startPrice: 3000000000000n, creationFee: 0n };
 let cfgLoaded = false;
 const gradTarget = () => E(7000); // graduation badge at 7,000 USDT0 in the pool
 // $MINTD is permanently graduated. Graduation never reverses once reached.
+//
+// $USDT1 was listed here and is not. It shows about 23% of the way to the
+// target, so the badge was asserting a milestone it has not reached.
+//
+// Worth knowing when reading that 23%: an external token's progress counts BOTH
+// sides of its pool (USDT0 plus the token valued at price) while a launchpad
+// token's counts only the USDT0 leg, so the same liquidity reads roughly twice
+// as high here. USDT1's pool holds about 423 USDT0. Either way it is far short,
+// but the two bars are not measuring the same thing.
+//
+// Removing it is clean: this list is checked BEFORE the localStorage cache, so a
+// forced token was never written there and the badge simply goes away.
 const FORCE_GRADUATED = [
   "0xE62C47074abb52A2bc87B62E47e3411A0020f020", // $MINTD
-  "0xC3eea9FE4b84b125f3Ed14f3A169A0D5007be7B6", // $USDT1
 ].map((a) => a.toLowerCase());
 function isGraduated(addr, reachedNow) {
   const key = addr.toLowerCase();
