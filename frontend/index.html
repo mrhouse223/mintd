@@ -3003,6 +3003,13 @@ function checkCoinLogo() {
   };
   probe.src = src;
 }
+/// One retry at the token's own on-chain image before giving up on initials.
+/// Without the guard a fallback that also fails loops on itself.
+function imgFallback(el, initials) {
+  const fb = el.getAttribute("data-fb");
+  if (fb && el.src !== fb) { el.removeAttribute("data-fb"); el.src = fb; return; }
+  el.parentNode.textContent = initials;
+}
 function sameAddr(a, b) {
   return !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase();
 }
@@ -5207,8 +5214,15 @@ function renderCards() {
     // title left and broke alignment against every other card in the row.
     const initials = (t.symbol.slice(0, 2).replace(/[^\w]/g, "")
       || String(t.name).slice(0, 2).replace(/[^\w]/g, "") || "·").toUpperCase();
-    const imgSrc = t.platform ? coinLogo() : safeImg(t.meta.image);
-    const av = imgSrc ? `<img src="${imgSrc}" loading="lazy" decoding="async" onerror="this.parentNode.textContent='${initials}'">` : initials;
+    // Prefer the larger copy, but keep the on-chain image as the fallback rather
+    // than dropping straight to initials: the CDN one is a third party and the
+    // data URI is the token's own, so a CDN miss must not lose the artwork.
+    const onChain = t.platform ? coinLogo() : safeImg(t.meta.image);
+    const imgSrc = (!t.platform && t.imgHi) ? t.imgHi : onChain;
+    const fallback = imgSrc !== onChain && onChain ? onChain : "";
+    const av = imgSrc
+      ? `<img src="${imgSrc}" loading="lazy" decoding="async" data-fb="${esc(fallback)}" onerror="imgFallback(this,'${initials}')">`
+      : initials;
     // A ticker identical to the name reads as a stutter and is the single
     // biggest cause of the title needing two lines.
     const dupTicker = String(t.name).trim().toLowerCase() === String(t.symbol).trim().toLowerCase();
@@ -7709,6 +7723,12 @@ async function loadDexStats() {
         // best available lifetime proxy: Dexscreener exposes 24h/6h/1h only, so
         // ratchet a running high-water mark per pool in localStorage
         t.volAll = Number(p.volume?.h24 || 0);
+        // A larger copy of the SAME artwork, free with a response we already
+        // fetch. Token images live on chain as data URIs, and gas makes them
+        // tiny: most are 96 or 128 pixels square, rendered into a 201px card on
+        // a 2x display, so the browser upscales them three to five times and
+        // they look soft. Dexscreener serves 800px versions of the same picture.
+        if (p.info?.imageUrl) t.imgHi = p.info.imageUrl;
       }
     }
     const vol = tokens.reduce((s, t) => s + (t.vol24 || 0), 0);
