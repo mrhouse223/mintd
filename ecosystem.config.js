@@ -97,6 +97,25 @@ module.exports = {
     },
     {
       ...common,
+      // Publishes frontend/stats.json hourly.
+      //
+      // The indexer writes that file every few minutes but nothing committed it,
+      // so the live site served numbers 42 hours old while the local file was
+      // current: TVL read 18,797 against an actual 33,059. A stats indexer that
+      // runs perfectly and never publishes looks exactly like a broken indexer
+      // from outside.
+      //
+      // A one-shot like the snapshot job, so "waiting restart" between runs is
+      // correct. publish-stats.sh re-runs the indexer, stages ONLY stats.json,
+      // and exits without committing when the numbers have not moved.
+      name: "stats-publish",
+      script: "scripts/publish-stats.sh",
+      interpreter: "bash",
+      autorestart: false,
+      cron_restart: "23 * * * *",
+    },
+    {
+      ...common,
       // Records StableEarn's share price once a day so the Earn tab can state a
       // MEASURED yield rather than repeat someone else's headline. Irreplaceable
       // for the same reason as holder-ledger: Stable has no archive state, so a
