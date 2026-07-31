@@ -2816,16 +2816,10 @@ const gradTarget = () => E(7000); // graduation badge at 7,000 USDT0 in the pool
 // $USDT1 was listed here and is not. It shows about 23% of the way to the
 // target, so the badge was asserting a milestone it has not reached.
 //
-// The two progress bars measure different things ON PURPOSE, so do not "fix"
-// this. An external token's progress counts BOTH sides of its pool (USDT0 plus
-// the token valued at price); a launchpad token's counts only the USDT0 leg.
-// The same liquidity therefore reads roughly twice as high for an external
-// token: USDT1's pool holds about 423 USDT0 and displays 23%.
-//
-// That is kept because USDT1 was not launched through the launchpad. It is a
-// standalone V3 position with its own locked liquidity, so the single-sided
-// denominator, which exists because a launchpad pool starts as one-sided supply,
-// does not describe it. Aligning them was considered and rejected.
+// Every token's progress is now on the same denominator, the USDT0 leg alone.
+// An earlier version measured external tokens on both sides of their pool, which
+// made USDT1 read further along than a launchpad coin holding more liquidity,
+// and separately double-counted external tokens in the headline TVL.
 //
 // Removing it is clean: this list is checked BEFORE the localStorage cache, so a
 // forced token was never written there and the badge simply goes away.
@@ -4952,8 +4946,18 @@ async function loadAllInner() {
         const tokenIs0 = BigInt(e.addr) < BigInt(ADDR.usdt0);
         const [slot, poolBal, tokBal] = await Promise.all([pool.slot0(), qc.balanceOf(e.pool), c.balanceOf(e.pool)]);
         const price = priceFromSqrt(slot[0], tokenIs0);
-        // total liquidity: USDT0 side + token side valued at the current price
-        const poolUsdt = poolBal * D6 + (tokBal * price) / 10n ** 18n;
+        // The USDT0 leg ONLY, exactly as a launchpad token records it.
+        //
+        // This used to add the token side valued at price, which broke two
+        // things at once. The graduation bar is a fraction of this number, so an
+        // external token read roughly twice as far along as a launchpad token
+        // with the same liquidity: USDT1 showed a higher percentage than DINKY
+        // while having a lower market cap, which is what surfaced it.
+        //
+        // And the headline TVL DOUBLES poolUsdt to account for both sides, so a
+        // both-sides figure here was counted twice. Every external token
+        // inflated TVL by its own liquidity again.
+        const poolUsdt = poolBal * D6;
         const meta = parseMeta(uri);
         if (e.logo) meta.image = e.logo;
         if (e.banner) meta.banner = e.banner;
