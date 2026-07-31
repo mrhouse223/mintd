@@ -114,6 +114,22 @@ module.exports = {
     },
     {
       ...common,
+      // Pings Telegram the moment StableEarn starts accepting deposits again.
+      // There is no event to subscribe to: Morpho Vault V2 derives maxDeposit
+      // from the underlying markets' caps rather than storing it, so nothing is
+      // emitted when it changes and polling is the only option.
+      //
+      // Read-only. It holds no key and can move nothing.
+      name: "stable-earn-cap-watch",
+      script: "scripts/stable-earn-cap-watch.js",
+      env: {
+        TG_BOT_TOKEN: env.TG_BOT_TOKEN,
+        TG_CHAT_ID: env.TG_CHAT_ID,
+        POLL_MS: env.SE_CAP_POLL_MS || "120000",
+      },
+    },
+    {
+      ...common,
       name: "arb-keeper",
       script: "scripts/arb-keeper-multi.js",
       env: {
