@@ -25,7 +25,13 @@ const BUY_TOKEN = process.env.BUY_TOKEN || "🟡";
 const LOGO_URL = process.env.LOGO_URL || "";
 const MIN_USD = Number(process.env.MIN_USD || "1");
 const POLL_MS = Number(process.env.POLL_MS || "12000");
-const MAX_RANGE = Number(process.env.MAX_RANGE || "2000");
+const MAX_RANGE = Number(process.env.MAX_RANGE || "500");
+// 500 is the RPC's hard [from, to] distance limit, not a tuning choice.
+// It was 2000, which worked only while the bot kept up: the moment it fell
+// more than 500 blocks behind, EVERY request exceeded the cap, so it could
+// never catch up and sat in a permanent failure loop skipping blocks while
+// pm2 still reported it online. Measured: a 500-block span succeeds and 501
+// fails with "could not coalesce error".
 
 const V3_SWAP_TOPIC = ethers.id("Swap(address,address,int256,int256,uint160,uint128,int24)");
 const v3Iface = new ethers.Interface([

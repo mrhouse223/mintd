@@ -224,7 +224,13 @@ async function main() {
 
   let last = await provider.getBlockNumber();
   let fails = 0;
-  const MAX_RANGE = Number(process.env.MAX_RANGE || "2000"); // never scan more blocks than this per poll
+  const MAX_RANGE = Number(process.env.MAX_RANGE || "500");
+// 500 is the RPC's hard [from, to] distance limit, not a tuning choice.
+// It was 2000, which worked only while the bot kept up: the moment it fell
+// more than 500 blocks behind, EVERY request exceeded the cap, so it could
+// never catch up and sat in a permanent failure loop skipping blocks while
+// pm2 still reported it online. Measured: a 500-block span succeeds and 501
+// fails with "could not coalesce error".
 
   // Stable's RPC rate-limits in bursts, surfacing as "could not coalesce error"
   // or "exceeded maximum retry limit". Retrying the individual call with a
