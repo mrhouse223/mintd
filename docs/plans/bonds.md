@@ -50,9 +50,11 @@ decisions follow:
 
 1. **The headline number is the discount and the term, not a yield.** "50% off,
    released over 30 days" is complete, checkable and needs no convention.
-2. **Where a rate is shown it is simple APR over the term, labelled with its
-   assumption**: "1,217% APR if the token price is unchanged". The conditional
-   is not fine print, it is the whole meaning.
+2. **The page shows simple APR over the term, and only that one.** Decided, not
+   open: 1,217% for the worked example. It carries its assumption inline,
+   "1,217% APR if the token price is unchanged", because the conditional is not
+   fine print, it is the whole meaning. The other three conventions are never
+   displayed.
 3. **Breakeven price is shown next to it, always.** $0.00005 for this bond. It
    is the number that actually tells a buyer what they are risking, because the
    buyer does not receive $2,000, they receive 20,000,000 tokens.
@@ -68,7 +70,7 @@ days holds above breakeven, not the price at the end.
   TWAP at creation time and never re-reads. This deletes an entire class of bugs
   (stale price, manipulated spot, pump-then-create) for zero lost functionality.
 - **Allowlist only, no arbitrary ERC-20s.** Every mintd-launched coin, plus
-  USDT0, STABLE and FEFER. See the allowlist section: the launchpad tokens are
+  USDT0, FEFER, and STABLE once its fork test passes. See the allowlist section: the launchpad tokens are
   safe by construction, the three additions are not and had to be checked
   individually.
 - **No push payouts.** Vesting is pull-based and computed. See the payout note.
@@ -90,22 +92,47 @@ so a bond on a launchpad coin only carries price risk.
 
 **The three additions, audited on chain 2026-07-31:**
 
-| Token | Finding |
-|---|---|
-| USDT0 `0x779Ded0c…` | **Upgradeable proxy.** Implementation `0xd797a3cb…` (18,094 bytes) carries `owner()`, `mint(address,uint256)` and `transferOwnership(address)`; proxy owner is `0x4DFF9b5b…`. No pause or blacklist selector today, but the implementation can be swapped and one added. |
-| STABLE | address not yet supplied, audit pending |
-| FEFER | address not yet supplied, audit pending |
+| Token | Finding | Escrowable |
+|---|---|---|
+| USDT0 `0x779Ded0c…` | **Upgradeable proxy.** Implementation `0xd797a3cb…` (18,094 bytes) carries `owner()`, `mint(address,uint256)` and `transferOwnership(address)`; proxy owner is `0x4DFF9b5b…`. No pause or blacklist selector today, but the implementation can be swapped and one added. | yes, with the caveat |
+| STABLE `0x…1003` | **A native precompile, not a contract.** `eth_getCode` returns an 88-byte stub that decodes to `PUSH0 PUSH0 REVERT`, which is not what executes: calls are intercepted by the client and failures come back as `"fail to send in precompiled contract"`. Reads answer correctly (18 dec, 100bn supply) and `approve`/`allowance` work, but `transferFrom` reverted `"invalid coins"` on a zero-value probe, which a standard ERC-20 accepts. | **not yet, see below** |
+| FEFER `0xeaf7aC0F…` | `DyorPumpToken`, verified, 11,687 bytes. Deployed ABI has **no mint, no owner, no pause, no blacklist** and no admin setter; the only state-changing entrypoints are the ERC-20 four plus `initialize` and `swap`. `_transfer` is plain OpenZeppelin, **no fee**. LP owner is `0x…dEaD`. | yes |
 
 USDT0 being mutable is not a reason to drop it, since it is the chain's quote
 asset and the entire site already depends on it. It is a reason not to extend
 the "safe by construction" claim past the launchpad coins, and to say on the
 page which of the two a given bond is.
 
-STABLE and FEFER get the same probe before they go in the list: proxy slot,
-`owner()`, mint, pause, blacklist, and a fee-on-transfer check by measuring the
-balance delta of a real transfer. Any that comes back upgradeable or mintable is
-listable but must be labelled, not silently treated as equivalent to a
-launchpad coin.
+### STABLE needs a live test before it is listed
+
+It is the one token here whose behaviour is defined by the chain client rather
+than by bytecode anyone can read. There is no source to review, no upgrade event
+to watch, and its semantics can change with a node release leaving no on-chain
+trace. That is a strictly stronger trust assumption than USDT0's proxy.
+
+Concretely unresolved: `transferFrom` reverted on a zero-value probe. Escrow is
+built on `transferFrom`, and a token that rejects zero-value transfers also
+breaks the common "transfer the remainder, which may be zero" path at the end of
+vesting. Whether it works for a real allowance cannot be settled read-only.
+
+**So STABLE ships only after a ganache or fork test that actually performs
+approve then `transferFrom` of a non-zero amount into a contract, and a zero-value
+transfer out.** If either fails it does not go on the list. Everything else here
+can be built without waiting on that.
+
+### FEFER had a gate worth catching
+
+Its `_transfer` is overridden with
+`require(complete || isLiquidityPool(from) || isLiquidityPool(to))`, so before
+the bonding curve completes, wallet-to-wallet transfers revert and a bond
+contract (not a pool) could neither receive escrow nor pay out. Read on chain:
+`complete == true`, and nothing in the ABI can set it false, so the gate is
+permanently open and FEFER is safe to escrow today.
+
+It is still the reason the allowlist is manual. A DyorPump token that has *not*
+completed would take escrow and then fail every payout, which is failure mode 1
+arriving through a side door rather than through a malicious owner. Any future
+addition gets the same read.
 
 ## Contracts touched
 
@@ -193,10 +220,12 @@ Cap suggestion: 300 bps.
    is paid the discount to accept. Mitigated by disclosure, not by code.
 4. **A 50% discount at a fixed price is free money, so a bot takes all of it in
    the first block.** Stable's front-running hole is documented and unfixed. A
-   per-wallet cap raises the cost without solving it (bots split across wallets).
-   A batch auction clearing at one price, or a Dutch auction, actually solves it
-   and is a larger build. v1 ships the cap and says plainly that it is a
-   speed bump.
+   per-wallet cap raises the cost without solving it, because bots split across
+   wallets. **Decision taken: no Dutch auction, no batch auction.** v1 ships the
+   fixed price plus the cap, which means a bond at a steep discount should be
+   expected to fill to bots rather than to the community, and the page must not
+   imply otherwise. Devs who care about who gets the allocation should set a
+   smaller discount, which is the lever they actually have.
 5. **Reentrancy on claim**, if a token calls back on transfer. Checks-effects-
    interactions plus a guard.
 6. **Rounding and stranded dust.** Vesting must be `owed = total * elapsed /
@@ -237,6 +266,11 @@ Cap suggestion: 300 bps.
 - [ ] 1% fee lands at the Safe, dev nets exactly 99%, and the two sum to the
       buyer's payment to the wei across a range of odd amounts
 - [ ] fee cap cannot be exceeded by the owner
+- [ ] STABLE: approve then non-zero `transferFrom` into the contract, and a
+      zero-value transfer out, both against a fork. Blocking for STABLE only
+- [ ] FEFER: escrow and full vest end to end, asserting `complete` is read at
+      creation and a non-complete DyorPump token is rejected
+- [ ] a token that reverts on zero-value transfer cannot strand a final claim
 - [ ] explicit `gasLimit` on every state-changing call (gotcha 8)
 - [ ] ganache with real Uniswap V2, matching the other suites
 
