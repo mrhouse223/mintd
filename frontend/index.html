@@ -2357,8 +2357,10 @@
           <div class="spacer"></div>
           <button class="chip" onclick="devLoad(true)">Rescan</button>
           <button class="btn" id="dvClaimBtn" onclick="devClaimAll()">Claim all</button>
+          <button class="btn ghost" id="dvSellBtn" onclick="devSellAll()">Sell claimed tokens</button>
         </div>
         <div id="dvNote" class="finenote" style="margin-bottom:10px"></div>
+        <div id="dvProgress" class="finenote" style="margin-bottom:10px;display:none"></div>
         <div id="dvRows"><div class="empty">Connect an operator wallet.</div></div>
       </div>
     </div>
@@ -4820,6 +4822,7 @@ const CLAIMER_ABI = [
 ];
 
 let dvPending = [];   // rows with something to claim
+let dvScanId = 0;
 
 function devNavSync() {
   const b = $("nav-dev");
@@ -4835,71 +4838,105 @@ async function devLoad(force) {
     rows.innerHTML = `<div class="empty">Connect an operator wallet.</div>`;
     return;
   }
-  const claimer = NET.mintd.claimer;
-  if (!claimer) {
-    rows.innerHTML = `<div class="empty">FeeClaimAll is not deployed on ${esc(NET.label)} yet.</div>`;
-    note.textContent = "";
-    return;
-  }
-  if (!pad) await init(); // init is async now: unawaited, rp is still null below
-  rows.innerHTML = `<div class="empty">Scanning…</div>`;
-  note.textContent = "Reading pending fees. This simulates a claim per token, so it takes a moment.";
+  if (!pad) await init();
+  // The scan reads the SAME token list the rest of the site already loaded, so
+  // a warm page costs nothing extra here.
+  if (force || !tokens.length) await loadAll();
 
+  // Launchpad tokens only. External and locked positions are not this pad's to
+  // claim, and `padOf` is the thing that says which pad owns the position.
+  const list = tokens.filter((t) => t.padOf && t.positionId);
+  if (!list.length) { rows.innerHTML = `<div class="empty">No launched tokens found.</div>`; note.textContent = ""; return; }
+
+  note.textContent = "Reading pending fees. This simulates a collect per token, so it takes a moment.";
+
+  // One scan at a time. Opening the page also triggers a scan, so a Rescan
+  // click while the first is still walking 126 tokens left both running and
+  // both appending to dvPending: the totals read nearly double, with a token
+  // count higher than the number scanned. The later scan wins and the earlier
+  // one stops at its next token.
+  const scanId = ++dvScanId;
   try {
-    const c = new ethers.Contract(claimer, CLAIMER_ABI, rp);
-    const quote = ADDR.usdt0;
-    const out = [];
-    // BOTH pads. The 121 tokens on the old pad keep earning fees forever, so
-    // scanning only the new pad would silently strand every one of their fee
-    // streams. FeeClaimAll takes the launchpad as an argument, so the same
-    // contract works against either. Deduped by nothing: the two pads share no
-    // tokens.
-    const pads = [padAddr(), OLD_PAD].filter(Boolean);
-    for (const pa of pads) {
-      const padC = new ethers.Contract(pa, PAD_ABI, rp);
-      const total = Number(await retryRead(() => padC.tokenCount()));
-      // Chunked because preview performs a real collect per token inside the
-      // eth_call; the whole list at once exceeds the node's call gas budget.
-      for (let i = 0; i < total; i += 20) {
-        const part = await c.previewRange.staticCall(pa, i, 20, quote);
-        for (const r of part) out.push({ ...r, pad: pa });
-      }
+    // Creator share per pad, not one global figure: the two pads were deployed
+    // with their own creatorShareBps and nothing keeps them equal.
+    const share = {};
+    for (const pa of allPads()) {
+      try { share[pa.toLowerCase()] = await retryRead(() => new ethers.Contract(pa, PAD_ABI, rp).creatorShareBps()); }
+      catch { share[pa.toLowerCase()] = cfg.share; }
     }
+    let mintrUsd = 0n;
+    if (MINTR_ADDR) { try { mintrUsd = await retryRead(() => new ethers.Contract(MINTR_ADDR, MINTR_ABI, rp).price1e18()); } catch {} }
 
+    const npm = new ethers.Contract(ADDR.npm, NPM_ABI, rp);
     const me = wallet.toLowerCase();
-    let proto = 0n, mine = 0n, n = 0;
+    const MAXU128 = (1n << 128n) - 1n;
     dvPending = [];
-    for (const r of out) {
-      const has = r.creatorQuote > 0n || r.protocolQuote > 0n || r.creatorToken > 0n || r.protocolToken > 0n;
-      if (!has) continue;
-      n++;
-      proto += r.protocolQuote;
-      // Counted once, not twice: when the connected wallet is both the
-      // creator and the feeRecipient, both legs describe the same address.
-      if (r.creator.toLowerCase() === me) mine += r.creatorQuote;
-      dvPending.push(r);
+    let scanned = 0, failed = 0;
+
+    // Sequential on purpose. Gotcha 1: two concurrent reads in a scan path get
+    // batched into one JSON-RPC array and Stable rejects the whole thing.
+    for (const t of list) {
+      if (scanId !== dvScanId) return; // superseded
+      scanned++;
+      let a0, a1;
+      try {
+        // Simulated as the pad, because the pad owns the position. Reading
+        // pending V3 fees any other way is not possible: `collect` is the only
+        // function that reports them, and only the owner may call it.
+        [a0, a1] = await npm.collect.staticCall(
+          { tokenId: t.positionId, recipient: t.padOf, amount0Max: MAXU128, amount1Max: MAXU128 },
+          { from: t.padOf }
+        );
+      } catch { failed++; continue; }
+      if (a0 === 0n && a1 === 0n) { if (scanned % 10 === 0) paint(); continue; }
+
+      const tokAmt = t.tokenIs0 ? a0 : a1;
+      const qRaw = t.tokenIs0 ? a1 : a0;
+      const bps = share[t.padOf.toLowerCase()] ?? cfg.share;
+      const cr = (x) => (x * bps) / 10000n;
+      // Everything below is 1e18 USD. The quote leg is 6-dec USDT0 or 18-dec
+      // MINTR, and mixing those two is the 1,000,000x error in gotcha 6.
+      const quoteUsd = t.isMintr ? (qRaw * mintrUsd) / 10n ** 18n : qRaw * D6;
+      const tokenUsd = (tokAmt * t.price) / 10n ** 18n;
+
+      dvPending.push({
+        token: t.addr, pad: t.padOf, creator: t.creator, sym: t.symbol,
+        isMintr: t.isMintr, tokenRaw: tokAmt, quoteRaw: qRaw,
+        creatorUsd: cr(quoteUsd) + cr(tokenUsd),
+        protocolUsd: (quoteUsd - cr(quoteUsd)) + (tokenUsd - cr(tokenUsd)),
+        mine: sameAddr(t.creator, wallet),
+      });
+      paint();
     }
 
-    $("dvProto").textContent = "$" + nf(Number(ethers.formatUnits(proto, 6)), 2);
-    $("dvMine").textContent = "$" + nf(Number(ethers.formatUnits(mine, 6)), 2);
-    $("dvCount").textContent = String(n);
-    $("dvScanned").textContent = String(total);
+    function paint() {
+      let proto = 0n, mine = 0n;
+      for (const r of dvPending) { proto += r.protocolUsd; if (r.mine) mine += r.creatorUsd; }
+      $("dvProto").textContent = "$" + nf(Number(ethers.formatEther(proto)), 2);
+      $("dvMine").textContent = "$" + nf(Number(ethers.formatEther(mine)), 2);
+      $("dvCount").textContent = String(dvPending.length);
+      $("dvScanned").textContent = scanned + " / " + list.length;
+      if (!dvPending.length) { rows.innerHTML = `<div class="empty">Scanning… ${scanned} of ${list.length}</div>`; return; }
+      // Biggest first: with 120+ tokens the tail is dust and the top few rows
+      // are the only ones worth acting on.
+      const sorted = [...dvPending].sort((a, b) => (b.creatorUsd + b.protocolUsd > a.creatorUsd + a.protocolUsd ? 1 : -1));
+      rows.innerHTML = `<table class="dvt" style="width:100%;border-collapse:collapse">
+        <tr style="text-align:left;opacity:.6;font-size:12px">
+          <th style="padding:6px 4px">TOKEN</th><th>CREATOR</th><th>CREATOR FEES</th><th>PROTOCOL FEES</th></tr>
+        ${sorted.map((r) => `<tr style="border-top:1px solid rgba(255,255,255,.06)">
+          <td style="padding:8px 4px"><a href="/token/${r.token}" onclick="event.preventDefault();navTo('/token/${r.token}')">$${esc(r.sym)}</a></td>
+          <td style="opacity:.7">${esc(short(r.creator))}${r.mine ? " (you)" : ""}</td>
+          <td>$${nf(Number(ethers.formatEther(r.creatorUsd)), 4)}</td>
+          <td>$${nf(Number(ethers.formatEther(r.protocolUsd)), 4)}</td></tr>`).join("")}
+      </table>`;
+    }
 
-    if (!n) { rows.innerHTML = `<div class="empty">Nothing pending across ${total} tokens.</div>`; note.textContent = ""; return; }
-
-    const tokName = (a) => { const t = tokens.find((x) => x.addr.toLowerCase() === a.toLowerCase()); return t ? t.sym : a.slice(0, 10) + "…"; };
-    rows.innerHTML = `<table class="dvt" style="width:100%;border-collapse:collapse">
-      <tr style="text-align:left;opacity:.6;font-size:12px">
-        <th style="padding:6px 4px">TOKEN</th><th>CREATOR</th><th>CREATOR FEES</th><th>PROTOCOL FEES</th></tr>
-      ${dvPending.map((r) => `<tr style="border-top:1px solid rgba(255,255,255,.06)">
-        <td style="padding:8px 4px"><a href="/token/${r.token}" onclick="event.preventDefault();navTo('/token/${r.token}')">$${esc(tokName(r.token))}</a></td>
-        <td style="opacity:.7">${esc(short(r.creator))}${r.creator.toLowerCase() === me ? " (you)" : ""}</td>
-        <td>$${nf(Number(ethers.formatUnits(r.creatorQuote, 6)), 4)}</td>
-        <td>$${nf(Number(ethers.formatUnits(r.protocolQuote, 6)), 4)}</td></tr>`).join("")}
-    </table>`;
+    paint();
+    if (!dvPending.length) rows.innerHTML = `<div class="empty">Nothing pending across ${list.length} tokens.</div>`;
     note.innerHTML = `Claiming pays each token's creator and the protocol recipient directly. `
       + `You only pay gas; nothing routes to the caller. `
-      + `<b>${dvPending.length}</b> token(s) have fees waiting.`;
+      + `<b>${dvPending.length}</b> token(s) have fees waiting`
+      + (failed ? `, ${failed} position(s) could not be read` : "") + `.`;
   } catch (e) {
     rows.innerHTML = `<div class="empty">Scan failed: ${esc(e.shortMessage || e.message)}</div>`;
     note.textContent = "";
@@ -4940,6 +4977,115 @@ async function devClaimAll() {
   } finally {
     btn.disabled = false;
     btn.textContent = "Claim all";
+  }
+}
+
+// Sell the claimed fee tokens back into USDT0.
+//
+// TWO CLICKS, ALWAYS. The first builds and shows the plan, the second sends it.
+// This sells real balances across thin pools and there is no undo, so the
+// operator sees every token and its quoted proceeds before anything moves.
+//
+// It sells WALLET BALANCES, not "what was just claimed": nothing on chain
+// records which tokens arrived from a fee claim, so any figure claiming to know
+// that would be invented. MINTD is excluded outright, since the operator holding
+// it is a position rather than fee dust.
+let dvSellPlan = null;
+
+async function devSellAll() {
+  if (!signer) return toast("Connect a wallet first", "err");
+  const btn = $("dvSellBtn"), prog = $("dvProgress");
+  prog.style.display = "";
+
+  if (dvSellPlan) { // second click: execute the plan already on screen
+    const plan = dvSellPlan;
+    dvSellPlan = null;
+    btn.disabled = true;
+    const router = new ethers.Contract(ADDR.router, SWAP_ROUTER_ABI, signer);
+    let sold = 0, skipped = 0;
+    for (const [i, s] of plan.entries()) {
+      try {
+        btn.textContent = `Selling ${i + 1} of ${plan.length}…`;
+        prog.textContent = `Selling $${s.sym}…`;
+        const erc = new ethers.Contract(s.token, ERC20_ABI, signer);
+        if ((await erc.allowance(wallet, ADDR.router)) < s.bal) {
+          await (await erc.approve(ADDR.router, ethers.MaxUint256)).wait();
+        }
+        // 5%, not the 1% the trade box uses. The quote already prices this
+        // sell's own impact, so what is left to absorb is movement between
+        // quoting and mining, and a 1% bound reverts constantly on pools this
+        // thin. Every leg is still bounded; none is a market order.
+        const minOut = (s.out * 95n) / 100n;
+        const tx = s.isMintr
+          ? await router.exactInput({
+              path: ethers.solidityPacked(["address", "uint24", "address", "uint24", "address"],
+                                          [s.token, POOL_FEE, MINTR_ADDR, POOL_FEE, ADDR.usdt0]),
+              recipient: wallet, amountIn: s.bal, amountOutMinimum: minOut })
+          : await router.exactInputSingle({ tokenIn: s.token, tokenOut: ADDR.usdt0, fee: POOL_FEE,
+              recipient: wallet, amountIn: s.bal, amountOutMinimum: minOut, sqrtPriceLimitX96: 0 });
+        await tx.wait();
+        sold++;
+      } catch (e) {
+        // One thin pool must not strand the rest of the batch.
+        skipped++;
+        console.error(`sell ${s.sym} failed`, e.shortMessage || e.message);
+      }
+    }
+    btn.disabled = false;
+    btn.textContent = "Sell claimed tokens";
+    prog.textContent = `Sold ${sold} token(s)` + (skipped ? `, ${skipped} failed (see console)` : "") + ".";
+    toast(`Sold ${sold} token(s)`, sold ? "ok" : "err");
+    return;
+  }
+
+  // first click: price everything the wallet actually holds
+  btn.disabled = true;
+  btn.textContent = "Checking balances…";
+  try {
+    if (!tokens.length) await loadAll();
+    const q = new ethers.Contract(ADDR.quoter, QUOTER2_ABI, rp);
+    const plan = [];
+    let n = 0;
+    const list = tokens.filter((t) => t.padOf && !sameAddr(t.addr, MINTD_ADDR));
+    for (const t of list) {
+      n++;
+      prog.textContent = `Checking ${n} of ${list.length}…`;
+      let bal;
+      // Sequential, same reason as the fee scan: batched reads are rejected.
+      try { bal = await new ethers.Contract(t.addr, ERC20_ABI, rp).balanceOf(wallet); } catch { continue; }
+      if (bal === 0n) continue;
+      let out = 0n;
+      try {
+        [out] = t.isMintr
+          ? await q.quoteExactInput.staticCall(
+              ethers.solidityPacked(["address", "uint24", "address", "uint24", "address"],
+                                    [t.addr, POOL_FEE, MINTR_ADDR, POOL_FEE, ADDR.usdt0]), bal)
+          : await q.quoteExactInputSingle.staticCall(
+              { tokenIn: t.addr, tokenOut: ADDR.usdt0, amountIn: bal, fee: POOL_FEE, sqrtPriceLimitX96: 0 });
+      } catch { continue; }
+      // Below a cent the swap costs more gas than it returns.
+      if (out < 10000n) continue;
+      plan.push({ token: t.addr, sym: t.symbol, bal, out, isMintr: t.isMintr });
+    }
+    if (!plan.length) {
+      prog.textContent = "No sellable balances above $0.01.";
+      btn.disabled = false; btn.textContent = "Sell claimed tokens";
+      return;
+    }
+    plan.sort((a, b) => (b.out > a.out ? 1 : -1));
+    const total = plan.reduce((a, s) => a + s.out, 0n);
+    dvSellPlan = plan;
+    prog.innerHTML = `<b>Review before selling.</b> ${plan.length} token(s) for about `
+      + `$${nf(Number(ethers.formatUnits(total, 6)), 2)} USDT0, one transaction each, `
+      + `5% slippage bound. MINTD is never included.<br>`
+      + plan.map((s) => `$${esc(s.sym)} ${nf(Number(ethers.formatEther(s.bal)), 2)} `
+          + `-> $${nf(Number(ethers.formatUnits(s.out, 6)), 4)}`).join(" &middot; ");
+    btn.disabled = false;
+    btn.textContent = `Confirm sell of ${plan.length}`;
+  } catch (e) {
+    dvSellPlan = null;
+    prog.textContent = "Could not price the sell: " + (e.shortMessage || e.message);
+    btn.disabled = false; btn.textContent = "Sell claimed tokens";
   }
 }
 
