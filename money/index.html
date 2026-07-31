@@ -1572,6 +1572,19 @@
       <div class="trade" style="padding:10px 16px">
         <div class="traderow th" style="grid-template-columns:1.6fr 1fr 1fr 1fr 1fr"><span>PAIR</span><span>DEX</span><span>LIQUIDITY</span><span>VOL 24H</span><span>EST LP APY</span></div>
         <div id="plTopList"><div class="empty">Loading…</div></div>
+      </div>
+
+      <div class="mkthead" style="margin:26px 0 12px">
+        <h2>Every MintSwap V2 pool</h2>
+        <div class="spacer"></div>
+        <span class="live"><span class="dot"></span><span id="plAllCount">–</span></span>
+      </div>
+      <div class="finenote" style="margin-bottom:12px">
+        Read straight from the factory, so a pool created a minute ago appears here without anything being
+        added to this site. Reserves and your share are read per pool; nothing is cached.
+      </div>
+      <div id="plAllList"><div class="empty">Loading…</div></div>
+      <div style="display:none"></div>
         <div class="feenote" style="margin-top:6px">Fee yield estimated as 24h volume x 0.3% x 365 / liquidity. Actual fees vary by DEX and day. Data: Dexscreener.</div>
       </div>
     </div>
@@ -2994,7 +3007,15 @@ async function route() {
     // this the retirement redirect below sends it to Earn, so clicking Pools
     // would show the Farms placeholder instead.
     if (isSoon("pools")) { showView("pools"); return; }
-    // Pools page retired: liquidity now lives on the Earn tab (zap in per pool)
+    // Un-retired: the page now lists every pool the factory has, not just the
+    // handful with a farm, so it has something the Earn tab does not.
+    if (MINTSWAP.factory) {
+      showView("pools");
+      if (!tokens.length && padAddr()) await loadAll();
+      plBals(); loadPools(); plAllPools();
+      return;
+    }
+    // Nothing to show without a factory: fall back rather than an empty page.
     showView("earn");
     if (!tokens.length && padAddr()) await loadAll();
     loadFarm(); loadFeePools();
@@ -6960,6 +6981,92 @@ async function plAdd() {
     plStatus(); loadPools();
   } catch (e) { toast(e.shortMessage || e.message, "err"); }
 }
+/// Every pair the factory has ever created, whether or not you hold any of it.
+///
+/// Enumerated with allPairs(i) rather than from logs. A V2 factory keeps the
+/// full list in its own storage, which is the only complete source on this
+/// chain: getLogs caps at 500 blocks AND 500 results and the node prunes to
+/// about four days, so PairCreated events cannot answer "every pool" and never
+/// could. This needs no indexer and no cache as a result.
+async function plAllPools() {
+  const el = $("plAllList");
+  if (!el) return;
+  if (!MINTSWAP.factory || !rp) { el.innerHTML = '<div class="empty">MintSwap is not deployed on this chain.</div>'; return; }
+  try {
+    const fac = new ethers.Contract(MINTSWAP.factory, V2FAC_ABI, rp);
+    const n = Number(await retryRead(() => fac.allPairsLength()));
+    $("plAllCount").textContent = `${n} pool${n === 1 ? "" : "s"}`;
+    // Rendered one at a time, as each resolves. Reading a pool costs about
+    // seven sequential round trips, batching is forbidden on this chain, and
+    // waiting for all of them left the page showing "Loading" for roughly half
+    // a minute, which reads as broken rather than slow.
+    const rows = [];
+    el.innerHTML = "";
+    const flush = () => { el.innerHTML = rows.join("") + (rows.length < n ? `<div class="empty">reading ${rows.length + 1} of ${n}…</div>` : ""); };
+    flush();
+    for (let i = 0; i < n; i++) {
+      try {
+        const addr = await retryRead(() => fac.allPairs(i));
+        const pc = new ethers.Contract(addr, PAIR_ABI, rp);
+        // Sequential, not Promise.all: this chain rejects batched JSON-RPC, and
+        // ethers batches whatever is pending in the same tick regardless of who
+        // issued it.
+        const t0 = await retryRead(() => pc.token0());
+        const t1 = await retryRead(() => new ethers.Contract(addr, ["function token1() view returns (address)"], rp).token1());
+        const [r0, r1] = await retryRead(() => pc.getReserves());
+        const total = await retryRead(() => pc.totalSupply());
+        const mine = wallet ? await retryRead(() => pc.balanceOf(wallet)) : 0n;
+        const meta = async (a) => {
+          const m = swMeta(a);
+          if (m) return { sym: m.sym, dec: m.dec };
+          const c = new ethers.Contract(a, ERC20_ABI, rp);
+          return { sym: await c.symbol().catch(() => "?"), dec: Number(await c.decimals().catch(() => 18)) };
+        };
+        const m0 = await meta(t0), m1 = await meta(t1);
+        // An empty pool is listed rather than hidden. It is a real pool anyone
+        // can seed, and quietly dropping it makes the count disagree with the
+        // factory, which is the first thing that looks like a bug.
+        const empty = total === 0n || (r0 === 0n && r1 === 0n);
+        const sharePct = total > 0n && mine > 0n ? Number((mine * 1000000n) / total) / 10000 : 0;
+        rows.push(`<div class="trade" style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <b style="font-size:15px">${esc(m0.sym)} / ${esc(m1.sym)}</b>
+            ${empty ? '<span class="badgepill" style="font-size:10px">EMPTY</span>' : ""}
+            ${mine > 0n ? `<span class="badgepill" style="font-size:10px">YOUR SHARE ${sharePct.toFixed(sharePct < 0.01 ? 4 : 2)}%</span>` : ""}
+            <div class="spacer"></div>
+            <button class="btn ghost" style="padding:7px 12px;font-size:12.5px"
+              onclick="plPick('${esc(t0)}','${esc(t1)}')">Add liquidity</button>
+          </div>
+          <div class="feerow" style="margin-top:8px"><span>Reserves</span><b>${nf(ethers.formatUnits(r0, m0.dec), 4)} ${esc(m0.sym)} · ${nf(ethers.formatUnits(r1, m1.dec), 4)} ${esc(m1.sym)}</b></div>
+          <div class="feerow"><span>Pair</span><b><a href="${CHAIN.blockExplorerUrls[0]}/address/${esc(addr)}" target="_blank" rel="noopener">${esc(short(addr))}</a></b></div>
+        </div>`);
+      } catch (e) {
+        // Name the pool that failed rather than dropping it silently, or the
+        // list quietly disagrees with the count above it.
+        console.error(`pool #${i} unreadable`, e.shortMessage || e.message);
+        rows.push(`<div class="trade" style="margin-bottom:10px"><div class="empty">Pool #${i} could not be read. Refresh to retry.</div></div>`);
+      }
+      flush();
+    }
+    el.innerHTML = rows.join("") || '<div class="empty">The factory has no pools yet.</div>';
+  } catch (e) {
+    el.innerHTML = `<div class="empty">Could not read the factory: ${esc(e.shortMessage || e.message)}</div>`;
+  }
+}
+
+/// Preselects a pool in the add-liquidity form above and scrolls to it.
+function plPick(a, b) {
+  $("plA").value = a; $("plB").value = b;
+  tokLabel("plA"); tokLabel("plB");
+  $("plAmtA").value = ""; $("plAmtB").value = "";
+  plBals();
+  plReserves().then((r) => {
+    if (!r) return;
+    $("plStatus").textContent = r.pair ? "existing pool" : "new pool, you set the opening ratio";
+  }).catch(() => {});
+  document.querySelector("#view-pools .trade").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 async function loadPools() {
   // renders into the Earn tab (the standalone Pools page was retired)
   const el = $("earnLps") || $("plList");
