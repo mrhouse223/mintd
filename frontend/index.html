@@ -505,6 +505,17 @@
   .lform h3 small { color: var(--dim); font-weight: 500; }
   .frow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .field { margin-bottom: 12px; }
+  /* Bond form: one control per line. The controls previously inherited the
+     card's inline flow, so label and input sat side by side and seven fields
+     wrapped into an unreadable paragraph. */
+  .bdform { display: grid; gap: 14px; }
+  .bdform .field input, .bdform .field select { width: 100%; }
+  .bondcard .bhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .bondcard .blogo { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex: none; }
+  .bondcard .blogo.bfb { display: grid; place-items: center; font-size: 11px; font-weight: 800;
+                         background: var(--card2, rgba(127,127,127,.16)); color: var(--dim); }
+  .bondcard .bstats { display: flex; gap: 22px; flex-wrap: wrap; margin: 12px 0 4px; font-size: 13px; }
+  .bondcard .bstats label { display: block; font-size: 9.5px; letter-spacing: .1em; font-weight: 700; color: var(--dim); margin-bottom: 2px; }
   .field label { font-size: 10px; letter-spacing: .12em; font-weight: 800; color: var(--dim); display: block; margin-bottom: 6px; }
   .field input, .field textarea { width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; color: var(--ink); padding: 11px 12px; font-size: 14px; font-family: inherit; }
   .field textarea { resize: vertical; min-height: 70px; }
@@ -1527,37 +1538,54 @@
           Your tokens move into the contract when you create the bond. You can take back
           whatever does not sell once the window closes, but nothing that has sold.
         </div>
-        <label>Token</label>
-        <select id="bdTok" onchange="bondQuote()"></select>
-        <label>Tokens to escrow</label>
-        <input id="bdAmt" placeholder="20000000" oninput="bondQuote()" autocomplete="off">
-        <label>Discount off the current price</label>
-        <select id="bdDisc" onchange="bondQuote()">
-          <option value="10">10%</option><option value="20">20%</option>
-          <option value="30">30%</option><option value="40">40%</option>
-          <option value="50" selected>50%</option><option value="60">60%</option>
-        </select>
-        <label>Sale open for</label>
-        <select id="bdSale" onchange="bondQuote()">
-          <option value="1">1 day</option><option value="3">3 days</option>
-          <option value="7" selected>7 days</option><option value="14">14 days</option>
-          <option value="30">30 days</option>
-        </select>
-        <label>Buyers vest over</label>
-        <select id="bdVest" onchange="bondQuote()">
-          <option value="1">1 day</option><option value="7">7 days</option>
-          <option value="14">14 days</option><option value="30" selected>30 days</option>
-          <option value="90">90 days</option>
-        </select>
-        <label>Release style</label>
-        <select id="bdStep" onchange="bondQuote()">
-          <option value="0" selected>Continuously</option>
-          <option value="600">Every 10 minutes</option>
-        </select>
-        <label>Max one wallet can buy (0 = no cap)</label>
-        <input id="bdCap" placeholder="0" oninput="bondQuote()" autocomplete="off">
-        <div id="bdPreview" class="finenote" style="margin:12px 0"></div>
-        <button class="btn" id="bdGo" onclick="bondCreate()">Escrow tokens and open the bond</button>
+        <div class="bdform">
+          <div class="field">
+            <label>TOKEN</label>
+            <button type="button" class="tokbtn" id="bdTok" style="width:100%;justify-content:space-between" onclick="openTokMenu('bdTok')">Select &#9662;</button>
+          </div>
+          <div class="field">
+            <label>TOKENS TO ESCROW</label>
+            <input id="bdAmt" placeholder="20000000" oninput="bondQuote()" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>DISCOUNT OFF THE CURRENT PRICE</label>
+            <select id="bdDisc" onchange="bondQuote()">
+              <option value="5">5%</option><option value="10" selected>10%</option>
+              <option value="20">20%</option><option value="30">30%</option>
+              <option value="40">40%</option><option value="50">50%</option>
+              <option value="60">60%</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>SALE OPEN FOR</label>
+            <select id="bdSale" onchange="bondQuote()">
+              <option value="1">1 day</option><option value="3">3 days</option>
+              <option value="7" selected>7 days</option><option value="14">14 days</option>
+              <option value="30">30 days</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>BUYERS VEST OVER</label>
+            <select id="bdVest" onchange="bondQuote()">
+              <option value="1">1 day</option><option value="7">7 days</option>
+              <option value="14">14 days</option><option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>RELEASE STYLE</label>
+            <select id="bdStep" onchange="bondQuote()">
+              <option value="0" selected>Continuously</option>
+              <option value="600">Every 10 minutes</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>MAX ONE WALLET CAN BUY (0 = NO CAP)</label>
+            <input id="bdCap" placeholder="0" oninput="bondQuote()" autocomplete="off">
+          </div>
+        </div>
+        <div id="bdPreview" class="finenote" style="margin:14px 0"></div>
+        <button class="btn" id="bdGo" style="width:100%" onclick="bondCreate()">Escrow tokens and open the bond</button>
       </div>
     </div>
   </section>
@@ -5250,18 +5278,19 @@ function bondPaint() {
   } else {
     rows.innerHTML = open.map((b) => `
       <div class="bondcard" style="border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:14px;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="bhead">
+          ${bondLogo(b)}
           <b style="font-size:17px">$${esc(b.sym)}</b>
           ${b.discount !== null ? `<span class="badgepill" style="background:var(--green);color:#fff">${nf(b.discount, 1)}% off</span>` : ""}
           <span style="opacity:.7;font-size:13px">releases over ${nf(b.days, 0)} day(s)${b.stepped ? ", every 10 min" : ""}</span>
           <div class="spacer"></div>
           <span style="opacity:.6;font-size:12px">closes in ${bondDur(b.endsIn)}</span>
         </div>
-        <div style="display:flex;gap:22px;flex-wrap:wrap;margin:10px 0 4px;font-size:13px">
-          <div><label style="opacity:.6">BOND PRICE</label><div>$${nf(Number(ethers.formatEther(b.bondPx)), 8)}</div></div>
-          <div><label style="opacity:.6">MARKET</label><div>$${nf(Number(ethers.formatEther(b.spot)), 8)}</div></div>
-          <div><label style="opacity:.6">BREAKEVEN</label><div>$${nf(Number(ethers.formatEther(b.bondPx)), 8)}</div></div>
-          <div><label style="opacity:.6">LEFT</label><div>${nfCompact(Number(ethers.formatEther(b.remaining)))} $${esc(b.sym)}</div></div>
+        <div class="bstats">
+          <div><label>BOND PRICE</label><div>$${nf(Number(ethers.formatEther(b.bondPx)), 8)}</div></div>
+          <div><label>MARKET</label><div>$${nf(Number(ethers.formatEther(b.spot)), 8)}</div></div>
+          <div><label>BREAKEVEN</label><div>$${nf(Number(ethers.formatEther(b.bondPx)), 8)}</div></div>
+          <div><label>LEFT</label><div>${nfCompact(Number(ethers.formatEther(b.remaining)))} $${esc(b.sym)}</div></div>
         </div>
         ${b.apr ? `<div class="finenote">${nf(b.apr, 0)}% APR <b>if the price is unchanged</b>. You receive tokens, not dollars: you are whole only while the average price across the ${nf(b.days, 0)} days stays above $${nf(Number(ethers.formatEther(b.bondPx)), 8)}.</div>` : ""}
         <div style="display:flex;gap:8px;margin-top:10px">
@@ -5285,6 +5314,16 @@ function bondPaint() {
         <button class="btn" ${b.owed > 0n ? "" : "disabled"} onclick="bondClaim(${b.id})">Claim</button>
       </div>`).join("");
   }
+}
+
+// Same source the swap picker uses, so a coin looks identical wherever it appears.
+function bondLogo(b) {
+  const t = tokens.find((x) => sameAddr(x.addr, b.token));
+  const src = t && (t.platform ? coinLogo() : safeImg(t.meta && t.meta.image)) || tokLogo(b.token);
+  const ini = esc((b.sym || "?").slice(0, 3));
+  return src
+    ? `<img src="${src}" class="blogo" loading="lazy" onerror="this.outerHTML='<span class=\\'blogo bfb\\'>${ini}</span>'">`
+    : `<span class="blogo bfb">${ini}</span>`;
 }
 
 const bondDur = (s) => s <= 0 ? "0m" : s < 3600 ? Math.round(s / 60) + "m"
@@ -5328,15 +5367,26 @@ async function bondClaim(id) {
   } catch (e) { toast(e.shortMessage || e.message, "err"); }
 }
 
+// Launchpad coins are allowed by construction; anything else has to be listed
+// on the contract, so it is not offered here.
+function bondTokenList() {
+  return tokens.filter((t) => t.padOf).map((t) => ({
+    addr: t.addr, sym: t.symbol, name: t.name, dec: 18,
+    logo: t.platform ? coinLogo() : safeImg(t.meta && t.meta.image),
+  }));
+}
+
 function bondShowCreate() {
   const el = $("bondCreate");
   el.style.display = el.style.display === "none" ? "" : "none";
-  if (el.style.display === "") {
-    const sel = $("bdTok");
-    sel.innerHTML = tokens.filter((t) => t.padOf)
-      .map((t) => `<option value="${t.addr}">$${esc(t.symbol)}</option>`).join("");
-    bondQuote();
+  if (el.style.display !== "") return;
+  if (!$("bdTok").value) {
+    const first = bondTokenList()[0];
+    if (first) $("bdTok").value = first.addr;
   }
+  tokLabel("bdTok");
+  bondQuote();
+  el.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function bondQuote() {
@@ -6146,7 +6196,10 @@ function tokRowHTML(t) {
 }
 function openTokMenu(id) {
   tokTarget = id;
-  tokAll = swBaseList();
+  // Bonds can only escrow an allowlisted token, so offering the full swap list
+  // here would let someone pick USDT0 or a custom import and get a revert at
+  // the end of a form they had already filled in.
+  tokAll = id === "bdTok" ? bondTokenList() : swBaseList();
   $("tokSearch").value = "";
   tokFilter();
   $("tokModal").classList.add("on");
@@ -6212,6 +6265,9 @@ function tokChoose(addr) {
     tokLabel("swIn"); tokLabel("swOutSel");
     $("swAmt").value = ""; $("swOut").value = ""; $("swRoute").textContent = "–"; swBest = null;
     swBalance();
+  } else if (tokTarget === "bdTok") {
+    tokLabel("bdTok");
+    bondQuote();
   } else {
     tokLabel("plA"); tokLabel("plB");
     $("plAmtA").value = $("plAmtB").value = "";
