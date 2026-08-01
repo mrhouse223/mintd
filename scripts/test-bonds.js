@@ -245,6 +245,30 @@ async function main() {
     "a bond opened at 1% still charges 1% after the owner raises the rate");
   await (await bm.setParams(100, 0, safe.address, GS)).wait();
 
+  say("\n-- launchpad coins are allowed without being listed, on BOTH pad shapes");
+  // The reason isAllowed uses a low-level staticcall: the two pads return
+  // different launches() structs, so no single interface decodes both. Only the
+  // first word is read, and `token` is the first member either way. Nothing
+  // exercised that path before, so a pad-derived allowlist that silently never
+  // matched would have shipped looking fine.
+  const padOld = await dep("MockPadOld", deployer);
+  const padNew = await dep("MockPadNew", deployer);
+  const bm2 = await dep("BondMarket", deployer, usdtAddr, safe.address, 100, 0,
+    [await padNew.getAddress(), await padOld.getAddress()]);
+  const onOld = await dep("TestToken", deployer, "Old", "OLD", 18, E(1000), deployer.address, 0, 0);
+  const onNew = await dep("TestToken", deployer, "New", "NEW", 18, E(1000), deployer.address, 0, 0);
+  const stray = await dep("TestToken", deployer, "Stray", "STRAY", 18, E(1000), deployer.address, 0, 0);
+  await (await padOld.set(await onOld.getAddress(), dev.address, GS)).wait();
+  await (await padNew.set(await onNew.getAddress(), dev.address, GS)).wait();
+  check(await bm2.isAllowed(await onOld.getAddress()), "a coin from the 7-field pad is allowed with no listing");
+  check(await bm2.isAllowed(await onNew.getAddress()), "a coin from the 8-field pad is allowed with no listing");
+  check(!(await bm2.isAllowed(await stray.getAddress())), "a coin from neither pad is still rejected");
+  check(!(await bm2.isAllowed(ethers.ZeroAddress)), "the zero address is rejected despite matching a zero struct");
+  // and it really escrows through that path, not just reports true
+  await (await onNew.approve(await bm2.getAddress(), ethers.MaxUint256, GS)).wait();
+  await (await bm2.create(await onNew.getAddress(), E(100), 50, 0, DAY, DAY, 0, 0, GS)).wait();
+  check((await bm2.bondCount()) === 1n, "and a bond can actually be created on a pad-derived token");
+
   say(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 }

@@ -47,6 +47,7 @@ const CORE = [
   // Created INTERNALLY by MintSynth, so there is no top-level creation input to
   // slice. Its two constructor arguments are its name and symbol, neither of
   // which has a setter, so they are read off the token instead.
+  ["BondMarket",        "0xD98780804449cC3b01Cd9A37fbaD808d01e24383", "BondMarket.sol",        "BondMarket",        ["address", "address", "uint256", "uint256", "address[]"]],
   ["MGLD",              "0x872a3C280B846759187c9E57F62d1Ed8407b135C", "MintSynth.sol",         "SynthToken",        ["string", "string"], "internal"],
 ];
 

@@ -1,6 +1,6 @@
 # Bonds
 
-Status: building
+Status: shipped
 Date: 2026-07-31
 
 ## What problem this solves
@@ -266,7 +266,20 @@ items were applied:
 It also found a real gap in the suite: buying twice on the same bond, the only
 place `p.claimed` is reset, was untested. Covered now, to the wei.
 
-Still to do: the frontend Bonds page, the STABLE fork test, and deploy.
+**Deployed 2026-07-31 to `0xD98780804449cC3b01Cd9A37fbaD808d01e24383`**, verified on
+stablescan. Read back on chain at deploy: feeRecipient is the Safe, feeBps 100,
+createFee 1.0 native, two pads registered, FEFER listed, zero address rejected,
+not paused, and a launchpad coin allowed with no listing. Ownership was moved to
+the Safe `0xE5F40204…` in the same run, so the deploying key holds nothing.
+
+Deployed from `OWNER_KEY`, never the compromised deployer; the script refuses
+that address outright.
+
+Allowlist as shipped: every launchpad coin (via the pads) plus FEFER. **STABLE is
+not listed** and stays off until its fork test passes. USDT0 is the quote asset
+and is not listed as bondable; one Safe call adds it if that was the intent.
+
+Still to do: the STABLE fork test, and docs copy for the Bonds page.
 
 ## Tests that must pass before deploy
 
