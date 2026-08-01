@@ -1,6 +1,6 @@
 # Bonds
 
-Status: draft
+Status: building
 Date: 2026-07-31
 
 ## What problem this solves
@@ -248,6 +248,25 @@ Cap suggestion: 300 bps.
   curve the buyer claims against, which is economically identical and costs one
   transaction.
 - Whether v1 requires the dev to lock remaining supply to list.
+
+## Build status
+
+`BondMarket.sol` and `scripts/test-bonds.js` are written and green: **47 tests,
+0 failures**, on ganache. `/security-review` has been run and returned **no HIGH
+or MEDIUM findings**; it verified conservation across the rebuy branch and the
+reentrancy ordering empirically rather than by reading. Four of its lower-severity
+items were applied:
+
+- the fee is now snapshotted per bond, so `setParams` cannot move the rate on a
+  raise a creator has already priced and advertised
+- `isAllowed(address(0))` returns false, instead of matching a pad's zero struct
+- `view_` reports zero remaining once a bond has been reclaimed
+- `addPad` emits `PadAdded` and rejects the zero address
+
+It also found a real gap in the suite: buying twice on the same bond, the only
+place `p.claimed` is reset, was untested. Covered now, to the wei.
+
+Still to do: the frontend Bonds page, the STABLE fork test, and deploy.
 
 ## Tests that must pass before deploy
 
