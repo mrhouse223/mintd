@@ -1209,6 +1209,7 @@
     <button id="nav-mintswap" onclick="go('mintswap')">Swap</button>
     <button id="nav-earn" onclick="go('earn')">Earn</button>
     <button id="nav-pools" onclick="go('pools')" style="display:none">Pools</button>
+    <button id="nav-bonds" onclick="go('bonds')" style="display:none">Bonds</button>
     <button id="nav-screener" onclick="go('screener')">Screener</button>
     <button id="nav-mintr" onclick="go('mintr')">MINTR</button>
     <button id="nav-synth" onclick="go('synth')">Gold</button>
@@ -1493,6 +1494,73 @@
         <button class="chip" onclick="loadPools()"><svg class="ic" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg> refresh</button>
       </div>
       <div id="earnLps"><div class="empty">Connect wallet to see your LP positions.</div></div>
+    </div>
+  </section>
+
+  <!-- BONDS -->
+  <section class="view" id="view-bonds">
+    <div class="launchC" style="max-width:1000px">
+      <div class="heroC" style="margin:28px auto 20px">
+        <div class="badgepill">BONDS</div>
+        <h1 style="font-size:38px">Raise without dumping</h1>
+        <p>Escrow tokens, sell them at a discount for <span class="paySymTxt">USDT0</span>, and let buyers vest in over time.
+           The tokens sit in the contract before anyone pays, and only the unsold remainder can come back to you.</p>
+      </div>
+
+      <div class="trade" style="margin-bottom:18px">
+        <div class="mkthead">
+          <h2>Open bonds</h2>
+          <div class="spacer"></div>
+          <button class="chip" onclick="bondLoad(true)">Refresh</button>
+          <button class="btn" onclick="bondShowCreate()">Create a bond</button>
+        </div>
+        <div id="bondNote" class="finenote" style="margin-bottom:10px"></div>
+        <div id="bondRows"><div class="empty">Loading…</div></div>
+      </div>
+
+      <div class="trade" id="bondMine" style="margin-bottom:18px;display:none">
+        <div class="mkthead"><h2>Your positions</h2></div>
+        <div id="bondMineRows"></div>
+      </div>
+
+      <div class="trade" id="bondCreate" style="display:none">
+        <div class="mkthead"><h2>Create a bond</h2></div>
+        <div class="finenote" style="margin-bottom:12px">
+          Your tokens move into the contract when you create the bond. You can take back
+          whatever does not sell once the window closes, but nothing that has sold.
+        </div>
+        <label>Token</label>
+        <select id="bdTok" onchange="bondQuote()"></select>
+        <label>Tokens to escrow</label>
+        <input id="bdAmt" placeholder="20000000" oninput="bondQuote()" autocomplete="off">
+        <label>Discount off the current price</label>
+        <select id="bdDisc" onchange="bondQuote()">
+          <option value="10">10%</option><option value="20">20%</option>
+          <option value="30">30%</option><option value="40">40%</option>
+          <option value="50" selected>50%</option><option value="60">60%</option>
+        </select>
+        <label>Sale open for</label>
+        <select id="bdSale" onchange="bondQuote()">
+          <option value="1">1 day</option><option value="3">3 days</option>
+          <option value="7" selected>7 days</option><option value="14">14 days</option>
+          <option value="30">30 days</option>
+        </select>
+        <label>Buyers vest over</label>
+        <select id="bdVest" onchange="bondQuote()">
+          <option value="1">1 day</option><option value="7">7 days</option>
+          <option value="14">14 days</option><option value="30" selected>30 days</option>
+          <option value="90">90 days</option>
+        </select>
+        <label>Release style</label>
+        <select id="bdStep" onchange="bondQuote()">
+          <option value="0" selected>Continuously</option>
+          <option value="600">Every 10 minutes</option>
+        </select>
+        <label>Max one wallet can buy (0 = no cap)</label>
+        <input id="bdCap" placeholder="0" oninput="bondQuote()" autocomplete="off">
+        <div id="bdPreview" class="finenote" style="margin:12px 0"></div>
+        <button class="btn" id="bdGo" onclick="bondCreate()">Escrow tokens and open the bond</button>
+      </div>
     </div>
   </section>
 
@@ -2467,6 +2535,7 @@ const CHAINS = {
       router: "0x32eaf9B5d5F2CD7361c5012890C943D7de84C22a",   // SwapRouter02
       quoter: "0xb070179E7032CdA868b53e6C1742F80c9e940d1A",   // QuoterV2
       npm: "0x3BdC3437405f7D801b6036532713fc1F179136a6",      // NonfungiblePositionManager
+      bondMarket: null,   // BondMarket, set on deploy. features.bonds stays false until then
       usdt0: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",    // gas token as a 6-dec ERC-20
     },
     mintd: {
@@ -2511,7 +2580,7 @@ const CHAINS = {
     },
     // holders: the standing board only exists for MINTD on Stable, which is
     // the only token the ledger indexes.
-    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, pools: true, screener: true, holders: true, agent: false },
+    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, pools: true, screener: true, holders: true, agent: false, bonds: false },
     statsFile: "stats.json",
     // Dexscreener's chain slug. Only Stable is indexed by them: a token
     // lookup for the live ARCS returns pairs:null and the "arc" slug 400s, so
@@ -3205,6 +3274,9 @@ async function route() {
     if (isSoon("earn")) return; // placeholder tab: no contracts to read
     if (!tokens.length && padAddr()) await loadAll();
     loadFarm(); loadFeePools(); loadPools(); seLoad();
+  } else if (h === "bonds") {
+    showView("bonds");
+    bondLoad();
   } else if (h === "pools") {
     // On a chain where Pools is a placeholder tab it gets its own view. Without
     // this the retirement redirect below sends it to Earn, so clicking Pools
@@ -3281,7 +3353,7 @@ function applyChainUi() {
   const map = { "nav-launch": "launch", "nav-mintswap": "swap", "nav-earn": "earn",
                 "nav-mintr": "mintr", "nav-synth": "gold", "nav-locker": "locker", "nav-burn": "burn",
                 "nav-screener": "screener", "nav-bridge": "bridge", "nav-holders": "holders",
-                "nav-pools": "pools",
+                "nav-pools": "pools", "nav-bonds": "bonds",
                 "nav-agent": "agent" };
   // A "soon" tab is shown even though its feature is off. The feature flag still
   // reads false everywhere else, so nothing tries to talk to a contract that is
@@ -5088,6 +5160,235 @@ async function devSellAll() {
     prog.textContent = "Could not price the sell: " + (e.shortMessage || e.message);
     btn.disabled = false; btn.textContent = "Sell claimed tokens";
   }
+}
+
+/* ------------------------------------------------------------------ bonds */
+const BOND_ABI = [
+  "function bondCount() view returns (uint256)",
+  "function bonds(uint256) view returns (address token, address creator, uint128 escrowed, uint128 sold, uint128 price, uint128 walletCap, uint64 saleStart, uint64 saleEnd, uint32 vestDuration, uint32 vestStep, uint16 feeBps, bool reclaimed)",
+  "function positions(uint256, address) view returns (uint128 total, uint128 claimed, uint128 bought, uint64 start)",
+  "function claimable(uint256, address) view returns (uint256)",
+  "function isAllowed(address) view returns (bool)",
+  "function createFee() view returns (uint256)",
+  "function create(address,uint256,uint128,uint32,uint32,uint32,uint32,uint128) payable returns (uint256)",
+  "function buy(uint256,uint256,uint256) returns (uint256)",
+  "function claim(uint256) returns (uint256)",
+  "function reclaim(uint256) returns (uint256)",
+];
+let bondList = [];
+
+// SIMPLE APR OVER THE TERM, and nothing else.
+//
+// The same 50%-off-over-30-days bond is 1,217%, 2,355%, 460,000% or about
+// 1,000,000,000% depending only on which convention you pick, all arithmetically
+// correct. Printing the biggest is not generosity, it is a claim this project
+// would have to walk back. So: one convention, stated, with its assumption
+// attached, and never without the breakeven price beside it.
+function bondApr(discountPct, days) {
+  if (!(discountPct > 0) || !(days > 0) || discountPct >= 100) return null;
+  const gain = discountPct / (100 - discountPct); // pay (100-d), receive 100
+  return gain * (365 / days) * 100;
+}
+
+async function bondLoad(force) {
+  const rows = $("bondRows"), note = $("bondNote");
+  const addr = NET.mintd.bondMarket;
+  if (!addr) {
+    rows.innerHTML = `<div class="empty">Bonds are not deployed on ${esc(NET.label)} yet.</div>`;
+    note.textContent = "";
+    return;
+  }
+  if (!pad) await init();
+  if (force || !tokens.length) await loadAll();
+  rows.innerHTML = `<div class="empty">Loading…</div>`;
+  try {
+    const c = new ethers.Contract(addr, BOND_ABI, rp);
+    const n = Number(await retryRead(() => c.bondCount()));
+    bondList = [];
+    // Sequential: gotcha 1, two concurrent reads in one tick get batched and
+    // Stable rejects the whole array.
+    for (let i = 0; i < n; i++) {
+      let b;
+      try { b = await retryRead(() => c.bonds(i)); } catch { continue; }
+      const t = tokens.find((x) => sameAddr(x.addr, b.token));
+      let owed = 0n, mine = null;
+      if (wallet) {
+        try { owed = await c.claimable(i, wallet); } catch {}
+        try { mine = await c.positions(i, wallet); } catch {}
+      }
+      bondList.push({ id: i, ...bondRow(b, t), raw: b, owed, mine });
+    }
+    bondPaint();
+  } catch (e) {
+    rows.innerHTML = `<div class="empty">Could not load bonds: ${esc(e.shortMessage || e.message)}</div>`;
+  }
+}
+
+// Everything a card shows, derived once.
+function bondRow(b, t) {
+  const remaining = b.reclaimed ? 0n : b.escrowed - b.sold;
+  // price is quote units (6-dec) per 1e18 tokens, so this is USD per token in 1e18.
+  const bondPx = (BigInt(b.price) * 10n ** 12n);
+  const spot = t ? t.price : 0n;
+  const discount = spot > 0n ? Number(((spot - bondPx) * 10000n) / spot) / 100 : null;
+  const days = Number(b.vestDuration) / 86400;
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    token: b.token, sym: t ? t.symbol : b.token.slice(0, 8) + "…",
+    creator: b.creator, remaining, bondPx, spot, discount, days,
+    apr: discount !== null ? bondApr(discount, days) : null,
+    open: now >= Number(b.saleStart) && now < Number(b.saleEnd) && remaining > 0n,
+    startsIn: Number(b.saleStart) - now, endsIn: Number(b.saleEnd) - now,
+    stepped: Number(b.vestStep) > 1,
+  };
+}
+
+function bondPaint() {
+  const rows = $("bondRows"), note = $("bondNote");
+  const open = bondList.filter((b) => b.open);
+  if (!open.length) {
+    rows.innerHTML = `<div class="empty">No bonds are open right now.</div>`;
+  } else {
+    rows.innerHTML = open.map((b) => `
+      <div class="bondcard" style="border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:14px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <b style="font-size:17px">$${esc(b.sym)}</b>
+          ${b.discount !== null ? `<span class="badgepill" style="background:var(--green);color:#fff">${nf(b.discount, 1)}% off</span>` : ""}
+          <span style="opacity:.7;font-size:13px">releases over ${nf(b.days, 0)} day(s)${b.stepped ? ", every 10 min" : ""}</span>
+          <div class="spacer"></div>
+          <span style="opacity:.6;font-size:12px">closes in ${bondDur(b.endsIn)}</span>
+        </div>
+        <div style="display:flex;gap:22px;flex-wrap:wrap;margin:10px 0 4px;font-size:13px">
+          <div><label style="opacity:.6">BOND PRICE</label><div>$${nf(Number(ethers.formatEther(b.bondPx)), 8)}</div></div>
+          <div><label style="opacity:.6">MARKET</label><div>$${nf(Number(ethers.formatEther(b.spot)), 8)}</div></div>
+          <div><label style="opacity:.6">BREAKEVEN</label><div>$${nf(Number(ethers.formatEther(b.bondPx)), 8)}</div></div>
+          <div><label style="opacity:.6">LEFT</label><div>${nfCompact(Number(ethers.formatEther(b.remaining)))} $${esc(b.sym)}</div></div>
+        </div>
+        ${b.apr ? `<div class="finenote">${nf(b.apr, 0)}% APR <b>if the price is unchanged</b>. You receive tokens, not dollars: you are whole only while the average price across the ${nf(b.days, 0)} days stays above $${nf(Number(ethers.formatEther(b.bondPx)), 8)}.</div>` : ""}
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <input id="bdBuy${b.id}" placeholder="0.00 ${esc(quoteTicker())}" autocomplete="off" style="max-width:180px">
+          <button class="btn" onclick="bondBuy(${b.id})">Buy</button>
+        </div>
+      </div>`).join("");
+  }
+  note.innerHTML = `A bond is a bet on the token, not a yield product. `
+    + `The discount is your only cushion, and the creator can still sell their own supply while you vest.`;
+
+  const mine = bondList.filter((b) => b.mine && b.mine.total > 0n);
+  $("bondMine").style.display = mine.length ? "" : "none";
+  if (mine.length) {
+    $("bondMineRows").innerHTML = mine.map((b) => `
+      <div style="display:flex;align-items:center;gap:12px;border-top:1px solid rgba(255,255,255,.06);padding:10px 0">
+        <b>$${esc(b.sym)}</b>
+        <span style="opacity:.7;font-size:13px">${nfCompact(Number(ethers.formatEther(b.mine.total - b.mine.claimed)))} still to come</span>
+        <div class="spacer"></div>
+        <span style="font-size:13px">${nf(Number(ethers.formatEther(b.owed)), 4)} claimable</span>
+        <button class="btn" ${b.owed > 0n ? "" : "disabled"} onclick="bondClaim(${b.id})">Claim</button>
+      </div>`).join("");
+  }
+}
+
+const bondDur = (s) => s <= 0 ? "0m" : s < 3600 ? Math.round(s / 60) + "m"
+  : s < 86400 ? Math.round(s / 3600) + "h" : Math.round(s / 86400) + "d";
+
+async function bondBuy(id) {
+  if (!signer) return connect();
+  const el = $("bdBuy" + id);
+  const v = el && el.value;
+  if (!v || Number(v) <= 0) return toast("Enter an amount", "err");
+  const b = bondList.find((x) => x.id === id);
+  const amt = ethers.parseUnits(String(v), 6);
+  try {
+    const q = new ethers.Contract(ADDR.usdt0, ERC20_ABI, signer);
+    if ((await q.allowance(wallet, NET.mintd.bondMarket)) < amt) {
+      toast("Approving " + quoteTicker() + "…");
+      await (await q.approve(NET.mintd.bondMarket, ethers.MaxUint256)).wait();
+    }
+    const c = new ethers.Contract(NET.mintd.bondMarket, BOND_ABI, signer);
+    // minTokens at 100%: the price is fixed, so the only way to receive less
+    // than quoted is the bond selling out underneath you, which should revert
+    // rather than silently fill smaller.
+    const expect = (amt * 10n ** 18n) / BigInt(b.raw.price);
+    const tx = await c.buy(id, amt, expect);
+    toast("Transaction sent…");
+    await tx.wait();
+    toast("Bought $" + b.sym + " bond", "ok");
+    bondLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function bondClaim(id) {
+  if (!signer) return connect();
+  try {
+    const c = new ethers.Contract(NET.mintd.bondMarket, BOND_ABI, signer);
+    const tx = await c.claim(id);
+    toast("Transaction sent…");
+    await tx.wait();
+    toast("Claimed", "ok");
+    bondLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+function bondShowCreate() {
+  const el = $("bondCreate");
+  el.style.display = el.style.display === "none" ? "" : "none";
+  if (el.style.display === "") {
+    const sel = $("bdTok");
+    sel.innerHTML = tokens.filter((t) => t.padOf)
+      .map((t) => `<option value="${t.addr}">$${esc(t.symbol)}</option>`).join("");
+    bondQuote();
+  }
+}
+
+function bondQuote() {
+  const t = tokens.find((x) => sameAddr(x.addr, $("bdTok").value));
+  const amt = Number($("bdAmt").value || 0);
+  const disc = Number($("bdDisc").value);
+  const vest = Number($("bdVest").value);
+  const el = $("bdPreview");
+  if (!t || !(amt > 0)) { el.textContent = "Enter an amount to see the terms."; return; }
+  const spot = Number(ethers.formatEther(t.price));
+  const px = spot * (100 - disc) / 100;
+  const raise = amt * px;
+  const apr = bondApr(disc, vest);
+  el.innerHTML = `You escrow <b>${nfCompact(amt)} $${esc(t.symbol)}</b> (worth $${nf(amt * spot, 2)} now) `
+    + `and raise up to <b>$${nf(raise, 2)}</b>, less the 1% fee, so about <b>$${nf(raise * 0.99, 2)}</b> to you.<br>`
+    + `Buyers pay $${nf(px, 8)} a token and break even at that price. `
+    + (apr ? `The page will show this as <b>${nf(apr, 0)}% APR if the price is unchanged</b>.` : "");
+}
+
+async function bondCreate() {
+  if (!signer) return connect();
+  const t = tokens.find((x) => sameAddr(x.addr, $("bdTok").value));
+  const amt = $("bdAmt").value;
+  if (!t || !amt || Number(amt) <= 0) return toast("Pick a token and an amount", "err");
+  const disc = Number($("bdDisc").value);
+  const btn = $("bdGo");
+  btn.disabled = true;
+  try {
+    const c = new ethers.Contract(NET.mintd.bondMarket, BOND_ABI, signer);
+    // price is quote units per 1e18 tokens: spot is USD 1e18, so scale down by
+    // 1e12 to reach 6-dec USDT0. Getting this wrong is a 1,000,000x mispricing.
+    const price = (t.price * BigInt(100 - disc)) / 100n / 10n ** 12n;
+    if (price <= 0n) throw new Error("price rounds to zero, the token is too cheap for a bond");
+    const tok = new ethers.Contract(t.addr, ERC20_ABI, signer);
+    const amtRaw = E(amt);
+    if ((await tok.allowance(wallet, NET.mintd.bondMarket)) < amtRaw) {
+      toast("Approving $" + t.symbol + "…");
+      await (await tok.approve(NET.mintd.bondMarket, ethers.MaxUint256)).wait();
+    }
+    const fee = await c.createFee();
+    const cap = $("bdCap").value ? E($("bdCap").value) : 0n;
+    const tx = await c.create(t.addr, amtRaw, price, 0,
+      Number($("bdSale").value) * 86400, Number($("bdVest").value) * 86400,
+      Number($("bdStep").value), cap, { value: fee });
+    toast("Transaction sent…");
+    await tx.wait();
+    toast("Bond created", "ok");
+    $("bondCreate").style.display = "none";
+    bondLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+  finally { btn.disabled = false; }
 }
 
 /* ------------------------------------------------------------ market data */
