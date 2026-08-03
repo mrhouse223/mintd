@@ -517,14 +517,20 @@
   /* Numbers get their own boxes. A row of bare text made the market price and
      the bond price look like the same field. */
   .bondcard { border: 1px solid var(--line, rgba(127,127,127,.18)); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
-  .bondcard .bgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 14px 0 12px; }
-  .bondcard .bbox { border: 1px solid var(--line, rgba(127,127,127,.16)); border-radius: 10px; padding: 10px 12px; }
-  .bondcard .bbox label { display: block; font-size: 9px; letter-spacing: .11em; font-weight: 800;
-                          color: var(--dim); margin-bottom: 5px; white-space: nowrap; }
-  .bondcard .bbox b { font-size: 15px; font-weight: 700; display: block; line-height: 1.25; }
-  .bondcard .bbox small { display: block; font-size: 10.5px; color: var(--dim); margin-top: 2px; }
+  /* Generic, not scoped to one card. These were .bondcard-only and the agents
+     page reused the markup, so every stat rendered as a run-on line of text. */
+  .bgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 14px 0 12px; }
+  .bbox { border: 1px solid var(--line, rgba(127,127,127,.16)); border-radius: 10px; padding: 10px 12px; }
+  .bbox label { display: block; font-size: 9px; letter-spacing: .11em; font-weight: 800;
+                color: var(--dim); margin-bottom: 5px; white-space: nowrap; }
+  .bbox b { font-size: 15px; font-weight: 700; display: block; line-height: 1.25; }
+  .bbox small { display: block; font-size: 10.5px; color: var(--dim); margin-top: 2px; }
   .bondcard .bbar { height: 6px; border-radius: 99px; background: var(--line, rgba(127,127,127,.18)); overflow: hidden; margin: 2px 0 12px; }
   .bondcard .bbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--green), var(--green2)); }
+  .agcard { border: 1px solid var(--line, rgba(127,127,127,.18)); border-radius: 14px; padding: 18px; margin-bottom: 14px; }
+  .agcard .aghead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .agcard .aghead b { font-size: 18px; }
+  .agcard .bgrid { margin-top: 14px; }
   .bchip { font-size: 10px; font-weight: 800; letter-spacing: .08em; padding: 4px 9px; border-radius: 99px; }
   .bchip.on  { background: var(--green); color: #fff; }
   .bchip.off { background: var(--line, rgba(127,127,127,.2)); color: var(--dim); }
@@ -1234,6 +1240,7 @@
     <button id="nav-mintswap" onclick="go('mintswap')">Swap</button>
     <button id="nav-earn" onclick="go('earn')">Earn</button>
     <button id="nav-bonds" onclick="go('bonds')" style="display:none">Bonds</button>
+    <button id="nav-agents" onclick="go('agents')" style="display:none">Agents</button>
     <button id="nav-pools" onclick="go('pools')" style="display:none">Pools</button>
     <button id="nav-mintr" onclick="go('mintr')">MINTR</button>
     <button id="nav-synth" onclick="go('synth')">Gold</button>
@@ -1518,6 +1525,62 @@
         <button class="chip" onclick="loadPools()"><svg class="ic" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg> refresh</button>
       </div>
       <div id="earnLps"><div class="empty">Connect wallet to see your LP positions.</div></div>
+    </div>
+  </section>
+
+  <!-- MINTD AGENTS -->
+  <section class="view" id="view-agents">
+    <div class="launchC" style="max-width:1040px">
+      <div class="heroC" style="margin:28px auto 20px">
+        <div class="badgepill">MINTD AGENTS</div>
+        <h1 style="font-size:38px">Contracts that run themselves.</h1>
+        <p>Rules that execute on a schedule instead of when somebody remembers. Every action is a
+           transaction you can check, and every agent below states plainly whether it is actually running.</p>
+      </div>
+
+      <div class="agcard" id="agRes">
+        <div class="aghead">
+          <b>Reservoir</b>
+          <span class="bchip off" id="agResChip">CHECKING…</span>
+          <div class="spacer"></div>
+          <a class="finenote" id="agResLink" target="_blank" rel="noopener">contract ↗</a>
+        </div>
+        <p class="finenote" style="margin:6px 0 0">
+          Collects protocol fees in <span class="paySymTxt">USDT0</span> and spends them buying $MINTD,
+          which goes straight to the burn address. The contract has no owner and no withdrawal path:
+          the only thing it can do with a balance is buy $MINTD and destroy it.
+        </p>
+        <div class="bgrid" id="agResStats"></div>
+        <div class="finenote" id="agResNote"></div>
+      </div>
+
+      <div class="agcard">
+        <div class="aghead">
+          <b>Liquidity vault</b>
+          <span class="bchip soon">BUILT, NOT DEPLOYED</span>
+          <div class="spacer"></div>
+          <button class="chip" onclick="go('agent')">Open ↗</button>
+        </div>
+        <p class="finenote" style="margin:6px 0 0">
+          Holds one Uniswap V3 position and rebalances it. The agent proposes <b>timing only</b>: every
+          value-carrying number is derived from a TWAP inside the vault, so a stolen keeper key can
+          waste gas but cannot choose an execution price, a venue or a range.
+        </p>
+      </div>
+
+      <div class="agcard">
+        <div class="aghead">
+          <b>Run one for your own coin</b>
+          <span class="bchip off">NOT DEPLOYED</span>
+        </div>
+        <p class="finenote" style="margin:6px 0 0">
+          The same reservoir, per token, switched on and off by whoever launched the coin. It needs two
+          things that do not exist yet: a burner deployed for your token, and a creator-gated registry
+          the keeper reads to know whose agent is on. Both are specced in
+          <a href="https://github.com/mrhouse223/mintd/blob/main/docs/plans/reservoir-agent.md" target="_blank" rel="noopener">the plan</a>.
+          It is listed here so the roadmap is visible, not because it is one click away.
+        </p>
+      </div>
     </div>
   </section>
 
@@ -2589,6 +2652,7 @@ const CHAINS = {
       pad: "0xCe7b02b3f0e5665f1C23E018039e9b6836c6221b",
       oldPad: "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0",
       bondMarket: "0xD98780804449cC3b01Cd9A37fbaD808d01e24383",  // BondMarket, owner is the Safe
+      burner: "0x7F007fbc6061806888A39A79763808aF5B94F4f4",       // BuybackBurner, no owner, buy-and-burn only
       mintd: "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       mintr: "0x8817D05f2560189F3697028f639Dbb4C68688400",
       synth: "0x09Eb7D9B18e56270F8898C4f3Ac3F2dc99F3b213",
@@ -2622,7 +2686,7 @@ const CHAINS = {
     },
     // holders: the standing board only exists for MINTD on Stable, which is
     // the only token the ledger indexes.
-    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, pools: true, screener: true, holders: true, agent: false, bonds: true },
+    features: { launch: true, swap: true, earn: true, mintr: true, gold: true, locker: true, burn: true, pools: true, screener: true, holders: true, agent: false, bonds: true, agents: true },
     statsFile: "stats.json",
     // Dexscreener's chain slug. Only Stable is indexed by them: a token
     // lookup for the live ARCS returns pairs:null and the "arc" slug 400s, so
@@ -3316,6 +3380,9 @@ async function route() {
     if (isSoon("earn")) return; // placeholder tab: no contracts to read
     if (!tokens.length && padAddr()) await loadAll();
     loadFarm(); loadFeePools(); loadPools(); seLoad();
+  } else if (h === "agents") {
+    showView("agents");
+    agentsLoad();
   } else if (h === "bonds") {
     showView("bonds");
     bondLoad();
@@ -3395,7 +3462,7 @@ function applyChainUi() {
   const map = { "nav-launch": "launch", "nav-mintswap": "swap", "nav-earn": "earn",
                 "nav-mintr": "mintr", "nav-synth": "gold", "nav-locker": "locker", "nav-burn": "burn",
                 "nav-screener": "screener", "nav-bridge": "bridge", "nav-holders": "holders",
-                "nav-pools": "pools", "nav-bonds": "bonds",
+                "nav-pools": "pools", "nav-bonds": "bonds", "nav-agents": "agents",
                 "nav-agent": "agent" };
   // A "soon" tab is shown even though its feature is off. The feature flag still
   // reads false everywhere else, so nothing tries to talk to a contract that is
@@ -5201,6 +5268,69 @@ async function devSellAll() {
     dvSellPlan = null;
     prog.textContent = "Could not price the sell: " + (e.shortMessage || e.message);
     btn.disabled = false; btn.textContent = "Sell claimed tokens";
+  }
+}
+
+/* ------------------------------------------------------------ mintd agents */
+const BURNER_ABI = [
+  "function pending() view returns (uint256)",
+  "function totalUsdtSpent() view returns (uint256)",
+  "function totalMintdBurned() view returns (uint256)",
+];
+
+async function agentsLoad() {
+  const addr = NET.mintd && NET.mintd.burner;
+  const stats = $("agResStats"), chip = $("agResChip"), note = $("agResNote");
+  const link = $("agResLink");
+  if (!addr) {
+    chip.textContent = "NOT ON THIS CHAIN";
+    stats.innerHTML = "";
+    note.textContent = "";
+    return;
+  }
+  link.href = NET.chain.blockExplorerUrls[0] + "/address/" + addr + "#code";
+  try {
+    const c = new ethers.Contract(addr, BURNER_ABI, rp);
+    // Sequential: gotcha 1, concurrent reads get batched and Stable rejects them.
+    const pending = await retryRead(() => c.pending());
+    const spent = await retryRead(() => c.totalUsdtSpent());
+    const burned = await retryRead(() => c.totalMintdBurned());
+
+    // The dead address holds burns from EVERY source, not just this contract.
+    // Reporting that total as the agent's work would overstate it by 200x.
+    let dead = 0n, supply = 0n;
+    try {
+      const m = new ethers.Contract(MINTD_ADDR, ERC20_ABI, rp);
+      dead = await retryRead(() => m.balanceOf("0x000000000000000000000000000000000000dEaD"));
+      supply = await retryRead(() => m.totalSupply());
+    } catch {}
+
+    const burnedN = Number(ethers.formatEther(burned));
+    const spentN = Number(ethers.formatUnits(spent, 6));
+    const avg = burnedN > 0 ? spentN / burnedN : 0;
+
+    // The contract is live and has burned before, but nothing calls it on a
+    // schedule. Saying "ACTIVE" here would be the claim, not the fact.
+    chip.textContent = "LIVE, RUNS MANUALLY";
+    chip.className = "bchip soon";
+
+    stats.innerHTML = `
+      <div class="bbox"><label>RESERVOIR</label><b>$${nf(Number(ethers.formatUnits(pending, 6)), 2)}</b><small>waiting to be spent</small></div>
+      <div class="bbox"><label>SPENT ON BUYBACKS</label><b>$${nf(spentN, 2)}</b><small>all time</small></div>
+      <div class="bbox"><label>MINTD BURNED HERE</label><b>${nfCompact(burnedN)}</b><small>by this contract</small></div>
+      <div class="bbox"><label>AVG BURN PRICE</label><b>$${avg ? avg.toExponential(2) : "–"}</b><small>paid per MINTD</small></div>
+      <div class="bbox"><label>BURNED, ALL SOURCES</label><b>${nfCompact(Number(ethers.formatEther(dead)))}</b><small>${supply > 0n ? nf(Number(ethers.formatEther(dead)) / Number(ethers.formatEther(supply)) * 100, 2) + "% of supply" : ""}</small></div>`;
+
+    const pctOfDead = dead > 0n ? (burnedN / Number(ethers.formatEther(dead))) * 100 : 0;
+    note.innerHTML = `Two different numbers, kept apart on purpose. `
+      + `<b>${nfCompact(burnedN)}</b> MINTD is what this contract has bought and burned; `
+      + `<b>${nfCompact(Number(ethers.formatEther(dead)))}</b> is everything at the burn address from every source, `
+      + `of which the buyback is <b>${nf(pctOfDead, 2)}%</b>. `
+      + `Nothing calls it on a schedule yet, so it fires when someone triggers it.`;
+  } catch (e) {
+    chip.textContent = "UNREADABLE";
+    stats.innerHTML = "";
+    note.textContent = "Could not read the burner: " + (e.shortMessage || e.message);
   }
 }
 

@@ -152,6 +152,33 @@ The agent holds no funds and has no privileges, so stopping it is `pm2 stop` and
 nothing is stranded. The buyback returns to manual, which is where it is today.
 No contract is deployed in v1, so there is nothing immutable to regret.
 
+## Per-project agents (the multi-tenant half)
+
+The ask is that any launched coin can switch the same reservoir on and off. Two
+pieces are missing, and neither is a frontend change.
+
+**A burner per token.** `BuybackBurner` is immutable with MINTD hardcoded, so it
+cannot serve another coin. Other projects need a `TokenBurner` (same shape: no
+owner, no withdrawal, buy-and-burn only) deployed one per token by a factory, so
+`isBurner(x)` is what proves an address is a real one rather than a lookalike
+pointing at a hostile router. `AgentVaultFactory` is the existing precedent.
+
+**A creator-gated registry.** The keeper has to learn whose agent is on without
+anyone maintaining a list by hand. `TokenMetaRegistry` already does exactly this
+shape: no owner at all, `pads` fixed at construction, writes gated on
+`creatorOf()`. An `AgentRegistry` copies it: the creator of a launchpad token can
+set `enabled`, the burner address, and the sizing caps for their own token and
+nobody else's.
+
+**The part that has no clean answer yet.** A creator cannot redirect their fee
+stream on chain. `claimFees` pays `launches[token].creator`, and there is no
+setter for it, so a creator cannot point their fees at a burner the way MINTR and
+MintSynth do. Their options are to fund the burner by hand, or to have launched
+with the burner as the creator address in the first place, which nobody did.
+Until that is solved, a per-project agent only spends what its creator remembers
+to send it, which is the same "runs when somebody remembers" problem this plan
+exists to remove. **Worth solving before building the registry, not after.**
+
 ## v2, only if v1 earns it
 
 A reservoir contract that can hold both legs, sell on overextension, mint and
