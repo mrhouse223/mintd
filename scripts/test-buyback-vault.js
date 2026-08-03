@@ -121,7 +121,7 @@ async function main() {
   check((await v.balances())[0] === U(541.5), "next slice is 5% of the NEW balance");
 
   say("\n-- the price floor comes from the TWAP, not the caller");
-  const minOut = await v.previewMinOut(U(100));
+  const minOut = await v.previewMinOut(usdtA, U(100));
   // 100 USDT0 at 0.001 per COIN = 100,000 COIN, less the 2% default tolerance
   // (1% pool fee + 1%), so ~98,000.
   check(minOut > E(97_900) && minOut <= E(98_000), `minOut tracks the TWAP (${ethers.formatEther(minOut)})`);
@@ -158,15 +158,15 @@ async function main() {
   // balance check runs before the oracle read, so an empty vault would revert
   // for the wrong reason and prove nothing about the oracle.
   await (await pool.setNewestObs(1, GS)).wait();          // newest observation is ancient
-  await reverts(() => v.previewMinOut(U(100)), "a pool with no recent observation is refused", "stale oracle");
+  await reverts(() => v.previewMinOut(usdtA, U(100)), "a pool with no recent observation is refused", "stale oracle");
   await warp(700);
   await reverts(() => v.connect(keeper).execute.staticCall(), "and execute() refuses too, rather than buying at spot", "stale oracle");
   await (await pool.setCardinality(1, GS)).wait();
   await (await pool.setNewestObs(Math.floor(Date.now() / 1000) + 3600, GS)).wait();
-  await reverts(() => v.previewMinOut(U(100)), "a single-slot oracle is refused as unarmed", "oracle unarmed");
+  await reverts(() => v.previewMinOut(usdtA, U(100)), "a single-slot oracle is refused as unarmed", "oracle unarmed");
   await (await pool.setCardinality(64, GS)).wait();
   await (await pool.setTick(TICK, GS)).wait();            // restamps freshness
-  check((await v.previewMinOut(U(100))) > 0n, "a fresh, armed oracle works again");
+  check((await v.previewMinOut(usdtA, U(100))) > 0n, "a fresh, armed oracle works again");
 
   say("\n-- owner bounds are enforced");
   await reverts(() => v.connect(ownerS).setParams.staticCall(2501, 100, 1800, 600), "slice cap enforced", "slice");
@@ -194,6 +194,106 @@ async function main() {
   const expect = (spent * (10n ** 18n) * 1000n) / (10n ** 6n);
   const drift = Number(gained * 10000n / expect) / 100;
   check(drift > 99.5 && drift <= 100, `${ethers.formatUnits(spent, 6)} USDT0 buys ${ethers.formatEther(gained)} COIN, ${drift}% of expected, no 1e12 error`);
+
+  say("\n-- SELLING ON A PUMP");
+  await (await v.connect(ownerS).withdrawAll(GS)).wait();
+  await (await v.connect(ownerS).deposit(U(1000), GS)).wait();
+  await (await pool.setTick(TICK, GS)).wait();
+  // A balanced vault must not be churned: selling needs the token leg to be
+  // worth at least 2x the quote leg. One buy first, so the vault HOLDS token
+  // and the overweight rule is what rejects it rather than an empty balance.
+  await warp(700); await (await pool.setTick(TICK, GS)).wait();
+  await (await v.connect(keeper).execute(GS)).wait();
+  await warp(700); await (await pool.setTick(TICK, GS)).wait();
+  await reverts(() => v.connect(keeper).executeSell.staticCall(), "cannot sell an underweight vault", "not overweight");
+
+  // Convert most of the vault into the token so it IS overweight.
+  await (await v.connect(ownerS).setParams(2500, 300, 600, 60, GS)).wait();
+  for (let i = 0; i < 8; i++) {
+    await warp(120); await (await pool.setTick(TICK, GS)).wait();
+    await (await v.connect(keeper).execute(GS)).wait();
+  }
+  const [qh, th] = await v.balances();
+  check(th > 0n && qh < U(200), `vault is now token-heavy (${ethers.formatUnits(qh, 6)} USDT0 left)`);
+
+  await warp(120); await (await pool.setTick(TICK, GS)).wait();
+  const qPre = (await v.balances())[0];
+  const srec = await (await v.connect(keeper).executeSell(GS)).wait();
+  const sev = srec.logs.map((l) => { try { return v.interface.parseLog(l); } catch { return null; } })
+                       .find((x) => x && x.name === "Executed");
+  check(sev && sev.args.isBuy === false, "sell emits an Executed with isBuy false");
+  check((await v.balances())[0] > qPre, "selling returns USDT0 to the vault");
+  check((await v.balances())[1] < th, "and reduces the token leg");
+
+  say("\n-- the breaker stops a keeper round-tripping the vault to death");
+  // Buy-only was self-limiting: each unit could be converted once. With a sell
+  // path a compromised keeper can cycle forever, losing the fee and the
+  // tolerance on every leg. The drawdown breaker is what bounds that, so it has
+  // to be demonstrated rather than asserted.
+  await (await router.setDiscount(300, GS)).wait();   // every leg gives up 3%
+  const startVal = await v.valueAtTwap();
+  let cycles = 0, tripped = false;
+  for (let i = 0; i < 40 && !tripped; i++) {
+    await warp(120); await (await pool.setTick(TICK, GS)).wait();
+    const fn = i % 2 === 0 ? "execute" : "executeSell";
+    // staticCall FIRST for the reason string. A sent transaction with an
+    // explicit gasLimit skips estimation and reverts with no reason at all,
+    // which is gotcha 8 in reverse: the failure is real but unreadable.
+    try { await v.connect(keeper)[fn].staticCall(); }
+    catch (e) {
+      if ((e.shortMessage || e.message).includes("drawdown")) { tripped = true; break; }
+      continue; // empty leg or not overweight, try the other direction
+    }
+    await (await v.connect(keeper)[fn](GS)).wait();
+    cycles++;
+  }
+  const endVal = await v.valueAtTwap();
+  const lostPct = Number((startVal - endVal) * 10000n / startVal) / 100;
+  check(tripped, `the breaker trips and halts the keeper after ${cycles} legs`);
+  check(lostPct <= 6, `the keeper could only bleed ${lostPct}% of the vault, not all of it`);
+  await (await router.setDiscount(0, GS)).wait();
+
+  say("\n-- a keeper CANNOT disarm the breaker by depositing dust");
+  // The attack a review caught: deposit() is permissionless, so if it ASSIGNED
+  // the high-water mark the keeper could pay in one raw unit, rebase the mark to
+  // wherever its grinding left the vault, and grind on forever. Measured at ~9%
+  // of the vault a day for about 2 USDT0 of deposits.
+  // The spread has to still be on: a fill at exactly the TWAP costs nothing, so
+  // the breaker would correctly not trip and the test would prove nothing.
+  await (await router.setDiscount(300, GS)).wait();
+  await (await usdt.connect(keeper).approve(vAddr, ethers.MaxUint256, GS)).wait();
+  const markBefore = await v.valueCheckpoint();
+  await (await v.connect(keeper).deposit(1n, GS)).wait();   // 0.000001 USDT0
+  const markAfter = await v.valueCheckpoint();
+  check(markAfter === markBefore + 1n, "a dust deposit raises the mark by exactly the dust, it does not rebase it");
+  await warp(120); await (await pool.setTick(TICK, GS)).wait();
+  await reverts(() => v.connect(keeper).execute.staticCall(),
+    "and the breaker still stops the next loss-making leg", "drawdown");
+  await (await router.setDiscount(0, GS)).wait();
+
+  say("\n-- only the owner can clear a tripped breaker");
+  await reverts(() => v.connect(keeper).recheckpoint.staticCall(), "keeper cannot reset its own scoreboard", "not owner");
+  await (await v.connect(ownerS).recheckpoint(GS)).wait();
+  await warp(120); await (await pool.setTick(TICK, GS)).wait();
+  const afterReset = await v.connect(keeper).execute.staticCall();
+  check(afterReset[0] > 0n, "owner can re-arm the vault and the agent resumes");
+
+  say("\n-- withdrawal still works with the breaker tripped");
+  await (await v.connect(ownerS).setSellParams(20000, 1, GS)).wait(); // 0.01% drawdown
+  // A fill at exactly the TWAP loses nothing, so a tight breaker correctly does
+  // NOT trip on its own. Give the router a spread so the leg actually costs
+  // something, which is what the breaker is measuring.
+  await (await router.setDiscount(200, GS)).wait();
+  await warp(120); await (await pool.setTick(TICK, GS)).wait();
+  await reverts(() => v.connect(keeper).execute.staticCall(), "a tight breaker halts the agent", "drawdown");
+  await (await v.connect(ownerS).withdrawAll(GS)).wait();
+  const [fq, ft] = await v.balances();
+  check(fq === 0n && ft === 0n, "the owner still exits fully while the agent is halted");
+
+  say("\n-- sell bounds");
+  await reverts(() => v.connect(ownerS).setSellParams.staticCall(9999, 500), "sell ratio cannot go below 1x", "ratio");
+  await reverts(() => v.connect(ownerS).setSellParams.staticCall(20000, 3001), "drawdown cap enforced", "drawdown");
+  await reverts(() => v.connect(keeper).setSellParams.staticCall(20000, 500), "keeper cannot touch sell params", "not owner");
 
   say(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);

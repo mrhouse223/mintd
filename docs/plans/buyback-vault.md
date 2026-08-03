@@ -1,6 +1,6 @@
 # Buyback vault (user-owned agents)
 
-Status: built and reviewed. Not deployed.
+Status: shipped
 Date: 2026-08-03
 
 ## What problem this solves
@@ -102,8 +102,25 @@ are fixed and each has a test:
   default is now derived from the pool's own fee tier, fee + 1%. No mock would
   have caught this, since the mock router charges no fee.
 
-Still to do: deploy the factory, and the Agents page UI for create / deposit /
-withdraw / trade history.
+**A sell path was added after the first review**, on request, matching DCR:
+`executeSell()` gated on the vault being overweight the token (2x by default).
+That invalidated the first review's reasoning that buy-only was self-limiting,
+so a cumulative drawdown breaker came with it. A second review then found a HIGH
+I had introduced: `deposit()` is permissionless and ASSIGNED the high-water mark,
+so a keeper paying in one raw unit (0.000001 USDT0) rebased the mark to wherever
+its grinding left the vault and disarmed the breaker entirely, measured at ~9% of
+the vault a day to zero for about 2 USDT0 of deposits. `AgentVault`'s header
+names this exact attack and ratchets upward only. Fixed with delta accounting
+(`valueCheckpoint += got`), which also arms the mark when the oracle is unusable
+instead of leaving it at zero with no floor. Regression test included.
+
+**Deployed 2026-08-03. `BuybackVaultFactory` at
+`0xAEfc1555cFd2F1a20C73F8CAF3b031A6f429a9bB`**, verified on stablescan, no owner
+and holds nothing. Confirmed live at deploy that a real pool builds a vault and
+a non-pool address is rejected. 54 tests.
+
+Still to do: the keeper that actually calls `execute` / `executeSell` on a rule.
+Until then vaults are owner-driven, which is safe but not yet autonomous.
 
 ## Contracts touched
 

@@ -1568,18 +1568,31 @@
         </p>
       </div>
 
-      <div class="agcard">
+      <div class="agcard" id="agMine">
         <div class="aghead">
-          <b>Run one for your own coin</b>
-          <span class="bchip off">NOT DEPLOYED</span>
+          <b>Your agents</b>
+          <span class="bchip on" id="agVaultChip">LIVE</span>
+          <div class="spacer"></div>
+          <button class="chip" onclick="vaultLoad(true)">Refresh</button>
+          <button class="btn" onclick="vaultShowCreate()">New agent</button>
         </div>
-        <p class="finenote" style="margin:6px 0 0">
-          The same reservoir, per token, switched on and off by whoever launched the coin. It needs two
-          things that do not exist yet: a burner deployed for your token, and a creator-gated registry
-          the keeper reads to know whose agent is on. Both are specced in
-          <a href="https://github.com/mrhouse223/mintd/blob/main/docs/plans/reservoir-agent.md" target="_blank" rel="noopener">the plan</a>.
-          It is listed here so the roadmap is visible, not because it is one click away.
+        <p class="finenote" style="margin:6px 0 10px">
+          Your own vault, pointed at any coin. You deposit <span class="paySymTxt">USDT0</span>, the agent
+          buys dips and can take profit on pumps, and everything it buys stays yours.
+          <b>Only you can withdraw</b>, at any time, with no help from the agent.
         </p>
+        <div id="agVaultRows"><div class="empty">Connect a wallet to see your agents.</div></div>
+
+        <div id="agVaultCreate" style="display:none;margin-top:14px;border-top:1px solid var(--line,rgba(127,127,127,.18));padding-top:14px">
+          <div class="bdform">
+            <div class="field">
+              <label>COIN TO BUY</label>
+              <button type="button" class="tokbtn" id="avTok" style="width:100%;justify-content:space-between" onclick="openTokMenu('avTok')">Select &#9662;</button>
+            </div>
+          </div>
+          <div id="avNote" class="finenote" style="margin:12px 0"></div>
+          <button class="btn" id="avGo" style="width:100%" onclick="vaultCreate()">Deploy my agent</button>
+        </div>
       </div>
     </div>
   </section>
@@ -2640,6 +2653,7 @@ const CHAINS = {
       router: "0x32eaf9B5d5F2CD7361c5012890C943D7de84C22a",   // SwapRouter02
       quoter: "0xb070179E7032CdA868b53e6C1742F80c9e940d1A",   // QuoterV2
       npm: "0x3BdC3437405f7D801b6036532713fc1F179136a6",      // NonfungiblePositionManager
+      v3factory: "0x88F0a512eF09175D456bc9547f914f48C013E4aA", // read from npm.factory()
       usdt0: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",    // gas token as a 6-dec ERC-20
     },
     mintd: {
@@ -2653,6 +2667,7 @@ const CHAINS = {
       oldPad: "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0",
       bondMarket: "0xD98780804449cC3b01Cd9A37fbaD808d01e24383",  // BondMarket, owner is the Safe
       burner: "0x7F007fbc6061806888A39A79763808aF5B94F4f4",       // BuybackBurner, no owner, buy-and-burn only
+      vaultFactory: "0xAEfc1555cFd2F1a20C73F8CAF3b031A6f429a9bB", // BuybackVaultFactory, no owner, holds nothing
       mintd: "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       mintr: "0x8817D05f2560189F3697028f639Dbb4C68688400",
       synth: "0x09Eb7D9B18e56270F8898C4f3Ac3F2dc99F3b213",
@@ -3383,6 +3398,7 @@ async function route() {
   } else if (h === "agents") {
     showView("agents");
     agentsLoad();
+    vaultLoad();
   } else if (h === "bonds") {
     showView("bonds");
     bondLoad();
@@ -5334,6 +5350,207 @@ async function agentsLoad() {
   }
 }
 
+
+const VFACTORY_ABI = [
+  "function create(address token, address pool) returns (address)",
+  "function byOwner(address) view returns (address[])",
+  "function vaultCount() view returns (uint256)",
+];
+const VAULT_ABI = [
+  "function owner() view returns (address)",
+  "function token() view returns (address)",
+  "function agent() view returns (address)",
+  "function balances() view returns (uint256 quoteBal, uint256 tokenBal)",
+  "function valueCheckpoint() view returns (uint256)",
+  "function sliceBps() view returns (uint16)",
+  "function maxSlippageBps() view returns (uint16)",
+  "function cooldown() view returns (uint32)",
+  "function lastExec() view returns (uint64)",
+  "function deposit(uint256)",
+  "function withdraw(address,uint256)",
+  "function withdrawAll()",
+  "function setAgent(address)",
+  "function recheckpoint()",
+  "event Executed(bool indexed isBuy, uint256 amountIn, uint256 amountOut, uint256 minOut, uint64 at)",
+];
+let myVaults = [];
+
+async function vaultLoad(force) {
+  const rows = $("agVaultRows");
+  const fa = NET.mintd && NET.mintd.vaultFactory;
+  if (!fa) { rows.innerHTML = `<div class="empty">Not on this chain.</div>`; return; }
+  if (!wallet) { rows.innerHTML = `<div class="empty">Connect a wallet to see your agents.</div>`; return; }
+  if (force || !tokens.length) await loadAll();
+  rows.innerHTML = `<div class="empty">Loading…</div>`;
+  try {
+    const f = new ethers.Contract(fa, VFACTORY_ABI, rp);
+    const list = await retryRead(() => f.byOwner(wallet));
+    myVaults = [];
+    // Sequential: gotcha 1, concurrent reads get batched and Stable rejects them.
+    for (const a of list) {
+      const v = new ethers.Contract(a, VAULT_ABI, rp);
+      try {
+        const tk = await retryRead(() => v.token());
+        const [q, t] = await retryRead(() => v.balances());
+        myVaults.push({ addr: a, token: tk, quoteBal: q, tokenBal: t,
+                        agent: await retryRead(() => v.agent()) });
+      } catch {}
+    }
+    vaultPaint();
+  } catch (e) {
+    rows.innerHTML = `<div class="empty">Could not read your agents: ${esc(e.shortMessage || e.message)}</div>`;
+  }
+}
+
+function vaultPaint() {
+  const rows = $("agVaultRows");
+  if (!myVaults.length) {
+    rows.innerHTML = `<div class="empty">You have no agents yet.</div>`;
+    return;
+  }
+  rows.innerHTML = myVaults.map((v, i) => {
+    const t = tokens.find((x) => sameAddr(x.addr, v.token));
+    const sym = t ? t.symbol : v.token.slice(0, 8) + "…";
+    const tokUsd = t ? Number(ethers.formatEther(v.tokenBal)) * Number(ethers.formatEther(t.price)) : 0;
+    return `<div class="bondcard">
+      <div class="bhead">
+        ${bondLogo({ token: v.token, sym })}
+        <b style="font-size:16px">$${esc(sym)}</b>
+        <span class="bchip ${v.agent === ethers.ZeroAddress ? "off" : "on"}">${v.agent === ethers.ZeroAddress ? "NO AGENT" : "AGENT ON"}</span>
+        <div class="spacer"></div>
+        <a class="finenote" href="${NET.chain.blockExplorerUrls[0]}/address/${v.addr}" target="_blank" rel="noopener">${esc(short(v.addr))} &#8599;</a>
+      </div>
+      <div class="bgrid">
+        <div class="bbox"><label>USDT0 READY</label><b>$${nf(Number(ethers.formatUnits(v.quoteBal, 6)), 2)}</b><small>to spend</small></div>
+        <div class="bbox"><label>$${esc(sym)} HELD</label><b>${nfCompact(Number(ethers.formatEther(v.tokenBal)))}</b><small>${tokUsd ? "$" + nf(tokUsd, 2) : "yours"}</small></div>
+        <div class="bbox"><label>TOTAL</label><b>$${nf(Number(ethers.formatUnits(v.quoteBal, 6)) + tokUsd, 2)}</b><small>you can withdraw it all</small></div>
+      </div>
+      <div class="bactions">
+        <input id="avDep${i}" placeholder="0.00 ${esc(quoteTicker())}" autocomplete="off">
+        <button class="btn" onclick="vaultDeposit(${i})">Deposit</button>
+        <button class="btn ghost" onclick="vaultWithdrawAll(${i})">Withdraw everything</button>
+        <button class="chip" onclick="vaultTrades(${i})">Trades</button>
+      </div>
+      <div id="avTrades${i}" class="finenote" style="margin-top:10px"></div>
+    </div>`;
+  }).join("");
+}
+
+function vaultShowCreate() {
+  const el = $("agVaultCreate");
+  el.style.display = el.style.display === "none" ? "" : "none";
+  if (el.style.display !== "") return;
+  if (!$("avTok").value) {
+    const first = tokens.find((t) => t.padOf);
+    if (first) $("avTok").value = first.addr;
+  }
+  tokLabel("avTok");
+  vaultQuote();
+}
+
+function vaultQuote() {
+  const t = tokens.find((x) => sameAddr(x.addr, $("avTok").value));
+  $("avNote").innerHTML = t
+    ? `Deploys a vault you own outright, pointed at the $${esc(t.symbol)} pool. `
+      + `It starts with no agent and no money: you deposit after, and you can withdraw at any time.`
+    : "Pick a coin.";
+}
+
+async function vaultCreate() {
+  if (!signer) return connect();
+  const t = tokens.find((x) => sameAddr(x.addr, $("avTok").value));
+  if (!t) return toast("Pick a coin", "err");
+  const btn = $("avGo");
+  btn.disabled = true;
+  try {
+    // The pool the vault will price against. The vault re-checks it against the
+    // canonical factory on chain, so a wrong one is rejected at construction
+    // rather than becoming a live vault reading a fake TWAP.
+    const fac = new ethers.Contract(ADDR.v3factory,
+      ["function getPool(address,address,uint24) view returns (address)"], rp);
+    const pool = await fac.getPool(t.addr, ADDR.usdt0, 10000);
+    if (!pool || pool === ethers.ZeroAddress) throw new Error("no 1% pool for that coin");
+    const f = new ethers.Contract(NET.mintd.vaultFactory, VFACTORY_ABI, signer);
+    const tx = await f.create(t.addr, pool);
+    toast("Deploying your agent…");
+    await tx.wait();
+    toast("Agent deployed", "ok");
+    $("agVaultCreate").style.display = "none";
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+  finally { btn.disabled = false; }
+}
+
+async function vaultDeposit(i) {
+  if (!signer) return connect();
+  const v = myVaults[i];
+  const raw = $("avDep" + i).value;
+  if (!raw || Number(raw) <= 0) return toast("Enter an amount", "err");
+  const amt = ethers.parseUnits(String(raw), 6);
+  try {
+    const q = new ethers.Contract(ADDR.usdt0, ERC20_ABI, signer);
+    if ((await q.allowance(wallet, v.addr)) < amt) {
+      toast("Approving " + quoteTicker() + "…");
+      await (await q.approve(v.addr, ethers.MaxUint256)).wait();
+    }
+    const c = new ethers.Contract(v.addr, VAULT_ABI, signer);
+    await (await c.deposit(amt)).wait();
+    toast("Deposited", "ok");
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function vaultWithdrawAll(i) {
+  if (!signer) return connect();
+  try {
+    const c = new ethers.Contract(myVaults[i].addr, VAULT_ABI, signer);
+    await (await c.withdrawAll()).wait();
+    toast("Everything withdrawn", "ok");
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+/// Trade history from Executed logs. Two hard limits shape this: the RPC caps a
+/// range at 500 blocks AND 500 results (gotcha 2), and prunes at roughly four
+/// days (gotcha 3), so this is a recent window and says so rather than implying
+/// it is the whole life of the vault.
+async function vaultTrades(i) {
+  const el = $("avTrades" + i);
+  el.textContent = "Reading recent trades…";
+  const v = myVaults[i];
+  try {
+    const lp = logProvider();
+    const c = new ethers.Contract(v.addr, VAULT_ABI, lp);
+    const head = await lp.getBlockNumber();
+    const SPAN = 500;                 // hard cap, not a tuning knob
+    const WINDOW = 20;                // 10,000 blocks, about two hours at 0.70s
+    const out = [];
+    for (let k = 0; k < WINDOW && out.length < 25; k++) {
+      const to = head - k * SPAN, from = Math.max(0, to - SPAN + 1);
+      if (to < 0) break;
+      let logs = [];
+      try { logs = await c.queryFilter(c.filters.Executed(), from, to); } catch { continue; }
+      for (const l of logs.reverse()) out.push(l);
+    }
+    if (!out.length) { el.textContent = "No trades in the last ~2 hours of blocks. The RPC keeps about four days of logs, so this is a recent window rather than the vault's whole history."; return; }
+    const t = tokens.find((x) => sameAddr(x.addr, v.token));
+    const sym = t ? t.symbol : "token";
+    el.innerHTML = out.slice(0, 25).map((l) => {
+      const buy = l.args.isBuy;
+      const inA = buy ? `$${nf(Number(ethers.formatUnits(l.args.amountIn, 6)), 2)}`
+                      : `${nfCompact(Number(ethers.formatEther(l.args.amountIn)))} $${esc(sym)}`;
+      const outA = buy ? `${nfCompact(Number(ethers.formatEther(l.args.amountOut)))} $${esc(sym)}`
+                       : `$${nf(Number(ethers.formatUnits(l.args.amountOut, 6)), 2)}`;
+      return `<div style="display:flex;gap:8px;padding:3px 0">
+        <b style="color:${buy ? "var(--green)" : "var(--red,#e5534b)"}">${buy ? "BUY" : "SELL"}</b>
+        <span>${inA} &rarr; ${outA}</span>
+        <div class="spacer"></div>
+        <a href="${NET.chain.blockExplorerUrls[0]}/tx/${l.transactionHash}" target="_blank" rel="noopener" style="opacity:.6">${esc(l.transactionHash.slice(0, 10))}&#8599;</a>
+      </div>`;
+    }).join("");
+  } catch (e) { el.textContent = "Could not read trades: " + (e.shortMessage || e.message); }
+}
+
 /* ------------------------------------------------------------------ bonds */
 const BOND_ABI = [
   "function bondCount() view returns (uint256)",
@@ -6411,7 +6628,7 @@ function openTokMenu(id) {
   // Bonds can only escrow an allowlisted token, so offering the full swap list
   // here would let someone pick USDT0 or a custom import and get a revert at
   // the end of a form they had already filled in.
-  tokAll = id === "bdTok" ? bondTokenList() : swBaseList();
+  tokAll = (id === "bdTok" || id === "avTok") ? bondTokenList() : swBaseList();
   $("tokSearch").value = "";
   tokFilter();
   $("tokModal").classList.add("on");
@@ -6480,6 +6697,9 @@ function tokChoose(addr) {
   } else if (tokTarget === "bdTok") {
     tokLabel("bdTok");
     bondQuote();
+  } else if (tokTarget === "avTok") {
+    tokLabel("avTok");
+    vaultQuote();
   } else {
     tokLabel("plA"); tokLabel("plB");
     $("plAmtA").value = $("plAmtB").value = "";

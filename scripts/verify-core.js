@@ -48,17 +48,26 @@ const CORE = [
   // slice. Its two constructor arguments are its name and symbol, neither of
   // which has a setter, so they are read off the token instead.
   ["BondMarket",        "0xD98780804449cC3b01Cd9A37fbaD808d01e24383", "BondMarket.sol",        "BondMarket",        ["address", "address", "uint256", "uint256", "address[]"]],
+  ["BuybackVaultFactory","0xAEfc1555cFd2F1a20C73F8CAF3b031A6f429a9bB", "BuybackVaultFactory.sol","BuybackVaultFactory",["address", "address", "address"], null, ["BuybackVault.sol", "AgentVault.sol"]],
   ["MGLD",              "0x872a3C280B846759187c9E57F62d1Ed8407b135C", "MintSynth.sol",         "SynthToken",        ["string", "string"], "internal"],
 ];
 
 const compiled = {};
-function compile(file, name) {
+// `deps` carries a contract's import closure. solc has no import callback here,
+// so a file that imports another fails outright with "File import callback not
+// supported" unless every source it reaches is handed over in the same input.
+function compile(file, name, deps) {
   const k = file + ":" + name;
   if (compiled[k]) return compiled[k];
   const rel = "contracts/" + file;
+  const sources = {};
+  for (const f of [file, ...(deps || [])]) {
+    const r = "contracts/" + f;
+    sources[r] = { content: fs.readFileSync(path.join(__dirname, "..", r), "utf8") };
+  }
   const input = {
     language: "Solidity",
-    sources: { [rel]: { content: fs.readFileSync(path.join(__dirname, "..", rel), "utf8") } },
+    sources,
     settings: { ...SETTINGS, outputSelection: { "*": { "*": ["abi", "evm.bytecode", "evm.deployedBytecode"] } } },
   };
   const out = JSON.parse(solc.compile(JSON.stringify(input)));
@@ -143,14 +152,14 @@ async function submit(addr, rel, name, std, args) {
     { staticNetwork: true, batchMaxCount: 1 });
 
   let ok = 0, skipped = 0, failed = 0;
-  for (const [label, addr, file, name, types, mode] of CORE) {
+  for (const [label, addr, file, name, types, mode, deps] of CORE) {
     if (only && !label.toLowerCase().includes(only.toLowerCase())) continue;
     process.stdout.write(label.padEnd(20));
     try {
       const src = await get({ module: "contract", action: "getsourcecode", address: addr });
       if (((src.result || [])[0] || {}).SourceCode) { console.log("already verified"); ok++; skipped++; continue; }
 
-      const { std, creation, rel } = compile(file, name);
+      const { std, creation, rel } = compile(file, name, deps);
       let args;
       if (mode === "internal") {
         // No creation input to slice; the arguments are the token's own strings.
