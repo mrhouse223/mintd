@@ -1,6 +1,6 @@
 # Reservoir agent (a DCR for MINTD)
 
-Status: draft
+Status: superseded in part. The user-owned version shipped as docs/plans/buyback-vault.md and its keeper is live; this plan's MINTD-reservoir half still waits on a fee source pointing at the burner.
 Date: 2026-08-03
 
 ## What problem this solves

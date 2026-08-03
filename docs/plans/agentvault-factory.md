@@ -1,6 +1,6 @@
 # AgentVault factory
 
-Status: **built, tested and reviewed. Not deployed.**
+Status: **shipped.** Deployed to Stable 2026-08-03 at `0x28A9C05d0e31E2fEBf983F479d3c0278794BEE35`, verified on stablescan. No owner, holds nothing.
 Date: 2026-07-29
 
 ## What problem this solves

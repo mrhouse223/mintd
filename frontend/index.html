@@ -1557,27 +1557,36 @@
       <div class="agcard">
         <div class="aghead">
           <b>Liquidity vault</b>
-          <span class="bchip soon">BUILT, NOT DEPLOYED</span>
+          <span class="bchip on" id="agLpChip">LIVE</span>
           <div class="spacer"></div>
-          <button class="chip" onclick="go('agent')">Open ↗</button>
+          <a class="finenote" id="agLpLink" target="_blank" rel="noopener">factory ↗</a>
         </div>
         <p class="finenote" style="margin:6px 0 0">
-          Holds one Uniswap V3 position and rebalances it. The agent proposes <b>timing only</b>: every
-          value-carrying number is derived from a TWAP inside the vault, so a stolen keeper key can
-          waste gas but cannot choose an execution price, a venue or a range.
+          Holds one Uniswap V3 position and rebalances it. The agent proposes a <b>range and a time</b>
+          and nothing else: the range is clamped to a band around the pool's time averaged price, and
+          every value-carrying number is derived inside the vault, so a stolen keeper key can waste gas
+          but cannot choose an execution price or a venue.
         </p>
+        <p class="finenote" style="margin:8px 0 0">
+          It starts in <b>propose-only</b>, meaning the agent cannot move anything until you approve each
+          action. You can move it to a timelock, where proposals become executable after a review window
+          you set, or let it run on its own. Rebalancing waits until price has drifted three quarters of
+          the way to the edge of the range, because every rebalance pays a swap fee.
+        </p>
+        <div class="bgrid" id="agLpStats"></div>
       </div>
 
       <div class="agcard">
         <div class="aghead"><b>How the agents decide</b></div>
         <div class="bgrid" style="margin-top:12px">
           <div class="bbox"><label>EVERY 10-15 MIN</label><b>Look</b><small>randomised, never a fixed clock</small></div>
-          <div class="bbox"><label>PRICE FELL</label><b>Buy</b><small>past the band, a slice of your USDT0</small></div>
-          <div class="bbox"><label>PRICE ROSE 4x THAT</label><b>Sell</b><small>only if heavy in the coin</small></div>
+          <div class="bbox"><label>FELL 0.03%</label><b>Buy</b><small>a 5% slice of your USDT0</small></div>
+          <div class="bbox"><label>ROSE 0.09%</label><b>Sell</b><small>only if heavy in the coin</small></div>
           <div class="bbox"><label>OTHERWISE</label><b>Hold</b><small>most cycles do nothing</small></div>
         </div>
         <p class="finenote" style="margin:4px 0 0">
-          It takes <b>one band to buy and four to sell</b>, so it leans toward accumulating rather than trading.
+          It takes <b>three times the move to sell as to buy</b>, so it leans toward accumulating rather than
+          trading. Those thresholds are the current settings and can be retuned.
           Each move is a slice of the balance, never all of it, and there is a cooldown between moves.
         </p>
         <div style="border-top:1px solid var(--line,rgba(127,127,127,.18));margin:14px 0 0;padding-top:14px">
@@ -1959,11 +1968,12 @@
         compares the pool price with the price it last saw:</p>
         <ul>
           <li><b>Buy</b> when the price has fallen past a band, spending a slice of your USDT0.</li>
-          <li><b>Sell</b> only when it has risen past <b>four times</b> that band, and only when the
+          <li><b>Sell</b> only when it has risen past <b>three times</b> that band, and only when the
               vault is already heavy in the coin. The contract checks that, not the agent.</li>
           <li><b>Hold</b> otherwise, which is most cycles.</li>
         </ul>
-        <p>One band to buy and four to sell, so it leans toward accumulating. The interval is
+        <p>Currently a 0.03% fall to buy and 0.09% rise to sell, three times as much movement to sell as
+        to buy, so it leans toward accumulating. The interval is
         deliberately irregular and the next one is never published: a buyer whose timing is public,
         in a thin pool, is somebody else's free lunch.</p>
 
@@ -2743,6 +2753,7 @@ const CHAINS = {
       bondMarket: "0xD98780804449cC3b01Cd9A37fbaD808d01e24383",  // BondMarket, owner is the Safe
       burner: "0x7F007fbc6061806888A39A79763808aF5B94F4f4",       // BuybackBurner, no owner, buy-and-burn only
       vaultFactory: "0x3db601869c2C47Bfa9b08c62E077Df4806C1283A", // BuybackVaultFactory, no owner, holds nothing
+      agentFactory: "0x28A9C05d0e31E2fEBf983F479d3c0278794BEE35", // AgentVaultFactory (LP), no owner, holds nothing
       keeper: "0xfe93602C1d76834b6370833B9ce7C86939B5D97f",      // the agent wallet. Gas only, can never withdraw
       mintd: "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       mintr: "0x8817D05f2560189F3697028f639Dbb4C68688400",
@@ -4435,6 +4446,7 @@ const AGENT_VAULT_ABI = [
   "function positionId() view returns (uint256)",
   "function valueNow() view returns (uint256)",
   "function valueCheckpoint() view returns (uint256)",
+  "function valueAtTwap() view returns (uint256)",
   "function token0() view returns (address)",
   "function token1() view returns (address)",
   "function valueInToken0() view returns (bool)",
@@ -5427,6 +5439,29 @@ async function agentsLoad() {
     stats.innerHTML = "";
     note.textContent = "Could not read the burner: " + (e.shortMessage || e.message);
   }
+  await lpStats();
+}
+
+/// The LP factory's headline. Deliberately just a count: how many vaults exist
+/// and how many have handed their agent the keys. Anything richer needs a walk
+/// over every vault, and this card is not the place to pay for that.
+async function lpStats() {
+  const fa = NET.mintd && NET.mintd.agentFactory;
+  const el = $("agLpStats"), chip = $("agLpChip"), link = $("agLpLink");
+  if (!el) return;
+  if (!fa) { chip.textContent = "NOT ON THIS CHAIN"; chip.className = "bchip off"; el.innerHTML = ""; return; }
+  link.href = NET.chain.blockExplorerUrls[0] + "/address/" + fa + "#code";
+  try {
+    const f = new ethers.Contract(fa, ["function vaultCount() view returns (uint256)"], rp);
+    const n = Number(await retryRead(() => f.vaultCount()));
+    el.innerHTML = `
+      <div class="bbox"><label>LP VAULTS</label><b>${n}</b><small>${n ? "deployed" : "none yet"}</small></div>
+      <div class="bbox"><label>STARTS IN</label><b>Propose only</b><small>you approve each move</small></div>
+      <div class="bbox"><label>REBALANCES AT</label><b>75%</b><small>of the way to an edge</small></div>`;
+  } catch (e) {
+    chip.textContent = "UNREADABLE"; chip.className = "bchip off";
+    el.innerHTML = "";
+  }
 }
 
 
@@ -5442,6 +5477,7 @@ const VAULT_ABI = [
   "function agent() view returns (address)",
   "function balances() view returns (uint256 quoteBal, uint256 tokenBal)",
   "function valueCheckpoint() view returns (uint256)",
+  "function valueAtTwap() view returns (uint256)",
   "function sliceBps() view returns (uint16)",
   "function maxSlippageBps() view returns (uint16)",
   "function cooldown() view returns (uint32)",
@@ -5483,7 +5519,13 @@ async function vaultLoad(force) {
         const tk = await retryRead(() => v.token());
         const [q, t] = await retryRead(() => v.balances());
         const owner = await retryRead(() => v.owner());
-        myVaults.push({ addr: a, token: tk, quoteBal: q, tokenBal: t, owner,
+        // The high-water mark, and the vault's own valuation of itself at the
+        // pool TWAP. Both can be absent: valueAtTwap reverts when the oracle is
+        // unusable, and a vault that has never traded has no mark yet.
+        let mark = 0n, live = null;
+        try { mark = await retryRead(() => v.valueCheckpoint()); } catch {}
+        try { live = await retryRead(() => v.valueAtTwap()); } catch {}
+        myVaults.push({ addr: a, token: tk, quoteBal: q, tokenBal: t, owner, mark, live,
                         mine: me && owner.toLowerCase() === me,
                         agent: await retryRead(() => v.agent()) });
       } catch (e) { console.error("vault", a, "skipped:", e.shortMessage || e.message); }
@@ -5519,6 +5561,7 @@ function vaultPaint() {
         <div class="bbox"><label>USDT0 READY</label><b>$${nf(Number(ethers.formatUnits(v.quoteBal, 6)), 2)}</b><small>to spend</small></div>
         <div class="bbox"><label>$${esc(sym)} HELD</label><b>${nfCompact(Number(ethers.formatEther(v.tokenBal)))}</b><small>${tokUsd ? "$" + nf(tokUsd, 2) : "in the vault"}</small></div>
         <div class="bbox"><label>TOTAL</label><b>$${nf(total, 2)}</b><small>${v.mine ? "you can withdraw it all" : "owned by " + esc(short(v.owner))}</small></div>
+        ${vaultPnlBox(v)}
       </div>
       <div class="bactions">
         ${v.mine ? `<input id="avDep${i}" placeholder="0.00" autocomplete="off" style="max-width:130px">
@@ -5534,6 +5577,30 @@ function vaultPaint() {
       <div id="avTrades${i}" class="finenote" style="margin-top:10px"></div>
     </div>`;
   }).join("");
+}
+
+/// Performance, measured against the vault's own high-water mark.
+///
+/// NOT against a cost basis summed from events, and the reason matters: deposit
+/// and depositToken emit the SAME Deposited event, one carrying 6-decimal USDT0
+/// and the other 18-decimal coin, so those amounts cannot be added up. A number
+/// derived that way would be wrong by a factor of a trillion on any vault that
+/// was funded with both.
+///
+/// The mark starts at exactly what was put in and only ratchets upward, so for a
+/// vault that has not yet gained this IS "versus what you deposited". Once it
+/// gains, it becomes "versus its best", which is the more useful number anyway
+/// because it is what the vault's own safety breaker acts on.
+function vaultPnlBox(v) {
+  if (!v.mark || v.mark === 0n || v.live === null) {
+    return `<div class="bbox"><label>VS PEAK</label><b>&ndash;</b><small>needs a live price</small></div>`;
+  }
+  const pct = Number(((v.live - v.mark) * 10000n) / v.mark) / 100;
+  const col = pct < -0.01 ? "var(--red,#e5534b)" : pct > 0.01 ? "var(--green)" : "";
+  const sign = pct > 0 ? "+" : "";
+  return `<div class="bbox"><label>VS PEAK</label>
+    <b style="color:${col}">${sign}${nf(pct, 2)}%</b>
+    <small>$${nf(Number(ethers.formatUnits(v.live, 6)), 2)} against $${nf(Number(ethers.formatUnits(v.mark, 6)), 2)}</small></div>`;
 }
 
 function vaultShowCreate() {
