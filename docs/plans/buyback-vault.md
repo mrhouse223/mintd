@@ -115,8 +115,12 @@ names this exact attack and ratchets upward only. Fixed with delta accounting
 instead of leaving it at zero with no floor. Regression test included.
 
 **Deployed 2026-08-03. `BuybackVaultFactory` at
-`0xAEfc1555cFd2F1a20C73F8CAF3b031A6f429a9bB`**, verified on stablescan, no owner
-and holds nothing. Confirmed live at deploy that a real pool builds a vault and
+`0x3db601869c2C47Bfa9b08c62E077Df4806C1283A`**, verified on stablescan, no owner
+and holds nothing. This replaced a first factory at `0xAEfc1555cF…` deployed the
+same day, to add `depositToken`. Vaults from the old one still work and are still
+fully withdrawable by their owners; they simply are not listed. One existed, at
+`0x31f8111740B605e16eCB7eA047b855F1A56b8514`, holding 10 USDT0, and its owner
+recovers it by calling `withdrawAll()` on that address directly. Confirmed live at deploy that a real pool builds a vault and
 a non-pool address is rejected. 54 tests.
 
 Still to do: the keeper that actually calls `execute` / `executeSell` on a rule.

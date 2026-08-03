@@ -29,7 +29,7 @@ const path = require("path");
 const { ethers } = require("ethers");
 
 const RPC_URL = process.env.RPC_URL || "https://rpc.stable.xyz";
-const FACTORY = process.env.VAULT_FACTORY || "0xAEfc1555cFd2F1a20C73F8CAF3b031A6f429a9bB";
+const FACTORY = process.env.VAULT_FACTORY || "0x3db601869c2C47Bfa9b08c62E077Df4806C1283A";
 const STATE = path.join(__dirname, "..", "data", "vault-keeper-state.json");
 
 // Randomised, never a fixed cron. A predictable buyer in a thin pool on a chain

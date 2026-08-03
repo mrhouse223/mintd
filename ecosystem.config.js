@@ -166,7 +166,7 @@ module.exports = {
       script: "scripts/vault-keeper.js",
       env: {
         KEEPER_KEY: env.KEEPER_KEY,
-        VAULT_FACTORY: env.VAULT_FACTORY || "0xAEfc1555cFd2F1a20C73F8CAF3b031A6f429a9bB",
+        VAULT_FACTORY: env.VAULT_FACTORY || "0x3db601869c2C47Bfa9b08c62E077Df4806C1283A",
         MIN_MS: env.VAULT_MIN_MS || "600000",
         MAX_MS: env.VAULT_MAX_MS || "900000",
         DEAD_ZONE: env.VAULT_DEAD_ZONE || "1500",

@@ -1607,7 +1607,8 @@
         </div>
         <p class="finenote" style="margin:6px 0 10px">
           Every agent running on mintd, on any coin. Yours are marked, and only you can touch those.
-          Deposit <span class="paySymTxt">USDT0</span>, the agent buys dips and can take profit on pumps,
+          Fund one with <span class="paySymTxt">USDT0</span>, with the coin itself, or both. The agent buys
+          dips and can take profit on pumps,
           and everything it buys stays yours. <b>Only the owner can withdraw</b>, at any time, with no
           help from the agent.
         </p>
@@ -1946,8 +1947,10 @@
 
         <h2 id="d-agents" data-chain="stable">Agents</h2>
         <div data-chain="stable">
-        <p>An agent is a vault you own that buys a coin for you on a rule. You deposit USDT0, it
-        buys dips and can take profit on pumps, and everything it buys stays in the vault as yours.
+        <p>An agent is a vault you own that buys a coin for you on a rule. You fund it with USDT0, with
+        the coin itself, or both; it buys dips and can take profit on pumps, and everything it holds stays
+        yours. Funding it with the coin lets it start overweight and take profit straight away, without
+        buying its way in first.
         The factory is <code>0xAEfc1555cFd2F1a20C73F8CAF3b031A6f429a9bB</code>, it has no owner, and
         it holds nothing.</p>
 
@@ -2739,7 +2742,7 @@ const CHAINS = {
       oldPad: "0x75FAdB240006313294A5B502CA9268cB03Fa9AC0",
       bondMarket: "0xD98780804449cC3b01Cd9A37fbaD808d01e24383",  // BondMarket, owner is the Safe
       burner: "0x7F007fbc6061806888A39A79763808aF5B94F4f4",       // BuybackBurner, no owner, buy-and-burn only
-      vaultFactory: "0xAEfc1555cFd2F1a20C73F8CAF3b031A6f429a9bB", // BuybackVaultFactory, no owner, holds nothing
+      vaultFactory: "0x3db601869c2C47Bfa9b08c62E077Df4806C1283A", // BuybackVaultFactory, no owner, holds nothing
       keeper: "0xfe93602C1d76834b6370833B9ce7C86939B5D97f",      // the agent wallet. Gas only, can never withdraw
       mintd: "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       mintr: "0x8817D05f2560189F3697028f639Dbb4C68688400",
@@ -5444,6 +5447,7 @@ const VAULT_ABI = [
   "function cooldown() view returns (uint32)",
   "function lastExec() view returns (uint64)",
   "function deposit(uint256)",
+  "function depositToken(uint256)",
   "function withdraw(address,uint256)",
   "function withdrawAll()",
   "function setAgent(address)",
@@ -5517,7 +5521,11 @@ function vaultPaint() {
         <div class="bbox"><label>TOTAL</label><b>$${nf(total, 2)}</b><small>${v.mine ? "you can withdraw it all" : "owned by " + esc(short(v.owner))}</small></div>
       </div>
       <div class="bactions">
-        ${v.mine ? `<input id="avDep${i}" placeholder="0.00 ${esc(quoteTicker())}" autocomplete="off">
+        ${v.mine ? `<input id="avDep${i}" placeholder="0.00" autocomplete="off" style="max-width:130px">
+        <select id="avAsset${i}" style="max-width:120px">
+          <option value="q">${esc(quoteTicker())}</option>
+          <option value="t">$${esc(sym)}</option>
+        </select>
         <button class="btn" onclick="vaultDeposit(${i})">Deposit</button>
         <button class="btn ghost" onclick="vaultWithdrawAll(${i})">Withdraw everything</button>
         <button class="chip" onclick="vaultToggleAgent(${i})">${on ? "Turn agent off" : "Turn agent on"}</button>` : ``}
@@ -5578,15 +5586,19 @@ async function vaultDeposit(i) {
   const v = myVaults[i];
   const raw = $("avDep" + i).value;
   if (!raw || Number(raw) <= 0) return toast("Enter an amount", "err");
-  const amt = ethers.parseUnits(String(raw), 6);
+  const isToken = $("avAsset" + i).value === "t";
+  // 6-dec USDT0 against an 18-dec coin. Parsing both at 6 would be a
+  // 1,000,000x error, which is gotcha 6 and has bitten this repo before.
+  const asset = isToken ? v.token : ADDR.usdt0;
+  const amt = isToken ? E(raw) : ethers.parseUnits(String(raw), 6);
   try {
-    const q = new ethers.Contract(ADDR.usdt0, ERC20_ABI, signer);
-    if ((await q.allowance(wallet, v.addr)) < amt) {
-      toast("Approving " + quoteTicker() + "…");
-      await (await q.approve(v.addr, ethers.MaxUint256)).wait();
+    const erc = new ethers.Contract(asset, ERC20_ABI, signer);
+    if ((await erc.allowance(wallet, v.addr)) < amt) {
+      toast("Approving…");
+      await (await erc.approve(v.addr, ethers.MaxUint256)).wait();
     }
     const c = new ethers.Contract(v.addr, VAULT_ABI, signer);
-    await (await c.deposit(amt)).wait();
+    await (await (isToken ? c.depositToken(amt) : c.deposit(amt))).wait();
     toast("Deposited", "ok");
     vaultLoad(true);
   } catch (e) { toast(e.shortMessage || e.message, "err"); }
@@ -8940,6 +8952,7 @@ const SYNTH_ABI = [
   "function mintPaused() view returns (bool)",
   "function isLiquidatable(address) view returns (bool)",
   "function deposit(uint256)",
+  "function depositToken(uint256)",
   "function withdraw(uint256)",
   "function mint(uint256)",
   "function burn(uint256)",
