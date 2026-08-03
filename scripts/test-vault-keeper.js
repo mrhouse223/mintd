@@ -4,7 +4,7 @@
 // No chain and no ganache: `decide` is pure, which is the point of having split
 // it out. The rule decides whether real money moves, so the boundaries get
 // asserted exactly rather than approximately.
-const { decide } = require("./vault-keeper.js");
+const { decide, rangeFor, needsRebalance } = require("./vault-keeper.js");
 
 let passed = 0, failed = 0;
 const check = (c, n) => { if (c) { passed++; console.log(`  ok  ${n}`); } else { failed++; console.log(`FAIL  ${n}`); } };
@@ -93,6 +93,38 @@ check(decide(cheaper, BASE, true).r === -decide(cheaper, BASE, false).r,
 let threw = false;
 try { decide(cheaper, BASE); } catch { threw = true; }
 check(threw, "omitting the orientation throws rather than silently picking one");
+
+
+console.log("\n-- LP RANGES: snapped to the spacing grid, centred on the TWAP");
+// Uniswap only accepts ticks on the spacing grid. An unsnapped proposal reverts
+// inside the vault rather than being rounded for you, so this is not cosmetic.
+const SP = 200; // the launchpad's 1% tier
+for (const t of [0, 137, -137, 99, 101, -99, -101, 345387, -345387]) {
+  const r = rangeFor(t, SP, 8);
+  if (r.lower % SP !== 0 || r.upper % SP !== 0) { failed++; console.log(`FAIL  tick ${t} produced an unsnapped range ${r.lower}..${r.upper}`); }
+}
+check(true, "every range lands on the spacing grid, including negative ticks");
+const r0 = rangeFor(0, SP, 8);
+check(r0.lower === -1600 && r0.upper === 1600, `width is +/-8 spacings (${r0.lower}..${r0.upper})`);
+check(rangeFor(345387, SP, 8).lower < 345387 && rangeFor(345387, SP, 8).upper > 345387,
+  "the TWAP tick sits inside the range it produces");
+const wide = rangeFor(0, SP, 20);
+check(wide.upper - wide.lower > r0.upper - r0.lower, "a bigger width really is wider");
+
+console.log("\n-- LP REBALANCE: only when price has eaten most of the way to an edge");
+// Rebalancing burns, swaps and re-mints, paying the pool fee on the swap each
+// time. Chasing every wiggle grinds the vault down in fees, so the default only
+// moves at 75% of the way out.
+check(needsRebalance(0, -1000, 1000).move === false, "dead centre holds");
+check(needsRebalance(700, -1000, 1000).move === false, "70% of the way out still holds");
+check(needsRebalance(800, -1000, 1000).move === true, "80% of the way out rebalances");
+check(needsRebalance(-800, -1000, 1000).move === true, "and symmetrically on the low side");
+check(needsRebalance(1500, -1000, 1000).move === true, "outside the range always rebalances");
+check(needsRebalance(1500, -1000, 1000).why.includes("outside"), "and says it was outside");
+check(needsRebalance(0, 0, 0).move === true, "an unset range always rebalances");
+// A tighter edge fraction should be more eager, not less.
+check(needsRebalance(500, -1000, 1000, 0.6).move === true && needsRebalance(500, -1000, 1000, 0.25).move === false,
+  "a larger edge fraction rebalances sooner, which is the knob's whole purpose");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

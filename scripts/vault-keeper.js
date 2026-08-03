@@ -30,6 +30,14 @@ const { ethers } = require("ethers");
 
 const RPC_URL = process.env.RPC_URL || "https://rpc.stable.xyz";
 const FACTORY = process.env.VAULT_FACTORY || "0x3db601869c2C47Bfa9b08c62E077Df4806C1283A";
+// One process, two vault types. Two keepers would mean two gas wallets and two
+// things to notice have died.
+const LP_FACTORY = process.env.AGENT_FACTORY || "0x28A9C05d0e31E2fEBf983F479d3c0278794BEE35";
+// How wide a range to propose, in tick spacings either side of the TWAP tick.
+const LP_WIDTH = Number(process.env.LP_WIDTH || 8);
+// Re-centre once the TWAP tick sits within this fraction of the half-width of an
+// edge. 0.25 means "act when price has eaten three quarters of the way out".
+const LP_EDGE = Number(process.env.LP_EDGE || 0.25);
 const STATE = path.join(__dirname, "..", "data", "vault-keeper-state.json");
 
 // Randomised, never a fixed cron. A predictable buyer in a thin pool on a chain
@@ -56,9 +64,31 @@ const VAULT_ABI = [
   "function executeSell() returns (uint256, uint256)",
 ];
 const POOL_ABI = [
-  "function slot0() view returns (uint160 sqrtPriceX96, int24, uint16, uint16, uint16, uint8, bool)",
+  "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, uint8, bool)",
   "function token0() view returns (address)",
+  "function observe(uint32[]) view returns (int56[], uint160[])",
 ];
+const LP_FACTORY_ABI = [
+  "function vaultCount() view returns (uint256)",
+  "function allVaultsSlice(uint256,uint256) view returns (address[])",
+];
+const LP_VAULT_ABI = [
+  "function agent() view returns (address)",
+  "function mode() view returns (uint8)",
+  "function pool() view returns (address)",
+  "function tickSpacing() view returns (int24)",
+  "function maxTickDrift() view returns (int24)",
+  "function twapWindow() view returns (uint32)",
+  "function cooldown() view returns (uint256)",
+  "function lastAction() view returns (uint256)",
+  "function positionId() view returns (uint256)",
+  "function valueCheckpoint() view returns (uint256)",
+  "function proposal() view returns (int24 lower, int24 upper, uint64 readyAt, bool approved, bool open, uint256 nonce)",
+  "function propose(int24,int24)",
+  "function execute()",
+  "function compound()",
+];
+const MODE = ["PAUSED", "PROPOSE_ONLY", "TIMELOCKED", "AUTONOMOUS"];
 const QUOTE = process.env.QUOTE || "0x779Ded0c9e1022225f8E0630b35a9b54bE713736"; // USDT0
 
 /// The whole decision, as a pure function so it can be tested without a chain.
@@ -99,6 +129,132 @@ function saveState(st) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+
+/// Where to put an LP range, as a pure function so it can be tested without a
+/// chain. Centred on the TWAP tick, never on spot: spot is what an attacker can
+/// shove for one block, and the vault will reject a proposal that sits far from
+/// its own TWAP anyway.
+///
+/// Both edges are snapped to `spacing`, because Uniswap only accepts ticks on
+/// the spacing grid and an unsnapped proposal reverts inside the vault rather
+/// than being rounded for you.
+function rangeFor(twapTick, spacing, widthSpacings = LP_WIDTH) {
+  const w = Math.max(1, Math.round(widthSpacings));
+  const centre = Math.round(twapTick / spacing) * spacing;
+  return { lower: centre - w * spacing, upper: centre + w * spacing };
+}
+
+/// Whether a live position is far enough off-centre to be worth moving.
+///
+/// Rebalancing is not free: it burns the position, swaps to rebalance the legs,
+/// and re-mints, paying the pool fee on the swap every time. So this deliberately
+/// does nothing until price has eaten most of the way to an edge, rather than
+/// chasing every wiggle and grinding the vault down in fees.
+function needsRebalance(twapTick, lower, upper, edgeFrac = LP_EDGE) {
+  if (lower === upper) return { move: true, why: "no range set" };
+  if (twapTick <= lower || twapTick >= upper) return { move: true, why: "price is outside the range" };
+  const half = (upper - lower) / 2;
+  const centre = (upper + lower) / 2;
+  const off = Math.abs(twapTick - centre);
+  // off/half is 0 dead centre, 1 at an edge.
+  const slack = 1 - edgeFrac;
+  return off / half >= slack
+    ? { move: true, why: `price is ${(off / half * 100).toFixed(0)}% of the way to an edge` }
+    : { move: false, why: `price is ${(off / half * 100).toFixed(0)}% of the way to an edge` };
+}
+
+/// Arithmetic-mean tick over the window, the same way the vault computes it.
+async function twapTickOf(pool, window) {
+  const [cum] = await pool.observe([window, 0]);
+  const delta = cum[1] - cum[0];
+  let t = Number(delta / BigInt(window));
+  if (delta < 0n && delta % BigInt(window) !== 0n) t--;
+  return t;
+}
+
+async function lpCycle(provider, signer, me, dry) {
+  const f = new ethers.Contract(LP_FACTORY, LP_FACTORY_ABI, provider);
+  const n = Number(await f.vaultCount());
+  if (n === 0) { console.log("lp: no vaults yet"); return; }
+  const list = await f.allVaultsSlice(0, Math.min(n, 200));
+  let mine = 0, acted = 0;
+
+  for (const addr of list) {
+    const v = new ethers.Contract(addr, LP_VAULT_ABI, signer);
+    try {
+      if ((await v.agent()).toLowerCase() !== me.toLowerCase()) continue;
+      mine++;
+      const mode = Number(await v.mode());
+      if (mode === 0) { console.log(`lp ${addr} PAUSED, skipping`); continue; }
+
+      const last = Number(await v.lastAction());
+      const cool = Number(await v.cooldown());
+      if (Math.floor(Date.now() / 1000) < last + cool) continue;
+
+      const poolAddr = await v.pool();
+      const pc = new ethers.Contract(poolAddr, POOL_ABI, provider);
+      const window = Number(await v.twapWindow());
+      let tw;
+      try { tw = await twapTickOf(pc, window); }
+      catch (e) { console.log(`lp ${addr} no usable TWAP, skipping`); continue; }
+
+      const spacing = Number(await v.tickSpacing());
+      const p = await v.proposal();
+
+      // An open proposal is a decision already made. Try to land it before
+      // making another, or a TIMELOCKED vault never gets past its review window
+      // because every cycle replaces the proposal and restarts the clock.
+      if (p.open) {
+        const ready = mode === 3 || p.approved || (mode === 2 && Date.now() / 1000 >= Number(p.readyAt));
+        if (!ready) { console.log(`lp ${addr} proposal ${p.lower}..${p.upper} waiting (${MODE[mode]})`); continue; }
+        try { await v.execute.staticCall(); }
+        catch (e) { console.log(`lp ${addr} execute not possible: ${(e.shortMessage || e.message).slice(0, 80)}`); continue; }
+        console.log(`lp ${addr} EXECUTE ${p.lower}..${p.upper}`);
+        if (!dry) {
+          // Explicit gasLimit: the vault's own header warns that execute and
+          // deposit are under-reported by eth_estimateGas, because clearing a
+          // proposal refunds storage and the estimate comes back NET while the
+          // EVM charges GROSS.
+          const tx = await v.execute({ gasLimit: 2_500_000 });
+          console.log(`   sent ${(await tx.wait()).hash}`);
+        } else console.log("   would send (dry run)");
+        acted++;
+        continue;
+      }
+
+      // No proposal. Decide whether the current range is still good enough.
+      const posId = Number(await v.positionId());
+      const decision = posId === 0
+        ? { move: true, why: "no position yet" }
+        : needsRebalance(tw, Number(p.lower), Number(p.upper));
+
+      // A vault holding a position reports its range through the proposal only
+      // after one has been made, so a live position with no stored proposal is
+      // read as centred and left alone until it drifts out. Cheap and safe: the
+      // worst case is a late rebalance, never an unwanted one.
+      if (!decision.move) { console.log(`lp ${addr} HOLD (${decision.why})`); continue; }
+
+      const { lower, upper } = rangeFor(tw, spacing);
+      const drift = Number(await v.maxTickDrift());
+      if (Math.abs(tw - (lower + upper) / 2) > drift) {
+        console.log(`lp ${addr} proposed range would exceed maxTickDrift, skipping`);
+        continue;
+      }
+      try { await v.propose.staticCall(lower, upper); }
+      catch (e) { console.log(`lp ${addr} propose rejected: ${(e.shortMessage || e.message).slice(0, 80)}`); continue; }
+      console.log(`lp ${addr} PROPOSE ${lower}..${upper} twap=${tw} (${decision.why}, ${MODE[mode]})`);
+      if (!dry) {
+        const tx = await v.propose(lower, upper, { gasLimit: 400_000 });
+        console.log(`   sent ${(await tx.wait()).hash}`);
+      } else console.log("   would send (dry run)");
+      acted++;
+    } catch (e) {
+      console.error(`lp ${addr} errored: ${(e.shortMessage || e.message || "").slice(0, 100)}`);
+    }
+  }
+  console.log(`lp cycle done: ${list.length} vaults, ${mine} mine, ${acted} acted`);
+}
 
 async function cycle(provider, signer, me, dry) {
   const st = loadState();
@@ -188,10 +344,15 @@ async function main() {
   }
   console.log(`vault-keeper as ${me}${dry ? " (dry run)" : ""}, factory ${FACTORY}`);
   console.log(`band ${DEAD_ZONE}, sell at ${DEAD_ZONE * SELL_MULT}, interval ${MIN_MS / 1000}-${MAX_MS / 1000}s`);
+  console.log(`lp factory ${LP_FACTORY}, width +/-${LP_WIDTH} spacings, re-centre at ${(1 - LP_EDGE) * 100}% to an edge`);
 
   for (;;) {
     try { await cycle(provider, signer, me, dry); }
-    catch (e) { console.error("cycle failed:", e.shortMessage || e.message); }
+    catch (e) { console.error("buyback cycle failed:", e.shortMessage || e.message); }
+    // Separate try: an LP failure must not stop buyback vaults being serviced,
+    // and the reverse.
+    try { await lpCycle(provider, signer, me, dry); }
+    catch (e) { console.error("lp cycle failed:", e.shortMessage || e.message); }
     if (process.argv.includes("--once")) break;
     await sleep(MIN_MS + Math.floor(Math.random() * (MAX_MS - MIN_MS)));
   }
@@ -199,4 +360,4 @@ async function main() {
 
 if (require.main === module) main();
 
-module.exports = { decide };
+module.exports = { decide, rangeFor, needsRebalance };

@@ -49,6 +49,7 @@ const CORE = [
   // which has a setter, so they are read off the token instead.
   ["BondMarket",        "0xD98780804449cC3b01Cd9A37fbaD808d01e24383", "BondMarket.sol",        "BondMarket",        ["address", "address", "uint256", "uint256", "address[]"]],
   ["BuybackVaultFactory","0x3db601869c2C47Bfa9b08c62E077Df4806C1283A", "BuybackVaultFactory.sol","BuybackVaultFactory",["address", "address", "address"], null, ["BuybackVault.sol", "AgentVault.sol"]],
+  ["AgentVaultFactory",  "0x28A9C05d0e31E2fEBf983F479d3c0278794BEE35", "AgentVaultFactory.sol", "AgentVaultFactory",  ["address", "address"], null, ["AgentVault.sol"]],
   ["MGLD",              "0x872a3C280B846759187c9E57F62d1Ed8407b135C", "MintSynth.sol",         "SynthToken",        ["string", "string"], "internal"],
 ];
 

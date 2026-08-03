@@ -171,6 +171,9 @@ module.exports = {
         MAX_MS: env.VAULT_MAX_MS || "900000",
         DEAD_ZONE: env.VAULT_DEAD_ZONE || "1500",
         SELL_MULT: env.VAULT_SELL_MULT || "3",
+        AGENT_FACTORY: env.AGENT_FACTORY || "0x28A9C05d0e31E2fEBf983F479d3c0278794BEE35",
+        LP_WIDTH: env.LP_WIDTH || "8",
+        LP_EDGE: env.LP_EDGE || "0.25",
       },
     },
     {
