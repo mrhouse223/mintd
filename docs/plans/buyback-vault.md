@@ -1,6 +1,6 @@
 # Buyback vault (user-owned agents)
 
-Status: draft
+Status: built and reviewed. Not deployed.
 Date: 2026-08-03
 
 ## What problem this solves
@@ -60,7 +60,7 @@ person, and the deposit is a donation with a delayed trigger. Defensible for a
 project's own treasury, strange for a stranger.
 
 They differ in the contract, the UI, and the tax story, so this is not a flag to
-be added later. **A is assumed below.** If B is wanted it is a separate mode set
+be added later. **A is confirmed and built.** If B is wanted it is a separate mode set
 at construction and never changeable, because a vault that can switch from
 "yours" to "burned" after you deposit is a rug with extra steps.
 
@@ -77,6 +77,33 @@ at construction and never changeable, because a vault that can switch from
   admin, which is the thing this design spends its budget avoiding.
 - **No protocol fee in v1.** A fee puts mintd in the path of user funds it
   currently never touches. Separate decision, separate plan.
+
+## Build status
+
+`BuybackVault.sol`, `BuybackVaultFactory.sol` and `scripts/test-buyback-vault.js`
+are written and green: **38 tests, 0 failures**. `/security-review` found one
+HIGH, one LOW and one that would have bricked the thing in production. All three
+are fixed and each has a test:
+
+- **HIGH, stale oracle.** `observe()` does not revert when a pool has no recent
+  history: it EXTRAPOLATES from the current tick, so the "TWAP" comes back
+  byte-identical to spot and `minOut` is derived from whatever price an attacker
+  last pushed it to. Push the price in a pool nobody trades, wait out the
+  window, and a 500 USDT0 slice fills at half value against a stated 1% bound.
+  `scripts/seed-twap.js` already said this in the repo ("the protection is not
+  broken, it is unarmed") and the contract's comment claimed the opposite.
+  `_twapTick` now requires cardinality >= 2 and an observation newer than the
+  window, because a degenerate TWAP still yields a healthy-looking `minOut`.
+- **LOW, `cooldown` was unbounded.** Zero made the slice cap vacuous: a keeper
+  could call `execute()` back to back in one block. Floor of 60s.
+- **Would not have run at all.** The default tolerance was a flat 1% while every
+  launchpad pool is the 1% fee tier. Router output is net of the fee and the
+  TWAP is not, so every fill would land under the minimum and revert. The
+  default is now derived from the pool's own fee tier, fee + 1%. No mock would
+  have caught this, since the mock router charges no fee.
+
+Still to do: deploy the factory, and the Agents page UI for create / deposit /
+withdraw / trade history.
 
 ## Contracts touched
 

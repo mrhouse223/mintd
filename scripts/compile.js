@@ -56,6 +56,9 @@ for (const rel of [
   "contracts/ArcSwapLaunchpad.sol",
   "contracts/WraxToken.sol",
   "contracts/BondMarket.sol",
+  "contracts/BuybackVault.sol",
+  "contracts/BuybackVaultFactory.sol",
+  "contracts/test/MockTwap.sol",
   "contracts/test/ReentrantBuyer.sol",
 ]) {
   sources[rel] = { content: fs.readFileSync(path.join(root, rel), "utf8") };
