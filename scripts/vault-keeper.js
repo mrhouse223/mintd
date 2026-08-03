@@ -15,10 +15,10 @@
 //   r = 1e6 * (s^2 - s_prev^2) / s_prev^2      oriented move, off sqrtPriceX96
 //   d = DEAD_ZONE                              band, in the same units
 //   BUY   when r < -d          buy the drawdown
-//   SELL  when r >  4d         and only if the vault is overweight, which the
+//   SELL  when r >  3d         and only if the vault is overweight, which the
 //                              contract enforces, not this file
 //   HOLD  otherwise
-// Asymmetric on purpose: one band to buy, four to sell.
+// Asymmetric on purpose: one band to buy, three to sell.
 //
 // WHY s_prev IS ON DISK
 // The RPC prunes at roughly four days and has no archive state (CLAUDE.md
@@ -38,7 +38,7 @@ const STATE = path.join(__dirname, "..", "data", "vault-keeper-state.json");
 const MIN_MS = Number(process.env.MIN_MS || 600_000);   // 10 min
 const MAX_MS = Number(process.env.MAX_MS || 900_000);   // 15 min
 const DEAD_ZONE = Number(process.env.DEAD_ZONE || 1500); // ~0.15%
-const SELL_MULT = Number(process.env.SELL_MULT || 4);
+const SELL_MULT = Number(process.env.SELL_MULT || 3);
 
 const FACTORY_ABI = [
   "function vaultCount() view returns (uint256)",

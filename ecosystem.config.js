@@ -170,6 +170,7 @@ module.exports = {
         MIN_MS: env.VAULT_MIN_MS || "600000",
         MAX_MS: env.VAULT_MAX_MS || "900000",
         DEAD_ZONE: env.VAULT_DEAD_ZONE || "1500",
+        SELL_MULT: env.VAULT_SELL_MULT || "3",
       },
     },
     {

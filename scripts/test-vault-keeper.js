@@ -28,7 +28,7 @@ console.log("\n-- direction");
 const down = sqrtAt(1 - 0.01);   // 1% down
 const up = sqrtAt(1 + 0.01);     // 1% up
 check(decide(down, BASE, false).action === "BUY", "a 1% fall buys");
-check(decide(up, BASE, false).action === "SELL", "a 1% rise past 4x the band sells");
+check(decide(up, BASE, false).action === "SELL", "a 1% rise past 3x the band sells");
 check(decide(BASE, BASE, false).action === "HOLD", "an unchanged price holds");
 
 console.log("\n-- the band, and its asymmetry");
@@ -38,13 +38,16 @@ const pastDown = sqrtAt(1 - 0.002);   // -0.2%, outside
 check(decide(justDown, BASE, false).action === "HOLD", "a fall inside the band holds");
 check(decide(pastDown, BASE, false).action === "BUY", "a fall past the band buys");
 
-// Selling needs FOUR times the band, so a rise that would have triggered a buy
+// Selling needs THREE times the band, so a rise that would have triggered a buy
 // in the other direction must still hold.
-const mirrorUp = sqrtAt(1 + 0.002);   // +0.2%: past the band, but not past 4x
+const mirrorUp = sqrtAt(1 + 0.002);   // +0.2%: past the band, but not past 3x
 check(decide(mirrorUp, BASE, false).action === "HOLD",
   "a rise the same size as a buying fall does NOT sell, the rule is buy-biased");
-const bigUp = sqrtAt(1 + 0.007);      // +0.7%, past 4x the band
-check(decide(bigUp, BASE, false).action === "SELL", "a rise past 4x the band sells");
+const bigUp = sqrtAt(1 + 0.006);      // +0.6%, past 3x the band (4500)
+check(decide(bigUp, BASE, false).action === "SELL", "a rise past 3x the band sells");
+
+const midUp = sqrtAt(1 + 0.004);      // +0.4%: past the band, under 3x
+check(decide(midUp, BASE, false).action === "HOLD", "a rise between 1x and 3x the band still holds");
 
 console.log("\n-- r is signed and roughly the price move in parts per million");
 const r1 = decide(sqrtAt(1.01), BASE, false).r;
