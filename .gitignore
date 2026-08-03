@@ -26,3 +26,9 @@ holder-ledger.lock
 data/agent-vaults-*.json
 data/stable-earn-cap.json
 data/verified-tokens.json
+
+# Keeper's last-seen price per pool. Machine-local and self-healing: a lost file
+# costs one HOLD cycle while it re-reads a reference price. Unlike
+# data/mintd-holder-ledger.json this is NOT irreplaceable, so it stays out of git
+# rather than churning a commit every ten minutes.
+data/vault-keeper-state.json
