@@ -514,8 +514,23 @@
   .bondcard .blogo { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex: none; }
   .bondcard .blogo.bfb { display: grid; place-items: center; font-size: 11px; font-weight: 800;
                          background: var(--card2, rgba(127,127,127,.16)); color: var(--dim); }
-  .bondcard .bstats { display: flex; gap: 22px; flex-wrap: wrap; margin: 12px 0 4px; font-size: 13px; }
-  .bondcard .bstats label { display: block; font-size: 9.5px; letter-spacing: .1em; font-weight: 700; color: var(--dim); margin-bottom: 2px; }
+  /* Numbers get their own boxes. A row of bare text made the market price and
+     the bond price look like the same field. */
+  .bondcard { border: 1px solid var(--line, rgba(127,127,127,.18)); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+  .bondcard .bgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 14px 0 12px; }
+  .bondcard .bbox { border: 1px solid var(--line, rgba(127,127,127,.16)); border-radius: 10px; padding: 10px 12px; }
+  .bondcard .bbox label { display: block; font-size: 9px; letter-spacing: .11em; font-weight: 800;
+                          color: var(--dim); margin-bottom: 5px; white-space: nowrap; }
+  .bondcard .bbox b { font-size: 15px; font-weight: 700; display: block; line-height: 1.25; }
+  .bondcard .bbox small { display: block; font-size: 10.5px; color: var(--dim); margin-top: 2px; }
+  .bondcard .bbar { height: 6px; border-radius: 99px; background: var(--line, rgba(127,127,127,.18)); overflow: hidden; margin: 2px 0 12px; }
+  .bondcard .bbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--green), var(--green2)); }
+  .bchip { font-size: 10px; font-weight: 800; letter-spacing: .08em; padding: 4px 9px; border-radius: 99px; }
+  .bchip.on  { background: var(--green); color: #fff; }
+  .bchip.off { background: var(--line, rgba(127,127,127,.2)); color: var(--dim); }
+  .bchip.soon{ background: rgba(120,150,255,.18); color: #7d9bff; }
+  .bactions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .bactions input { max-width: 200px; }
   .field label { font-size: 10px; letter-spacing: .12em; font-weight: 800; color: var(--dim); display: block; margin-bottom: 6px; }
   .field input, .field textarea { width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; color: var(--ink); padding: 11px 12px; font-size: 14px; font-family: inherit; }
   .field textarea { resize: vertical; min-height: 70px; }
@@ -5260,11 +5275,20 @@ function bondRow(b, t) {
   const discount = spot > 0n ? Number(((spot - bondPx) * 10000n) / spot) / 100 : null;
   const days = Number(b.vestDuration) / 86400;
   const now = Math.floor(Date.now() / 1000);
+  const started = now >= Number(b.saleStart);
+  const ended = now >= Number(b.saleEnd);
+  const soldOut = remaining === 0n;
   return {
     token: b.token, sym: t ? t.symbol : b.token.slice(0, 8) + "…",
-    creator: b.creator, remaining, bondPx, spot, discount, days,
+    creator: b.creator, escrowed: b.escrowed, soldTokens: b.sold, remaining,
+    bondPx, spot, discount, days,
     apr: discount !== null ? bondApr(discount, days) : null,
-    open: now >= Number(b.saleStart) && now < Number(b.saleEnd) && remaining > 0n,
+    open: started && !ended && !soldOut,
+    started, ended, soldOut, reclaimed: b.reclaimed,
+    // Progress and the money raised so far, both derived here so the card is
+    // pure formatting.
+    pct: b.escrowed > 0n ? Number((b.sold * 10000n) / b.escrowed) / 100 : 0,
+    raised: (Number(ethers.formatEther(b.sold)) * Number(ethers.formatUnits(b.price, 6))),
     startsIn: Number(b.saleStart) - now, endsIn: Number(b.saleEnd) - now,
     stepped: Number(b.vestStep) > 1,
   };
@@ -5272,33 +5296,20 @@ function bondRow(b, t) {
 
 function bondPaint() {
   const rows = $("bondRows"), note = $("bondNote");
+  const me = wallet ? wallet.toLowerCase() : null;
   const open = bondList.filter((b) => b.open);
-  if (!open.length) {
-    rows.innerHTML = `<div class="empty">No bonds are open right now.</div>`;
-  } else {
-    rows.innerHTML = open.map((b) => `
-      <div class="bondcard" style="border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:14px;margin-bottom:10px">
-        <div class="bhead">
-          ${bondLogo(b)}
-          <b style="font-size:17px">$${esc(b.sym)}</b>
-          ${b.discount !== null ? `<span class="badgepill" style="background:var(--green);color:#fff">${nf(b.discount, 1)}% off</span>` : ""}
-          <span style="opacity:.7;font-size:13px">releases over ${nf(b.days, 0)} day(s)${b.stepped ? ", every 10 min" : ""}</span>
-          <div class="spacer"></div>
-          <span style="opacity:.6;font-size:12px">closes in ${bondDur(b.endsIn)}</span>
-        </div>
-        <div class="bstats">
-          <div><label>BOND PRICE</label><div>$${nf(Number(ethers.formatEther(b.bondPx)), 8)}</div></div>
-          <div><label>MARKET</label><div>$${nf(Number(ethers.formatEther(b.spot)), 8)}</div></div>
-          <div><label>BREAKEVEN</label><div>$${nf(Number(ethers.formatEther(b.bondPx)), 8)}</div></div>
-          <div><label>LEFT</label><div>${nfCompact(Number(ethers.formatEther(b.remaining)))} $${esc(b.sym)}</div></div>
-        </div>
-        ${b.apr ? `<div class="finenote">${nf(b.apr, 0)}% APR <b>if the price is unchanged</b>. You receive tokens, not dollars: you are whole only while the average price across the ${nf(b.days, 0)} days stays above $${nf(Number(ethers.formatEther(b.bondPx)), 8)}.</div>` : ""}
-        <div style="display:flex;gap:8px;margin-top:10px">
-          <input id="bdBuy${b.id}" placeholder="0.00 ${esc(quoteTicker())}" autocomplete="off" style="max-width:180px">
-          <button class="btn" onclick="bondBuy(${b.id})">Buy</button>
-        </div>
-      </div>`).join("");
-  }
+  // Closed bonds used to be dropped on the floor. A creator whose window ended
+  // then had no way to see the bond at all, let alone reclaim what did not
+  // sell, and 200,000 escrowed tokens simply vanished from the interface.
+  const other = bondList.filter((b) => !b.open);
+
+  const section = (title, list) => !list.length ? "" :
+    `<div style="font-size:11px;letter-spacing:.1em;font-weight:800;color:var(--dim);margin:18px 0 8px">${title}</div>`
+    + list.map(bondCardHTML).join("");
+
+  rows.innerHTML = (open.length ? open.map(bondCardHTML).join("") : `<div class="empty">No bonds are open right now.</div>`)
+    + section("CLOSED &amp; UPCOMING", other);
+
   note.innerHTML = `A bond is a bet on the token, not a yield product. `
     + `The discount is your only cushion, and the creator can still sell their own supply while you vest.`;
 
@@ -5307,13 +5318,84 @@ function bondPaint() {
   if (mine.length) {
     $("bondMineRows").innerHTML = mine.map((b) => `
       <div style="display:flex;align-items:center;gap:12px;border-top:1px solid rgba(255,255,255,.06);padding:10px 0">
-        <b>$${esc(b.sym)}</b>
-        <span style="opacity:.7;font-size:13px">${nfCompact(Number(ethers.formatEther(b.mine.total - b.mine.claimed)))} still to come</span>
+        ${bondLogo(b)}
+        <div>
+          <b>$${esc(b.sym)}</b>
+          <div style="font-size:12px;opacity:.7">${nfCompact(Number(ethers.formatEther(b.mine.total - b.mine.claimed)))} still to come</div>
+        </div>
         <div class="spacer"></div>
         <span style="font-size:13px">${nf(Number(ethers.formatEther(b.owed)), 4)} claimable</span>
         <button class="btn" ${b.owed > 0n ? "" : "disabled"} onclick="bondClaim(${b.id})">Claim</button>
       </div>`).join("");
   }
+}
+
+function bondCardHTML(b) {
+  const me = wallet ? wallet.toLowerCase() : null;
+  const isMine = me && b.creator.toLowerCase() === me;
+  const chip = b.open ? `<span class="bchip on">OPEN</span>`
+    : !b.started ? `<span class="bchip soon">OPENS IN ${bondDur(b.startsIn)}</span>`
+    : b.soldOut ? `<span class="bchip off">SOLD OUT</span>`
+    : `<span class="bchip off">CLOSED</span>`;
+  const px = (x, d) => "$" + nf(Number(ethers.formatEther(x)), d);
+
+  // Reclaim is the creator's only route to unsold escrow, and it exists only
+  // after the window closes. Without this button the tokens are stranded.
+  const canReclaim = isMine && b.ended && !b.reclaimed && b.remaining > 0n;
+  const actions = b.open
+    ? `<input id="bdBuy${b.id}" placeholder="0.00 ${esc(quoteTicker())}" autocomplete="off">
+       <button class="btn" onclick="bondBuy(${b.id})">Buy</button>`
+    : canReclaim
+    ? `<button class="btn" onclick="bondReclaim(${b.id})">Reclaim ${nfCompact(Number(ethers.formatEther(b.remaining)))} unsold $${esc(b.sym)}</button>`
+    : b.reclaimed ? `<span class="finenote">Unsold tokens have been returned to the creator.</span>`
+    : b.ended ? `<span class="finenote">This sale has closed.${isMine ? "" : " Buyers keep vesting on schedule."}</span>`
+    : `<span class="finenote">Sale has not opened yet.</span>`;
+
+  return `<div class="bondcard">
+    <div class="bhead">
+      ${bondLogo(b)}
+      <b style="font-size:17px">$${esc(b.sym)}</b>
+      ${chip}
+      ${bondDiscountBadge(b)}
+      <div class="spacer"></div>
+      <span style="opacity:.6;font-size:12px">${b.open ? "closes in " + bondDur(b.endsIn) : ""}</span>
+    </div>
+
+    <div class="bgrid">
+      <div class="bbox"><label>BOND PRICE</label><b>${px(b.bondPx, 8)}</b><small>per $${esc(b.sym)}</small></div>
+      <div class="bbox"><label>MARKET</label><b>${px(b.spot, 8)}</b><small>right now</small></div>
+      <div class="bbox"><label>BREAKEVEN</label><b>${px(b.bondPx, 8)}</b><small>avg over ${nf(b.days, 0)}d</small></div>
+      <div class="bbox"><label>VESTS OVER</label><b>${nf(b.days, 0)} days</b><small>${b.stepped ? "every 10 min" : "continuously"}</small></div>
+      <div class="bbox"><label>SOLD</label><b>${nf(b.pct, 1)}%</b><small>$${nf(b.raised, 2)} raised</small></div>
+      <div class="bbox"><label>LEFT</label><b>${nfCompact(Number(ethers.formatEther(b.remaining)))}</b><small>of ${nfCompact(Number(ethers.formatEther(b.escrowed)))}</small></div>
+    </div>
+    <div class="bbar"><i style="width:${Math.min(100, b.pct)}%"></i></div>
+
+    ${b.discount !== null && b.discount <= 0 ? `<div class="finenote" style="margin-bottom:10px;color:var(--red,#e5534b)"><b>This bond costs more than the open market.</b> It was priced when $${esc(b.sym)} was higher, and a bond's price is fixed at creation. Buying $${esc(b.sym)} on the Swap tab is cheaper right now.</div>` : ""}
+    ${b.apr ? `<div class="finenote" style="margin-bottom:10px">${nf(b.apr, 0)}% APR <b>if the price is unchanged</b>. You receive tokens, not dollars: you are whole only while the average price across the ${nf(b.days, 0)} days stays above ${px(b.bondPx, 8)}.</div>` : ""}
+    <div class="bactions">${actions}</div>
+  </div>`;
+}
+
+// A bond's price is fixed at creation, so if the market falls under it the
+// "discount" goes negative. Rendering that as "-96.1% off" is worse than
+// useless: it reads like a bigger discount at a glance.
+function bondDiscountBadge(b) {
+  if (b.discount === null) return "";
+  if (b.discount <= 0) return `<span class="bchip off" style="background:rgba(229,83,75,.16);color:#e5534b">ABOVE MARKET</span>`;
+  return `<span class="badgepill" style="background:var(--green);color:#fff">${nf(b.discount, 1)}% off</span>`;
+}
+
+async function bondReclaim(id) {
+  if (!signer) return connect();
+  try {
+    const c = new ethers.Contract(NET.mintd.bondMarket, BOND_ABI, signer);
+    const tx = await c.reclaim(id);
+    toast("Transaction sent…");
+    await tx.wait();
+    toast("Unsold tokens returned", "ok");
+    bondLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
 }
 
 // Same source the swap picker uses, so a coin looks identical wherever it appears.
