@@ -295,6 +295,41 @@ async function main() {
   await reverts(() => v.connect(ownerS).setSellParams.staticCall(20000, 3001), "drawdown cap enforced", "drawdown");
   await reverts(() => v.connect(keeper).setSellParams.staticCall(20000, 500), "keeper cannot touch sell params", "not owner");
 
+  say("\n-- funding with the coin itself");
+  // The previous section already emptied the vault, so no withdrawAll here: it
+  // would revert "empty" and the failure would look like the deposit's fault.
+  // It also left the breaker at 0.01%, which would halt any trade below.
+  await (await v.connect(ownerS).setSellParams(20000, 500, GS)).wait();
+  await (await pool.setTick(TICK, GS)).wait();
+  await (await tok.transfer(ownerS.address, E(50_000), GS)).wait();
+  await (await tok.connect(ownerS).approve(vAddr, ethers.MaxUint256, GS)).wait();
+  await (await v.connect(ownerS).depositToken(E(50_000), GS)).wait();
+  const [dq, dt] = await v.balances();
+  check(dt === E(50_000), "the coin lands in the vault");
+  check(dq === 0n, "and no USDT0 was involved");
+  // 50,000 COIN at 0.001 = 50 USDT0 of value, credited to the mark so the
+  // breaker knows what the vault is actually worth.
+  const mark = await v.valueCheckpoint();
+  // A tick is a discrete step, so the credited value lands near 50 rather than
+  // exactly on it. The band is what matters, not the last digit.
+  check(mark > U(49) && mark < U(51), `the mark is credited at the coin's real value (${ethers.formatUnits(mark, 6)})`);
+  // Overweight by construction, so it can sell straight away.
+  await warp(120); await (await pool.setTick(TICK, GS)).wait();
+  await (await v.connect(ownerS).setAgent(keeper.address, GS)).wait();
+  const sell = await v.connect(keeper).executeSell.staticCall();
+  check(sell[0] > 0n, "a coin-funded vault can take profit immediately, with no buy first");
+  await (await v.connect(ownerS).withdrawAll(GS)).wait();
+
+  say("\n-- a coin deposit needs a real price, unlike a USDT0 one");
+  await (await pool.setNewestObs(1, GS)).wait();
+  await reverts(() => v.connect(ownerS).depositToken.staticCall(E(1000)),
+    "depositing the coin refuses a stale oracle rather than guessing its value", "stale oracle");
+  await (await v.connect(ownerS).deposit(U(5), GS)).wait();
+  check((await v.balances())[0] === U(5), "but a USDT0 deposit still works with the oracle down");
+  await (await v.connect(ownerS).withdrawAll(GS)).wait();
+  check((await v.balances())[0] === 0n, "and the exit still works too");
+  await (await pool.setTick(TICK, GS)).wait();
+
   say(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 }

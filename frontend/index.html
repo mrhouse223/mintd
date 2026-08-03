@@ -1568,20 +1568,50 @@
         </p>
       </div>
 
+      <div class="agcard">
+        <div class="aghead"><b>How the agents decide</b></div>
+        <div class="bgrid" style="margin-top:12px">
+          <div class="bbox"><label>EVERY 10-15 MIN</label><b>Look</b><small>randomised, never a fixed clock</small></div>
+          <div class="bbox"><label>PRICE FELL</label><b>Buy</b><small>past the band, a slice of your USDT0</small></div>
+          <div class="bbox"><label>PRICE ROSE 4x THAT</label><b>Sell</b><small>only if heavy in the coin</small></div>
+          <div class="bbox"><label>OTHERWISE</label><b>Hold</b><small>most cycles do nothing</small></div>
+        </div>
+        <p class="finenote" style="margin:4px 0 0">
+          It takes <b>one band to buy and four to sell</b>, so it leans toward accumulating rather than trading.
+          Each move is a slice of the balance, never all of it, and there is a cooldown between moves.
+        </p>
+        <div style="border-top:1px solid var(--line,rgba(127,127,127,.18));margin:14px 0 0;padding-top:14px">
+          <b style="font-size:14px">Why the agent cannot rob you</b>
+          <p class="finenote" style="margin:6px 0 0">
+            The agent's only power is choosing <b>when</b>. It cannot name a price, a size, or where anything goes:
+            those are fixed in your vault, not passed in by the caller. The minimum it will accept on any trade is
+            worked out inside the vault from the pool's own time-averaged price, so a stolen agent key cannot
+            quote itself a bad fill and pocket the difference. It cannot withdraw, ever. You can, at any moment,
+            without asking it, and you can switch it off in one transaction.
+          </p>
+          <p class="finenote" style="margin:8px 0 0">
+            There is also a stop: the vault remembers its high-water value, and if it drifts more than a set amount
+            below that, every trade halts until you re-arm it. That is what bounds a misbehaving agent to a few
+            percent rather than the whole balance.
+          </p>
+        </div>
+      </div>
+
       <div class="agcard" id="agMine">
         <div class="aghead">
-          <b>Your agents</b>
+          <b>Live agents</b>
           <span class="bchip on" id="agVaultChip">LIVE</span>
           <div class="spacer"></div>
           <button class="chip" onclick="vaultLoad(true)">Refresh</button>
           <button class="btn" onclick="vaultShowCreate()">New agent</button>
         </div>
         <p class="finenote" style="margin:6px 0 10px">
-          Your own vault, pointed at any coin. You deposit <span class="paySymTxt">USDT0</span>, the agent
-          buys dips and can take profit on pumps, and everything it buys stays yours.
-          <b>Only you can withdraw</b>, at any time, with no help from the agent.
+          Every agent running on mintd, on any coin. Yours are marked, and only you can touch those.
+          Deposit <span class="paySymTxt">USDT0</span>, the agent buys dips and can take profit on pumps,
+          and everything it buys stays yours. <b>Only the owner can withdraw</b>, at any time, with no
+          help from the agent.
         </p>
-        <div id="agVaultRows"><div class="empty">Connect a wallet to see your agents.</div></div>
+        <div id="agVaultRows"><div class="empty">Loading…</div></div>
 
         <div id="agVaultCreate" style="display:none;margin-top:14px;border-top:1px solid var(--line,rgba(127,127,127,.18));padding-top:14px">
           <div class="bdform">
@@ -1765,7 +1795,7 @@
         <p>Everything on <span class="brand">mintd.fun</span>, explained. All contracts are onchain and verifiable on <span class="cexp">stablescan.xyz</span>. Nothing here is financial advice, and all code is unaudited: do your own research.</p>
       </div>
       <div class="trade docs">
-        <p class="d-toc"><b>Contents:</b> <a href="#d-start">Getting started</a> · <a href="#d-overview">Overview</a> · <a href="#d-launchpad">Launchpad</a> · <a href="#d-curve">Bonding curve &amp; graduation</a> · <a href="#d-fees">Fees</a><span data-chain="arc-testnet"> · <a href="#d-devbuy">Dev buy cap</a> · <a href="#d-tokenomics">Tokenomics</a></span> · <a href="#d-editing">Editing your token page</a> · <a href="#d-swap">Swap</a><span data-chain="stable"> · <a href="#d-pools">Pools</a> · <a href="#d-earn">Earn / farms</a> · <a href="#d-zap">Zap</a><span data-chain="stable"> · <a href="#d-stableearn">StableEarn</a></span></span> · <a href="#d-mintr">MINTR</a><span data-chain="stable"> · <a href="#d-gold">Mintd Gold</a></span> · <a href="#d-locker">Locker</a> · <a href="#d-bridge"><span data-chain="stable">Bridge</span><span data-chain="arc-testnet">Faucet</span></a> · <a href="#d-buyback">Buyback &amp; burn</a><span data-chain="stable"> · <a href="#d-mintd">$MINTD</a></span><span data-chain="stable"> · <a href="#d-contracts">Contracts</a></span> · <a href="#d-safety">Security</a></p>
+        <p class="d-toc"><b>Contents:</b> <a href="#d-start">Getting started</a> · <a href="#d-overview">Overview</a> · <a href="#d-launchpad">Launchpad</a> · <a href="#d-curve">Bonding curve &amp; graduation</a> · <a href="#d-fees">Fees</a><span data-chain="arc-testnet"> · <a href="#d-devbuy">Dev buy cap</a> · <a href="#d-tokenomics">Tokenomics</a></span> · <a href="#d-editing">Editing your token page</a> · <a href="#d-swap">Swap</a><span data-chain="stable"> · <a href="#d-pools">Pools</a> · <a href="#d-earn">Earn / farms</a> · <a href="#d-zap">Zap</a><span data-chain="stable"> · <a href="#d-stableearn">StableEarn</a></span></span> · <a href="#d-mintr">MINTR</a><span data-chain="stable"> · <a href="#d-gold">Mintd Gold</a></span> · <a href="#d-locker">Locker</a> · <a href="#d-bridge"><span data-chain="stable">Bridge</span><span data-chain="arc-testnet">Faucet</span></a> · <a href="#d-buyback">Buyback &amp; burn</a><span data-chain="stable"> · <a href="#d-mintd">$MINTD</a></span><span data-chain="stable"> · <a href="#d-agents">Agents</a> · <a href="#d-contracts">Contracts</a></span> · <a href="#d-safety">Security</a></p>
 
         <p data-chain="arc-testnet" style="border-left:3px solid var(--green);padding-left:12px">
           <b>You are reading the <span class="cname">Arc Testnet</span> docs.</b> This is a test network:
@@ -1912,6 +1942,48 @@
         <div data-chain="stable">
         <h2 id="d-mintd">$MINTD</h2>
         <p>$MINTD is the platform token, launched through the launchpad itself as token #0 with permanently locked liquidity. Its value is tied to platform activity: 100% of its token-side trading fees are burned, and the buyback-and-burn converts platform revenue into MINTD buys and burns. The live burn counter on the homepage reads the dead-address balance directly.</p>
+        </div>
+
+        <h2 id="d-agents" data-chain="stable">Agents</h2>
+        <div data-chain="stable">
+        <p>An agent is a vault you own that buys a coin for you on a rule. You deposit USDT0, it
+        buys dips and can take profit on pumps, and everything it buys stays in the vault as yours.
+        The factory is <code>0xAEfc1555cFd2F1a20C73F8CAF3b031A6f429a9bB</code>, it has no owner, and
+        it holds nothing.</p>
+
+        <h3>The rule</h3>
+        <p>Every 10 to 15 minutes, at a randomised interval rather than a fixed clock, the agent
+        compares the pool price with the price it last saw:</p>
+        <ul>
+          <li><b>Buy</b> when the price has fallen past a band, spending a slice of your USDT0.</li>
+          <li><b>Sell</b> only when it has risen past <b>four times</b> that band, and only when the
+              vault is already heavy in the coin. The contract checks that, not the agent.</li>
+          <li><b>Hold</b> otherwise, which is most cycles.</li>
+        </ul>
+        <p>One band to buy and four to sell, so it leans toward accumulating. The interval is
+        deliberately irregular and the next one is never published: a buyer whose timing is public,
+        in a thin pool, is somebody else's free lunch.</p>
+
+        <h3>What the agent can and cannot do</h3>
+        <p>Its only power is choosing <b>when</b>. The functions it calls take no arguments at all,
+        so it cannot name a price, a size, or a destination. The minimum it will accept on a trade is
+        computed inside your vault from the pool's own time-averaged price, so an agent whose key was
+        stolen still cannot quote itself a bad fill and keep the difference. It can never withdraw.
+        You can, at any time, whether the agent is on, off, or halted, and you can switch it off in
+        one transaction.</p>
+        <p>The vault also remembers its high-water value. If it drifts more than a set amount below
+        that, every trade stops until you re-arm it. That is what bounds a misbehaving agent to a few
+        percent rather than the whole balance.</p>
+
+        <h3>Things to know before you fund one</h3>
+        <ul>
+          <li>An agent is a buyer, not a strategy that promises anything. If the coin falls, you own
+              more of a coin that fell.</li>
+          <li>It trades against the pool's time-averaged price. A pool that has not traded recently
+              has no usable average, and the agent refuses to act rather than trading on a stale one.</li>
+          <li>Trade history on the site is a recent window, because the chain keeps roughly four days
+              of logs. The vault's own totals are always current.</li>
+        </ul>
         </div>
 
         <h2 id="d-contracts" data-chain="stable">Contracts</h2>
@@ -2668,6 +2740,7 @@ const CHAINS = {
       bondMarket: "0xD98780804449cC3b01Cd9A37fbaD808d01e24383",  // BondMarket, owner is the Safe
       burner: "0x7F007fbc6061806888A39A79763808aF5B94F4f4",       // BuybackBurner, no owner, buy-and-burn only
       vaultFactory: "0xAEfc1555cFd2F1a20C73F8CAF3b031A6f429a9bB", // BuybackVaultFactory, no owner, holds nothing
+      keeper: "0xfe93602C1d76834b6370833B9ce7C86939B5D97f",      // the agent wallet. Gas only, can never withdraw
       mintd: "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       mintr: "0x8817D05f2560189F3697028f639Dbb4C68688400",
       synth: "0x09Eb7D9B18e56270F8898C4f3Ac3F2dc99F3b213",
@@ -4037,6 +4110,9 @@ async function connect() {
     // only fetched for the connected wallet, so a repaint alone would leave the
     // controls missing on the vaults that just became theirs.
     if ($("view-agent").classList.contains("on")) agLoad(true);
+    // Same reasoning: the list is public, but which vaults are YOURS, and the
+    // controls that go with them, are only known once a wallet is connected.
+    if ($("view-agents").classList.contains("on")) vaultLoad(true);
     if ($("view-bridge").classList.contains("on")) brRender();
     if (cur) refreshTrade();
     if ($("view-mintswap").classList.contains("on")) swBalance();
@@ -5355,6 +5431,7 @@ const VFACTORY_ABI = [
   "function create(address token, address pool) returns (address)",
   "function byOwner(address) view returns (address[])",
   "function vaultCount() view returns (uint256)",
+  "function vaults(uint256) view returns (address)",
 ];
 const VAULT_ABI = [
   "function owner() view returns (address)",
@@ -5379,56 +5456,71 @@ async function vaultLoad(force) {
   const rows = $("agVaultRows");
   const fa = NET.mintd && NET.mintd.vaultFactory;
   if (!fa) { rows.innerHTML = `<div class="empty">Not on this chain.</div>`; return; }
-  if (!wallet) { rows.innerHTML = `<div class="empty">Connect a wallet to see your agents.</div>`; return; }
   if (force || !tokens.length) await loadAll();
   rows.innerHTML = `<div class="empty">Loading…</div>`;
   try {
     const f = new ethers.Contract(fa, VFACTORY_ABI, rp);
-    const list = await retryRead(() => f.byOwner(wallet));
+    // EVERY vault, not just the connected wallet's. Agents are public: anyone
+    // should be able to see what is running on which coin without connecting
+    // anything, and reading byOwner meant a visitor saw nothing and an owner saw
+    // nothing either until their wallet happened to be connected before the page
+    // loaded.
+    const n = Number(await retryRead(() => f.vaultCount()));
     myVaults = [];
+    const me = wallet ? wallet.toLowerCase() : null;
     // Sequential: gotcha 1, concurrent reads get batched and Stable rejects them.
-    for (const a of list) {
+    // Newest first, and capped, because this grows without bound.
+    for (let i = n - 1; i >= 0 && myVaults.length < 60; i--) {
+      let a;
+      try { a = await retryRead(() => f.vaults(i)); }
+      catch (e) { console.error("vault", i, "unreadable:", e.shortMessage || e.message); continue; }
       const v = new ethers.Contract(a, VAULT_ABI, rp);
       try {
         const tk = await retryRead(() => v.token());
         const [q, t] = await retryRead(() => v.balances());
-        myVaults.push({ addr: a, token: tk, quoteBal: q, tokenBal: t,
+        const owner = await retryRead(() => v.owner());
+        myVaults.push({ addr: a, token: tk, quoteBal: q, tokenBal: t, owner,
+                        mine: me && owner.toLowerCase() === me,
                         agent: await retryRead(() => v.agent()) });
-      } catch {}
+      } catch (e) { console.error("vault", a, "skipped:", e.shortMessage || e.message); }
     }
     vaultPaint();
   } catch (e) {
-    rows.innerHTML = `<div class="empty">Could not read your agents: ${esc(e.shortMessage || e.message)}</div>`;
+    rows.innerHTML = `<div class="empty">Could not read agents: ${esc(e.shortMessage || e.message)}</div>`;
   }
 }
 
 function vaultPaint() {
   const rows = $("agVaultRows");
   if (!myVaults.length) {
-    rows.innerHTML = `<div class="empty">You have no agents yet.</div>`;
+    rows.innerHTML = `<div class="empty">No agents have been created yet.</div>`;
     return;
   }
   rows.innerHTML = myVaults.map((v, i) => {
     const t = tokens.find((x) => sameAddr(x.addr, v.token));
-    const sym = t ? t.symbol : v.token.slice(0, 8) + "…";
+    const sym = t ? t.symbol : v.token.slice(0, 8) + "\u2026";
     const tokUsd = t ? Number(ethers.formatEther(v.tokenBal)) * Number(ethers.formatEther(t.price)) : 0;
+    const on = v.agent !== ethers.ZeroAddress;
+    const total = Number(ethers.formatUnits(v.quoteBal, 6)) + tokUsd;
     return `<div class="bondcard">
       <div class="bhead">
         ${bondLogo({ token: v.token, sym })}
         <b style="font-size:16px">$${esc(sym)}</b>
-        <span class="bchip ${v.agent === ethers.ZeroAddress ? "off" : "on"}">${v.agent === ethers.ZeroAddress ? "NO AGENT" : "AGENT ON"}</span>
+        <span class="bchip ${on ? "on" : "off"}">${on ? "AGENT ON" : "AGENT OFF"}</span>
+        ${v.mine ? `<span class="bchip soon">YOURS</span>` : ""}
         <div class="spacer"></div>
         <a class="finenote" href="${NET.chain.blockExplorerUrls[0]}/address/${v.addr}" target="_blank" rel="noopener">${esc(short(v.addr))} &#8599;</a>
       </div>
       <div class="bgrid">
         <div class="bbox"><label>USDT0 READY</label><b>$${nf(Number(ethers.formatUnits(v.quoteBal, 6)), 2)}</b><small>to spend</small></div>
-        <div class="bbox"><label>$${esc(sym)} HELD</label><b>${nfCompact(Number(ethers.formatEther(v.tokenBal)))}</b><small>${tokUsd ? "$" + nf(tokUsd, 2) : "yours"}</small></div>
-        <div class="bbox"><label>TOTAL</label><b>$${nf(Number(ethers.formatUnits(v.quoteBal, 6)) + tokUsd, 2)}</b><small>you can withdraw it all</small></div>
+        <div class="bbox"><label>$${esc(sym)} HELD</label><b>${nfCompact(Number(ethers.formatEther(v.tokenBal)))}</b><small>${tokUsd ? "$" + nf(tokUsd, 2) : "in the vault"}</small></div>
+        <div class="bbox"><label>TOTAL</label><b>$${nf(total, 2)}</b><small>${v.mine ? "you can withdraw it all" : "owned by " + esc(short(v.owner))}</small></div>
       </div>
       <div class="bactions">
-        <input id="avDep${i}" placeholder="0.00 ${esc(quoteTicker())}" autocomplete="off">
+        ${v.mine ? `<input id="avDep${i}" placeholder="0.00 ${esc(quoteTicker())}" autocomplete="off">
         <button class="btn" onclick="vaultDeposit(${i})">Deposit</button>
         <button class="btn ghost" onclick="vaultWithdrawAll(${i})">Withdraw everything</button>
+        <button class="chip" onclick="vaultToggleAgent(${i})">${on ? "Turn agent off" : "Turn agent on"}</button>` : ``}
         <button class="chip" onclick="vaultTrades(${i})">Trades</button>
       </div>
       <div id="avTrades${i}" class="finenote" style="margin-top:10px"></div>
@@ -5496,6 +5588,21 @@ async function vaultDeposit(i) {
     const c = new ethers.Contract(v.addr, VAULT_ABI, signer);
     await (await c.deposit(amt)).wait();
     toast("Deposited", "ok");
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+/// Naming the keeper is the entire opt-in. Until a vault does this its agent is
+/// the zero address and execute() reverts for everyone but the owner, so a vault
+/// nobody has switched on simply never trades.
+async function vaultToggleAgent(i) {
+  if (!signer) return connect();
+  const v = myVaults[i];
+  const on = v.agent !== ethers.ZeroAddress;
+  try {
+    const c = new ethers.Contract(v.addr, VAULT_ABI, signer);
+    await (await c.setAgent(on ? ethers.ZeroAddress : NET.mintd.keeper)).wait();
+    toast(on ? "Agent off. It can no longer trade." : "Agent on. It can trade, never withdraw.", "ok");
     vaultLoad(true);
   } catch (e) { toast(e.shortMessage || e.message, "err"); }
 }

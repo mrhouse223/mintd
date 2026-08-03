@@ -149,6 +149,31 @@ module.exports = {
     },
     {
       ...common,
+      // Drives BuybackVault agents. Acts ONLY on vaults that have named this
+      // wallet, so it is opt-in per vault and does nothing until someone
+      // switches theirs on.
+      //
+      // It holds no funds and has no privileges beyond being named. execute()
+      // and executeSell() take no arguments, so this key cannot choose a price,
+      // a size or a recipient; a thief gets wasted gas and badly timed trades
+      // inside each vault's own bounds, and any owner can revoke it in one
+      // transaction. Gas-only key, never the deployer.
+      //
+      // The interval jitters inside the script rather than being a cron: a
+      // buyer whose timing is public, in a thin pool, on a chain whose
+      // front-running hole is unfixed, is somebody else's free lunch.
+      name: "vault-keeper",
+      script: "scripts/vault-keeper.js",
+      env: {
+        KEEPER_KEY: env.KEEPER_KEY,
+        VAULT_FACTORY: env.VAULT_FACTORY || "0xAEfc1555cFd2F1a20C73F8CAF3b031A6f429a9bB",
+        MIN_MS: env.VAULT_MIN_MS || "600000",
+        MAX_MS: env.VAULT_MAX_MS || "900000",
+        DEAD_ZONE: env.VAULT_DEAD_ZONE || "1500",
+      },
+    },
+    {
+      ...common,
       name: "arb-keeper",
       script: "scripts/arb-keeper-multi.js",
       env: {

@@ -157,6 +157,29 @@ contract BuybackVault {
         emit Deposited(msg.sender, got);
     }
 
+    /// @notice Fund the vault with the COIN instead of USDT0, so an agent can
+    ///         start overweight and take profit on a pump without having to buy
+    ///         its way in first.
+    ///
+    /// Unlike a USDT0 deposit this one needs a price: the high-water mark is
+    /// denominated in quote, and crediting a token deposit at anything other
+    /// than its real value would either hand the agent free rope or trip the
+    /// breaker on arrival. So it reverts when the pool has no usable average,
+    /// rather than guessing. USDT0 deposits and every withdrawal stay
+    /// oracle-free, so this can never block the exit.
+    function depositToken(uint256 amount) external lock {
+        require(amount > 0, "zero");
+        uint256 before = IERC20V(token).balanceOf(address(this));
+        require(IERC20V(token).transferFrom(msg.sender, address(this), amount), "pull failed");
+        uint256 got = IERC20V(token).balanceOf(address(this)) - before;
+        require(got > 0, "received nothing");
+        uint256 credited = _tokenToQuote(got, TickMath.getSqrtRatioAtTick(_twapTick()));
+        require(credited > 0, "no twap");
+        valueCheckpoint += credited;
+        emit Checkpointed(valueCheckpoint);
+        emit Deposited(msg.sender, got);
+    }
+
     /// @notice Withdraw one asset. Available in every state, needs no agent.
     function withdraw(address asset, uint256 amount) public onlyOwner lock {
         require(asset == quote || asset == token, "unknown asset");
