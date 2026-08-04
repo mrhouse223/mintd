@@ -1,6 +1,6 @@
 # mintd.fun — Launch. Lock. Trade.
 
-A memecoin launchpad for **Stablechain** (Stable Mainnet, chain ID 988), where the native gas token is USDT0. Every launch puts a fixed 1B supply straight into a **locked Uniswap V3 pool** in a single transaction — no bonding curve, no migration, trading is live from block one. The platform's own token is **$MINTD**, launched through the same mechanism as token #0 at deploy time and pinned in the UI with a PLATFORM badge.
+A currency launchpad for **Stablechain** (Stable Mainnet, chain ID 988), where the native gas token is USDT0. Every launch puts a fixed 1B supply straight into a **locked Uniswap V3 pool** in a single transaction — no bonding curve, no migration, trading is live from block one. The platform's own token is **$MINTD**, launched through the same mechanism as token #0 at deploy time and pinned in the UI with a PLATFORM badge.
 
 ## How it works
 
