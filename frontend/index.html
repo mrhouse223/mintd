@@ -1603,7 +1603,9 @@
         </div>
         <p class="finenote" style="margin:4px 0 0">
           It takes <b>three times the move to sell as to buy</b>, so it leans toward accumulating rather than
-          trading. Those thresholds are the current settings and can be retuned.
+          trading. Every threshold here, the slice size, the slippage tolerance, the cooldown, the sell
+          ratio and the drawdown stop, is <b>yours to adjust</b> per agent from its Settings, within limits
+          the contract enforces so no setting can be turned into a way to lose the vault.
           Each move is a slice of the balance, never all of it, and there is a cooldown between moves.
         </p>
         <div style="border-top:1px solid var(--line,rgba(127,127,127,.18));margin:14px 0 0;padding-top:14px">
@@ -5498,7 +5500,12 @@ const VAULT_ABI = [
   "function valueAtTwap() view returns (uint256)",
   "function sliceBps() view returns (uint16)",
   "function maxSlippageBps() view returns (uint16)",
+  "function twapWindow() view returns (uint32)",
   "function cooldown() view returns (uint32)",
+  "function sellRatioBps() view returns (uint16)",
+  "function maxDrawdownBps() view returns (uint16)",
+  "function setParams(uint16,uint16,uint32,uint32)",
+  "function setSellParams(uint16,uint16)",
   "function lastExec() view returns (uint64)",
   "function deposit(uint256)",
   "function depositToken(uint256)",
@@ -5543,8 +5550,20 @@ async function vaultLoad(force) {
         let mark = 0n, live = null;
         try { mark = await retryRead(() => v.valueCheckpoint()); } catch {}
         try { live = await retryRead(() => v.valueAtTwap()); } catch {}
-        myVaults.push({ addr: a, token: tk, quoteBal: q, tokenBal: t, owner, mark, live,
-                        mine: me && owner.toLowerCase() === me,
+        const mine = me && owner.toLowerCase() === me;
+        // Only the owner needs the knobs, so only read them for owned vaults.
+        let cfg = null;
+        if (mine) {
+          cfg = {
+            slice: Number(await retryRead(() => v.sliceBps())),
+            slip: Number(await retryRead(() => v.maxSlippageBps())),
+            twap: Number(await retryRead(() => v.twapWindow())),
+            cool: Number(await retryRead(() => v.cooldown())),
+            ratio: Number(await retryRead(() => v.sellRatioBps())),
+            drawdown: Number(await retryRead(() => v.maxDrawdownBps())),
+          };
+        }
+        myVaults.push({ addr: a, token: tk, quoteBal: q, tokenBal: t, owner, mark, live, mine, cfg,
                         agent: await retryRead(() => v.agent()) });
       } catch (e) { console.error("vault", a, "skipped:", e.shortMessage || e.message); }
     }
@@ -5589,8 +5608,10 @@ function vaultPaint() {
         </select>
         <button class="btn" onclick="vaultDeposit(${i})">Deposit</button>
         <button class="btn ghost" onclick="vaultWithdrawAll(${i})">Withdraw everything</button>
-        <button class="chip" onclick="vaultToggleAgent(${i})">${on ? "Turn agent off" : "Turn agent on"}</button>` : ``}
+        <button class="chip" onclick="vaultToggleAgent(${i})">${on ? "Turn agent off" : "Turn agent on"}</button>
+        <button class="chip" onclick="vaultSettings(${i})">Settings</button>` : ``}
       </div>
+      ${v.mine && v.cfg ? vaultSettingsPanel(v, i) : ""}
       <div id="avTrades${i}" class="finenote" style="margin-top:10px">Loading recent trades…</div>
     </div>`;
   }).join("");
@@ -5668,6 +5689,74 @@ async function vaultCreate() {
     vaultLoad(true);
   } catch (e) { toast(e.shortMessage || e.message, "err"); }
   finally { btn.disabled = false; }
+}
+
+// Every field here maps to an on-chain setter that is bounded in the contract,
+// so this exposes control, not new power: the worst an owner can set is still
+// safe by construction. Values are shown in the units a person thinks in
+// (percent, minutes) and converted to the contract's bps/seconds on save.
+function vaultSettingsPanel(v, i) {
+  const c = v.cfg;
+  const row = (label, id, val, suffix, hint) =>
+    `<label style="display:block;font-size:11px;opacity:.7;margin:8px 0 3px">${label}${hint ? ` <span style="opacity:.6">${hint}</span>` : ""}</label>
+     <div style="display:flex;align-items:center;gap:6px"><input id="${id}${i}" value="${val}" style="max-width:120px">${suffix ? `<span class="finenote">${suffix}</span>` : ""}</div>`;
+  return `<div id="avCfg${i}" style="display:none;margin-top:10px;border-top:1px solid var(--line,rgba(127,127,127,.18));padding-top:10px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>${row("Buy slice", "cfSlice", c.slice / 100, "% of USDT0", "max 25")}</div>
+      <div>${row("Max slippage", "cfSlip", c.slip / 100, "% vs TWAP", "max 10")}</div>
+      <div>${row("Cooldown", "cfCool", Math.round(c.cool / 60), "min between trades", "")}</div>
+      <div>${row("TWAP window", "cfTwap", Math.round(c.twap / 60), "min average", "min 5")}</div>
+      <div>${row("Sell when heavy", "cfRatio", c.ratio / 10000, "x the USDT0 leg", "min 1")}</div>
+      <div>${row("Drawdown stop", "cfDraw", c.drawdown / 100, "% below peak", "max 30")}</div>
+    </div>
+    <div class="bactions" style="margin-top:12px">
+      <button class="btn" onclick="vaultSaveSettings(${i})">Save settings</button>
+      <button class="chip" onclick="vaultRecheckpoint(${i})">Re-arm the stop</button>
+    </div>
+    <p class="finenote" style="margin:8px 0 0">The drawdown stop halts trading once the vault falls this far below its best value. A volatile coin can trip a tight one, so widen it or re-arm after a big move.</p>
+  </div>`;
+}
+
+function vaultSettings(i) {
+  const el = $("avCfg" + i);
+  if (el) el.style.display = el.style.display === "none" ? "" : "none";
+}
+
+async function vaultSaveSettings(i) {
+  if (!signer) return connect();
+  const v = myVaults[i];
+  const num = (id, min, max) => {
+    const n = Number($(id + i).value);
+    if (!isFinite(n) || n < min || n > max) throw new Error(`${id} out of range (${min}-${max})`);
+    return n;
+  };
+  try {
+    // percent/minutes back to bps/seconds. Rounded, and re-clamped to the
+    // contract's own caps so a rounding step cannot push a value over.
+    const slice = Math.min(2500, Math.round(num("cfSlice", 0.01, 25) * 100));
+    const slip = Math.min(1000, Math.round(num("cfSlip", 0, 10) * 100));
+    const twap = Math.max(300, Math.round(num("cfTwap", 5, 1440) * 60));
+    const cool = Math.max(60, Math.round(num("cfCool", 1, 1440) * 60));
+    const ratio = Math.max(10000, Math.round(num("cfRatio", 1, 100) * 10000));
+    const draw = Math.min(3000, Math.round(num("cfDraw", 0.01, 30) * 100));
+    const c = new ethers.Contract(v.addr, VAULT_ABI, signer);
+    toast("Saving trade settings…");
+    await (await c.setParams(slice, slip, twap, cool)).wait();
+    toast("Saving sell and stop…");
+    await (await c.setSellParams(ratio, draw)).wait();
+    toast("Settings saved", "ok");
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function vaultRecheckpoint(i) {
+  if (!signer) return connect();
+  try {
+    const c = new ethers.Contract(myVaults[i].addr, VAULT_ABI, signer);
+    await (await c.recheckpoint()).wait();
+    toast("Stop re-armed to the current value", "ok");
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
 }
 
 async function vaultDeposit(i) {
@@ -5789,6 +5878,14 @@ const LPV_ABI = [
   "function setAgent(address)",
   "function setMode(uint8)",
   "function approve(uint256 nonce)",
+  "function maxTickDrift() view returns (int24)",
+  "function maxSlippageBps() view returns (uint256)",
+  "function lossToleranceBps() view returns (uint256)",
+  "function reviewWindow() view returns (uint256)",
+  "function twapWindow() view returns (uint32)",
+  "function cooldown() view returns (uint256)",
+  "function setPolicy(int24,uint256,uint256,uint256,uint32,uint256)",
+  "function resetCheckpoint()",
   "event Executed(uint256 tokenId, int24 lower, int24 upper)",
 ];
 const LP_MODES = ["PAUSED", "PROPOSE-ONLY", "TIMELOCKED", "AUTONOMOUS"];
@@ -5822,6 +5919,14 @@ async function lpLoad(force) {
           mode: Number(await retryRead(() => v.mode())),
           positionId: await retryRead(() => v.positionId()),
           proposal: await retryRead(() => v.proposal()),
+          cfg: (me && owner.toLowerCase() === me) ? {
+            drift: Number(await retryRead(() => v.maxTickDrift())),
+            slip: Number(await retryRead(() => v.maxSlippageBps())),
+            loss: Number(await retryRead(() => v.lossToleranceBps())),
+            review: Number(await retryRead(() => v.reviewWindow())),
+            twap: Number(await retryRead(() => v.twapWindow())),
+            cool: Number(await retryRead(() => v.cooldown())),
+          } : null,
         });
       } catch (e) { console.error("lp vault", a, "skipped:", e.shortMessage || e.message); }
     }
@@ -5865,7 +5970,9 @@ function lpPaint() {
         </select>
         <button class="chip" onclick="lpSetMode(${i})">Set mode</button>
         <button class="chip" onclick="lpToggleAgent(${i})">${v.agent === ethers.ZeroAddress ? "Turn agent on" : "Turn agent off"}</button>
-      </div>` : ""}
+        <button class="chip" onclick="lpSettings(${i})">Settings</button>
+      </div>
+      ${v.cfg ? lpSettingsPanel(v, i) : ""}` : ""}
       <div id="lpTrades${i}" class="finenote" style="margin-top:10px">Loading rebalances…</div>
     </div>`;
   }).join("");
@@ -5951,6 +6058,66 @@ async function lpCreate() {
     lpLoad(true);
   } catch (e) { toast(e.shortMessage || e.message, "err"); }
   finally { btn.disabled = false; }
+}
+
+// Every field maps to setPolicy, which is bounded in the contract. Shown in
+// human units, converted to the contract's bps/seconds/ticks on save.
+function lpSettingsPanel(v, i) {
+  const c = v.cfg;
+  const row = (label, id, val, suffix, hint) =>
+    `<label style="display:block;font-size:11px;opacity:.7;margin:8px 0 3px">${label}${hint ? ` <span style="opacity:.6">${hint}</span>` : ""}</label>
+     <div style="display:flex;align-items:center;gap:6px"><input id="${id}${i}" value="${val}" style="max-width:120px">${suffix ? `<span class="finenote">${suffix}</span>` : ""}</div>`;
+  return `<div id="lpCfg${i}" style="display:none;margin-top:10px;border-top:1px solid var(--line,rgba(127,127,127,.18));padding-top:10px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>${row("Max range drift", "lcDrift", c.drift, "ticks from TWAP", "max 20000")}</div>
+      <div>${row("Max slippage", "lcSlip", c.slip / 100, "% vs TWAP", "max 5")}</div>
+      <div>${row("Loss tolerance", "lcLoss", c.loss / 100, "% before it stops", "max 20")}</div>
+      <div>${row("Review window", "lcReview", Math.round(c.review / 60), "min to veto (timelock)", "min 5")}</div>
+      <div>${row("TWAP window", "lcTwap", Math.round(c.twap / 60), "min average", "min 5")}</div>
+      <div>${row("Cooldown", "lcCool", Math.round(c.cool / 60), "min between moves", "")}</div>
+    </div>
+    <div class="bactions" style="margin-top:12px">
+      <button class="btn" onclick="lpSavePolicy(${i})">Save settings</button>
+      <button class="chip" onclick="lpResetCheckpoint(${i})">Re-arm the stop</button>
+    </div>
+  </div>`;
+}
+
+function lpSettings(i) {
+  const el = $("lpCfg" + i);
+  if (el) el.style.display = el.style.display === "none" ? "" : "none";
+}
+
+async function lpSavePolicy(i) {
+  if (!signer) return connect();
+  const num = (id, min, max) => {
+    const n = Number($(id + i).value);
+    if (!isFinite(n) || n < min || n > max) throw new Error(`${id} out of range (${min}-${max})`);
+    return n;
+  };
+  try {
+    const drift = Math.min(20000, Math.round(num("lcDrift", 1, 20000)));
+    const slip = Math.min(500, Math.round(num("lcSlip", 0, 5) * 100));
+    const loss = Math.min(2000, Math.round(num("lcLoss", 0, 20) * 100));
+    const review = Math.max(300, Math.round(num("lcReview", 5, 10080) * 60));
+    const twap = Math.max(300, Math.round(num("lcTwap", 5, 1440) * 60));
+    const cool = Math.round(num("lcCool", 0, 1440) * 60);
+    const c = new ethers.Contract(myLpVaults[i].addr, LPV_ABI, signer);
+    toast("Saving policy…");
+    await (await c.setPolicy(drift, slip, loss, review, twap, cool)).wait();
+    toast("Policy saved", "ok");
+    lpLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function lpResetCheckpoint(i) {
+  if (!signer) return connect();
+  try {
+    const c = new ethers.Contract(myLpVaults[i].addr, LPV_ABI, signer);
+    await (await c.resetCheckpoint()).wait();
+    toast("Stop re-armed", "ok");
+    lpLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
 }
 
 async function lpDeposit(i) {
