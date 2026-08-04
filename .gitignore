@@ -32,3 +32,6 @@ data/verified-tokens.json
 # data/mintd-holder-ledger.json this is NOT irreplaceable, so it stays out of git
 # rather than churning a commit every ten minutes.
 data/vault-keeper-state.json
+
+# Internal ops, security state and strategy: kept local, never in the public repo.
+private/
