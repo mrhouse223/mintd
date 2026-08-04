@@ -5813,48 +5813,60 @@ async function vaultWithdrawAll(i) {
 /// it is the whole life of the vault.
 async function vaultTrades(i) {
   const el = $("avTrades" + i);
-  el.textContent = "Reading recent trades…";
   const v = myVaults[i];
-  try {
-    const lp = logProvider();
-    const c = new ethers.Contract(v.addr, VAULT_ABI, lp);
-    const head = await lp.getBlockNumber();
-    const SPAN = 500;                 // hard cap, not a tuning knob
-    const WINDOW = 8;                 // 4,000 blocks, about 45 min at 0.70s
-    const out = [];
-    for (let k = 0; k < WINDOW && out.length < 25; k++) {
-      const to = head - k * SPAN, from = Math.max(0, to - SPAN + 1);
-      if (to < 0) break;
-      let logs = [];
-      try { logs = await c.queryFilter(c.filters.Executed(), from, to); } catch { continue; }
-      for (const l of logs.reverse()) out.push(l);
-    }
-    if (!out.length) {
-      const v2 = myVaults[i];
-      const off = v2 && v2.agent === ethers.ZeroAddress;
-      el.innerHTML = off
-        ? `No trades yet. The agent is <b>off</b>, so this vault only moves when you do.`
-        : `No trades yet. The agent buys only when the price drops past its band and sells only on a rise, so a quiet market means it correctly sits still. This window covers the last few thousand blocks; the chain keeps about four days of logs.`;
-      return;
-    }
-    const t = tokens.find((x) => sameAddr(x.addr, v.token));
-    const sym = t ? t.symbol : "token";
-    el.innerHTML = out.slice(0, 25).map((l) => {
-      const buy = l.args.isBuy;
-      const inA = buy ? `$${nf(Number(ethers.formatUnits(l.args.amountIn, 6)), 2)}`
-                      : `${nfCompact(Number(ethers.formatEther(l.args.amountIn)))} $${esc(sym)}`;
-      const outA = buy ? `${nfCompact(Number(ethers.formatEther(l.args.amountOut)))} $${esc(sym)}`
-                       : `$${nf(Number(ethers.formatUnits(l.args.amountOut, 6)), 2)}`;
-      return `<div style="display:flex;gap:8px;padding:3px 0">
-        <b style="color:${buy ? "var(--green)" : "var(--red,#e5534b)"}">${buy ? "BUY" : "SELL"}</b>
-        <span>${inA} &rarr; ${outA}</span>
-        <div class="spacer"></div>
-        <a href="${NET.chain.blockExplorerUrls[0]}/tx/${l.transactionHash}" target="_blank" rel="noopener" style="opacity:.6">${esc(l.transactionHash.slice(0, 10))}&#8599;</a>
-      </div>`;
-    }).join("");
-  } catch (e) { el.textContent = "Could not read trades: " + (e.shortMessage || e.message); }
+  const t = tokens.find((x) => sameAddr(x.addr, v.token));
+  const sym = t ? t.symbol : "token";
+  const trades = await agentTradesFor(v.addr);
+  if (!trades.length) {
+    el.innerHTML = v.agent === ethers.ZeroAddress
+      ? `No trades yet. The agent is <b>off</b>, so this vault only moves when you do.`
+      : `No trades yet. It buys only on a drop past its band and sells only on a rise, so a quiet market means it is correctly sitting still.`;
+    return;
+  }
+  el.innerHTML = trades.slice(0, 25).map((tr) => {
+    const buy = tr.type === "buy";
+    const inA = buy ? `$${nf(Number(ethers.formatUnits(tr.amountIn, 6)), 2)}`
+                    : `${nfCompact(Number(ethers.formatEther(tr.amountIn)))} $${esc(sym)}`;
+    const outA = buy ? `${nfCompact(Number(ethers.formatEther(tr.amountOut)))} $${esc(sym)}`
+                     : `$${nf(Number(ethers.formatUnits(tr.amountOut, 6)), 2)}`;
+    return `<div style="display:flex;gap:8px;padding:3px 0;font-size:12px">
+      <b style="color:${buy ? "var(--green)" : "var(--red,#e5534b)"}">${buy ? "BUY" : "SELL"}</b>
+      <span>${inA} &rarr; ${outA}</span>
+      <span style="opacity:.5">${agoFromTs(tr.ts)}</span>
+      <div class="spacer"></div>
+      <a href="${NET.chain.blockExplorerUrls[0]}/tx/${tr.tx}" target="_blank" rel="noopener" style="opacity:.6">${esc(tr.tx.slice(0, 10))}&#8599;</a>
+    </div>`;
+  }).join("");
+}
+// Not named tradeAgo: a pre-existing tradeAgo(block) for the buy ticker takes a
+// BLOCK number, and function-declaration hoisting made the later one win, so a
+// unix timestamp handed to it read as a block and rendered "just now" for
+// everything. This one takes a unix ts and stands alone.
+function agoFromTs(ts) {
+  if (!ts) return "";
+  const s = Math.floor(Date.now() / 1000) - ts;
+  if (s < 3600) return Math.round(s / 60) + "m ago";
+  if (s < 86400) return Math.round(s / 3600) + "h ago";
+  return Math.round(s / 86400) + "d ago";
 }
 
+
+/* --------------------------------------------------- committed agent trades */
+// The keeper appends every trade to frontend/agent-trades.json and publish-stats
+// commits it, so the site has complete history without scanning logs against a
+// 500-block-capped, 4-day-pruning RPC. Read once, cached, shared by both card
+// types. A stale-but-present file beats a live scan that can only see 45 minutes.
+let _agentTrades = null;
+async function agentTradesFor(vault) {
+  if (_agentTrades === null) {
+    try {
+      const r = await fetch("/agent-trades.json?t=" + Math.floor(Date.now() / 60000));
+      _agentTrades = r.ok ? (await r.json()).trades || [] : [];
+    } catch { _agentTrades = []; }
+  }
+  const v = vault.toLowerCase();
+  return _agentTrades.filter((t) => t.vault === v).sort((a, b) => b.block - a.block);
+}
 
 /* ------------------------------------------------------------- LP agents */
 const LPFACTORY_ABI = [
@@ -5886,7 +5898,7 @@ const LPV_ABI = [
   "function cooldown() view returns (uint256)",
   "function setPolicy(int24,uint256,uint256,uint256,uint32,uint256)",
   "function resetCheckpoint()",
-  "event Executed(uint256 tokenId, int24 lower, int24 upper)",
+  "event Rebalanced(int24 lower, int24 upper, uint256 valueBefore, uint256 valueAfter)",
 ];
 const LP_MODES = ["PAUSED", "PROPOSE-ONLY", "TIMELOCKED", "AUTONOMOUS"];
 let myLpVaults = [];
@@ -5985,35 +5997,23 @@ async function lpTrades(i) {
   const el = $("lpTrades" + i);
   if (!el) return;
   const v = myLpVaults[i];
-  try {
-    const lp = logProvider();
-    const c = new ethers.Contract(v.addr, LPV_ABI, lp);
-    const head = await lp.getBlockNumber();
-    const SPAN = 500, WINDOW = 8;
-    const out = [];
-    for (let k = 0; k < WINDOW && out.length < 20; k++) {
-      const to = head - k * SPAN, from = Math.max(0, to - SPAN + 1);
-      if (to < 0) break;
-      let logs = [];
-      try { logs = await c.queryFilter(c.filters.Executed(), from, to); } catch { continue; }
-      for (const l of logs.reverse()) out.push(l);
-    }
-    if (!out.length) {
-      el.innerHTML = (v.positionId && v.positionId !== 0n)
-        ? `In range, no rebalance recently. It only moves the range once price drifts three quarters of the way to an edge.`
-        : (v.agent === ethers.ZeroAddress
-            ? `No position yet. The agent is off, so nothing will happen until you turn it on and it mints a range.`
-            : `No position yet. The agent mints one on its next cycle after a deposit.`);
-      return;
-    }
-    el.innerHTML = out.slice(0, 20).map((l) =>
-      `<div style="display:flex;gap:8px;padding:3px 0">
-        <b style="color:var(--green2)">REBALANCE</b>
-        <span>ticks ${l.args.lower} to ${l.args.upper}</span>
-        <div class="spacer"></div>
-        <a href="${NET.chain.blockExplorerUrls[0]}/tx/${l.transactionHash}" target="_blank" rel="noopener" style="opacity:.6">${esc(l.transactionHash.slice(0, 10))}&#8599;</a>
-      </div>`).join("");
-  } catch (e) { el.textContent = "Could not read rebalances: " + (e.shortMessage || e.message); }
+  const trades = await agentTradesFor(v.addr);
+  if (!trades.length) {
+    el.innerHTML = (v.positionId && v.positionId !== 0n)
+      ? `In range, no rebalance yet. It moves the range only once price drifts three quarters of the way to an edge.`
+      : (v.agent === ethers.ZeroAddress
+          ? `No position yet. The agent is off until you turn it on.`
+          : `No position yet. The agent mints one on its next cycle after a deposit.`);
+    return;
+  }
+  el.innerHTML = trades.slice(0, 20).map((tr) =>
+    `<div style="display:flex;gap:8px;padding:3px 0;font-size:12px">
+      <b style="color:var(--green2)">REBALANCE</b>
+      <span>ticks ${tr.lower} to ${tr.upper}</span>
+      <span style="opacity:.5">${agoFromTs(tr.ts)}</span>
+      <div class="spacer"></div>
+      <a href="${NET.chain.blockExplorerUrls[0]}/tx/${tr.tx}" target="_blank" rel="noopener" style="opacity:.6">${esc(tr.tx.slice(0, 10))}&#8599;</a>
+    </div>`).join("");
 }
 
 function lpShowCreate() {

@@ -27,6 +27,7 @@
 const fs = require("fs");
 const path = require("path");
 const { ethers } = require("ethers");
+const { record } = require("./backfill-agent-trades.js");
 
 const RPC_URL = process.env.RPC_URL || "https://rpc.stable.xyz";
 const FACTORY = process.env.VAULT_FACTORY || "0x3db601869c2C47Bfa9b08c62E077Df4806C1283A";
@@ -130,6 +131,30 @@ function saveState(st) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const BUY_EV = new ethers.Interface(["event Executed(bool indexed isBuy,uint256 amountIn,uint256 amountOut,uint256 minOut,uint64 at)"]);
+const LP_EV = new ethers.Interface(["event Rebalanced(int24 lower,int24 upper,uint256 valueBefore,uint256 valueAfter)"]);
+
+// Append a trade to frontend/agent-trades.json from a mined receipt. Best
+// effort: a keeper that trades but fails to log it must not throw and skip the
+// next vault, so this swallows its own errors.
+function recordFrom(rc, vault, kind) {
+  try {
+    for (const log of rc.logs) {
+      if (log.address.toLowerCase() !== vault.toLowerCase()) continue;
+      const iface = kind === "buyback" ? BUY_EV : LP_EV;
+      let p; try { p = iface.parseLog(log); } catch { continue; }
+      if (!p || (p.name !== "Executed" && p.name !== "Rebalanced")) continue;
+      const e = kind === "buyback"
+        ? { vault: vault.toLowerCase(), kind, type: p.args.isBuy ? "buy" : "sell",
+            amountIn: p.args.amountIn.toString(), amountOut: p.args.amountOut.toString() }
+        : { vault: vault.toLowerCase(), kind, type: "rebalance",
+            lower: Number(p.args.lower), upper: Number(p.args.upper) };
+      e.block = rc.blockNumber; e.tx = rc.hash; e.li = log.index; e.ts = Math.floor(Date.now() / 1000);
+      record(e);
+    }
+  } catch (err) { console.error("recordFrom failed:", err.message); }
+}
+
 
 /// Where to put an LP range, as a pure function so it can be tested without a
 /// chain. Centred on the TWAP tick, never on spot: spot is what an attacker can
@@ -216,8 +241,9 @@ async function lpCycle(provider, signer, me, dry) {
           // deposit are under-reported by eth_estimateGas, because clearing a
           // proposal refunds storage and the estimate comes back NET while the
           // EVM charges GROSS.
-          const tx = await v.execute({ gasLimit: 2_500_000 });
-          console.log(`   sent ${(await tx.wait()).hash}`);
+          const rc = await (await v.execute({ gasLimit: 2_500_000 })).wait();
+          console.log(`   sent ${rc.hash}`);
+          recordFrom(rc, addr, "lp");
         } else console.log("   would send (dry run)");
         acted++;
         continue;
@@ -260,8 +286,9 @@ async function lpCycle(provider, signer, me, dry) {
         catch (e) { console.log(`   execute not yet possible: ${(e.shortMessage || e.message).slice(0, 70)}`); continue; }
         console.log(`lp ${addr} EXECUTE ${lower}..${upper} (same cycle, AUTONOMOUS)`);
         if (!dry) {
-          const tx = await v.execute({ gasLimit: 2_500_000 });
-          console.log(`   sent ${(await tx.wait()).hash}`);
+          const rc = await (await v.execute({ gasLimit: 2_500_000 })).wait();
+          console.log(`   sent ${rc.hash}`);
+          recordFrom(rc, addr, "lp");
         } else console.log("   would send (dry run)");
       }
     } catch (e) {
@@ -336,6 +363,7 @@ async function cycle(provider, signer, me, dry) {
       const tx = await v[fn]({ gasLimit: 900_000 });
       const rc = await tx.wait();
       console.log(`   ${d.action} sent ${rc.hash}`);
+      recordFrom(rc, addr, "buyback");
       acted++;
     } catch (e) {
       console.error(`${addr} errored: ${(e.shortMessage || e.message || "").slice(0, 100)}`);

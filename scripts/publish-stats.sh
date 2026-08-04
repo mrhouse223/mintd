@@ -26,9 +26,11 @@ node scripts/stats-indexer.js
 # Staged first, then compared against the index. `git diff` reports no change
 # for an untracked path, so while stats.json is untracked a working-tree
 # comparison exits "unchanged" on every run and the file never ships.
-git add frontend/stats.json
-if git diff --cached --quiet -- frontend/stats.json; then
-  echo "stats unchanged, nothing to publish"
+# stats.json plus agent-trades.json (the keeper appends to it between runs; this
+# is what carries it to the live site). Both staged narrowly, nothing else.
+git add frontend/stats.json frontend/agent-trades.json 2>/dev/null || git add frontend/stats.json
+if git diff --cached --quiet -- frontend/stats.json frontend/agent-trades.json; then
+  echo "stats and trades unchanged, nothing to publish"
   exit 0
 fi
 
