@@ -1,15 +1,15 @@
 {
-  "updated": 1785813672,
-  "block": 34245197,
-  "tvl": "25177.353561",
+  "updated": 1785817219,
+  "block": 34250250,
+  "tvl": "24684.266327",
   "tvlBreakdown": {
-    "pools": "24345.400946",
+    "pools": "23852.313712",
     "mintrReserve": "727.002933",
     "mgldCollateral": "104.949682"
   },
-  "volumeAllTime": "804070.629527",
-  "volume24h": "10916.35671",
-  "trades24h": 423,
+  "volumeAllTime": "804398.077336",
+  "volume24h": "10691.59726",
+  "trades24h": 412,
   "mintrTvl": "727.002933",
   "mintdBurned": "96354093.411496198336956109",
   "mintdBurnedPct": "9.64",
