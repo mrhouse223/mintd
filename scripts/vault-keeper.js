@@ -39,6 +39,8 @@ const LP_WIDTH = Number(process.env.LP_WIDTH || 8);
 // Re-centre once the TWAP tick sits within this fraction of the half-width of an
 // edge. 0.25 means "act when price has eaten three quarters of the way out".
 const LP_EDGE = Number(process.env.LP_EDGE || 0.25);
+// Per-vault overrides for these decision params, set by each vault's owner.
+const AGENT_CONFIG = process.env.AGENT_CONFIG_ADDR || "0x3FcEfc5793F53e9b8F503cffd0FE116818335efD";
 const STATE = path.join(__dirname, "..", "data", "vault-keeper-state.json");
 
 // Randomised, never a fixed cron. A predictable buyer in a thin pool on a chain
@@ -90,6 +92,18 @@ const LP_VAULT_ABI = [
   "function compound()",
 ];
 const MODE = ["PAUSED", "PROPOSE_ONLY", "TIMELOCKED", "AUTONOMOUS"];
+const CONFIG_ABI = ["function get(address) view returns (uint16 band, uint8 sellMult, uint8 lpWidth, uint8 lpEdgePct, bool set)"];
+
+// Per-vault decision params, override falling back to the keeper's env defaults.
+// One read per vault per cycle; the registry is ownerless and the value was
+// bounded on write, so it can be trusted without re-validating here.
+async function cfgFor(provider, vault) {
+  try {
+    const c = await new ethers.Contract(AGENT_CONFIG, CONFIG_ABI, provider).get(vault);
+    if (!c.set) return null;
+    return { band: Number(c.band), sellMult: Number(c.sellMult), lpWidth: Number(c.lpWidth), lpEdge: Number(c.lpEdgePct) / 100 };
+  } catch { return null; }
+}
 const QUOTE = process.env.QUOTE || "0x779Ded0c9e1022225f8E0630b35a9b54bE713736"; // USDT0
 
 /// The whole decision, as a pure function so it can be tested without a chain.
@@ -225,6 +239,9 @@ async function lpCycle(provider, signer, me, dry) {
       catch (e) { console.log(`lp ${addr} no usable TWAP, skipping`); continue; }
 
       const spacing = Number(await v.tickSpacing());
+      const o = await cfgFor(provider, addr);
+      const width = o ? o.lpWidth : LP_WIDTH;
+      const edge = o ? o.lpEdge : LP_EDGE;
       const p = await v.proposal();
 
       // An open proposal is a decision already made. Try to land it before
@@ -253,7 +270,7 @@ async function lpCycle(provider, signer, me, dry) {
       const posId = Number(await v.positionId());
       const decision = posId === 0
         ? { move: true, why: "no position yet" }
-        : needsRebalance(tw, Number(p.lower), Number(p.upper));
+        : needsRebalance(tw, Number(p.lower), Number(p.upper), edge);
 
       // A vault holding a position reports its range through the proposal only
       // after one has been made, so a live position with no stored proposal is
@@ -261,7 +278,7 @@ async function lpCycle(provider, signer, me, dry) {
       // worst case is a late rebalance, never an unwanted one.
       if (!decision.move) { console.log(`lp ${addr} HOLD (${decision.why})`); continue; }
 
-      const { lower, upper } = rangeFor(tw, spacing);
+      const { lower, upper } = rangeFor(tw, spacing, width);
       const drift = Number(await v.maxTickDrift());
       if (Math.abs(tw - (lower + upper) / 2) > drift) {
         console.log(`lp ${addr} proposed range would exceed maxTickDrift, skipping`);
@@ -333,7 +350,10 @@ async function cycle(provider, signer, me, dry) {
       const key = poolAddr.toLowerCase();
       const sPrev = st.pools[key] ? BigInt(st.pools[key]) : 0n;
 
-      const d = decide(s, sPrev, quoteIs0);
+      const o = await cfgFor(provider, addr);
+      const band = o ? o.band : DEAD_ZONE;
+      const sellMult = o ? o.sellMult : SELL_MULT;
+      const d = decide(s, sPrev, quoteIs0, band, sellMult);
       // Recorded whatever the decision, so the next cycle has a reference even
       // after a HOLD. Written before acting: a crash mid-swap must not make the
       // next run compare against a price two cycles old.
@@ -388,6 +408,7 @@ async function main() {
   console.log(`vault-keeper as ${me}${dry ? " (dry run)" : ""}, factory ${FACTORY}`);
   console.log(`band ${DEAD_ZONE}, sell at ${DEAD_ZONE * SELL_MULT}, interval ${MIN_MS / 1000}-${MAX_MS / 1000}s`);
   console.log(`lp factory ${LP_FACTORY}, width +/-${LP_WIDTH} spacings, re-centre at ${(1 - LP_EDGE) * 100}% to an edge`);
+  console.log(`per-vault overrides via AgentConfig ${AGENT_CONFIG}`);
 
   for (;;) {
     try { await cycle(provider, signer, me, dry); }

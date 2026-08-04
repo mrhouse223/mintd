@@ -58,6 +58,7 @@ for (const rel of [
   "contracts/BondMarket.sol",
   "contracts/BuybackVault.sol",
   "contracts/BuybackVaultFactory.sol",
+  "contracts/AgentConfig.sol",
   "contracts/test/MockTwap.sol",
   "contracts/test/ReentrantBuyer.sol",
 ]) {

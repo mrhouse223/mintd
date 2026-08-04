@@ -2773,6 +2773,7 @@ const CHAINS = {
       burner: "0x7F007fbc6061806888A39A79763808aF5B94F4f4",       // BuybackBurner, no owner, buy-and-burn only
       vaultFactory: "0x3db601869c2C47Bfa9b08c62E077Df4806C1283A", // BuybackVaultFactory, no owner, holds nothing
       agentFactory: "0x28A9C05d0e31E2fEBf983F479d3c0278794BEE35", // AgentVaultFactory (LP), no owner, holds nothing
+      agentConfig: "0x3FcEfc5793F53e9b8F503cffd0FE116818335efD",  // per-vault keeper overrides, ownerless
       keeper: "0xfe93602C1d76834b6370833B9ce7C86939B5D97f",      // the agent wallet. Gas only, can never withdraw
       mintd: "0xE62C47074abb52A2bc87B62E47e3411A0020f020",
       mintr: "0x8817D05f2560189F3697028f639Dbb4C68688400",
@@ -5563,7 +5564,8 @@ async function vaultLoad(force) {
             drawdown: Number(await retryRead(() => v.maxDrawdownBps())),
           };
         }
-        myVaults.push({ addr: a, token: tk, quoteBal: q, tokenBal: t, owner, mark, live, mine, cfg,
+        const kcfg = mine ? await keeperCfgFor(a) : null;
+        myVaults.push({ addr: a, token: tk, quoteBal: q, tokenBal: t, owner, mark, live, mine, cfg, kcfg,
                         agent: await retryRead(() => v.agent()) });
       } catch (e) { console.error("vault", a, "skipped:", e.shortMessage || e.message); }
     }
@@ -5714,7 +5716,32 @@ function vaultSettingsPanel(v, i) {
       <button class="chip" onclick="vaultRecheckpoint(${i})">Re-arm the stop</button>
     </div>
     <p class="finenote" style="margin:8px 0 0">The drawdown stop halts trading once the vault falls this far below its best value. A volatile coin can trip a tight one, so widen it or re-arm after a big move.</p>
+    <div style="border-top:1px solid var(--line,rgba(127,127,127,.18));margin-top:12px;padding-top:12px">
+      <b style="font-size:13px">When it acts</b> ${v.kcfg && !v.kcfg.set ? `<span class="finenote">(keeper defaults)</span>` : ``}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
+        <div>${row("Buy trigger", "cfBand", (v.kcfg.band / 10000).toFixed(2), "% drop to buy", "0.01-5")}</div>
+        <div>${row("Sell trigger", "cfMult", v.kcfg.sellMult, "x the buy trigger", "1-20")}</div>
+      </div>
+      <button class="btn" style="margin-top:10px" onclick="vaultSaveTuning(${i})">Save when-it-acts</button>
+      <p class="finenote" style="margin:8px 0 0">The agent buys when the price drops past the buy trigger, and sells at that multiple of it. A higher multiple accumulates more before taking profit.</p>
+    </div>
   </div>`;
+}
+
+async function vaultSaveTuning(i) {
+  if (!signer) return connect();
+  const v = myVaults[i];
+  try {
+    // band is the keeper's ppm-ish unit: 10000 == a 1% move.
+    const band = Math.max(1, Math.min(50000, Math.round(Number($("cfBand" + i).value) * 10000)));
+    const mult = Math.max(1, Math.min(20, Math.round(Number($("cfMult" + i).value))));
+    // setConfig writes all four; a buyback vault ignores the LP pair, so carry
+    // its current width/edge through unchanged.
+    const c = new ethers.Contract(NET.mintd.agentConfig, AGENTCFG_ABI, signer);
+    await (await c.setConfig(v.addr, band, mult, v.kcfg.lpWidth, v.kcfg.lpEdgePct)).wait();
+    toast("Saved. The keeper picks it up next cycle.", "ok");
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
 }
 
 function vaultSettings(i) {
@@ -5851,6 +5878,28 @@ function agoFromTs(ts) {
 }
 
 
+/* ------------------------------------------------ per-vault keeper tuning */
+// AgentConfig stores the DECISION params the keeper reads (buy band and sell
+// multiple for a buyback vault, range width and rebalance edge for an LP one).
+// Ownerless; each write is gated on the vault's own owner. The keeper falls back
+// to these defaults when a vault has no override, so the UI shows the same
+// numbers a fresh vault runs on.
+const AGENTCFG_ABI = [
+  "function get(address) view returns (uint16 band, uint8 sellMult, uint8 lpWidth, uint8 lpEdgePct, bool set)",
+  "function setConfig(address vault, uint16 band, uint8 sellMult, uint8 lpWidth, uint8 lpEdgePct)",
+];
+const KEEPER_DEFAULTS = { band: 300, sellMult: 3, lpWidth: 8, lpEdgePct: 75 };
+async function keeperCfgFor(vault) {
+  const a = NET.mintd && NET.mintd.agentConfig;
+  if (!a) return { ...KEEPER_DEFAULTS, set: false };
+  try {
+    const c = await retryRead(() => new ethers.Contract(a, AGENTCFG_ABI, rp).get(vault));
+    return c.set
+      ? { band: Number(c.band), sellMult: Number(c.sellMult), lpWidth: Number(c.lpWidth), lpEdgePct: Number(c.lpEdgePct), set: true }
+      : { ...KEEPER_DEFAULTS, set: false };
+  } catch { return { ...KEEPER_DEFAULTS, set: false }; }
+}
+
 /* --------------------------------------------------- committed agent trades */
 // The keeper appends every trade to frontend/agent-trades.json and publish-stats
 // commits it, so the site has complete history without scanning logs against a
@@ -5939,6 +5988,7 @@ async function lpLoad(force) {
             twap: Number(await retryRead(() => v.twapWindow())),
             cool: Number(await retryRead(() => v.cooldown())),
           } : null,
+          kcfg: (me && owner.toLowerCase() === me) ? await keeperCfgFor(a) : null,
         });
       } catch (e) { console.error("lp vault", a, "skipped:", e.shortMessage || e.message); }
     }
@@ -6080,6 +6130,15 @@ function lpSettingsPanel(v, i) {
       <button class="btn" onclick="lpSavePolicy(${i})">Save settings</button>
       <button class="chip" onclick="lpResetCheckpoint(${i})">Re-arm the stop</button>
     </div>
+    <div style="border-top:1px solid var(--line,rgba(127,127,127,.18));margin-top:12px;padding-top:12px">
+      <b style="font-size:13px">How it manages the range</b> ${v.kcfg && !v.kcfg.set ? `<span class="finenote">(keeper defaults)</span>` : ``}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
+        <div>${row("Range width", "lcWidth", v.kcfg.lpWidth, "tick spacings each side", "1-100")}</div>
+        <div>${row("Rebalance at", "lcEdge", v.kcfg.lpEdgePct, "% of the way to an edge", "1-99")}</div>
+      </div>
+      <button class="btn" style="margin-top:10px" onclick="lpSaveTuning(${i})">Save range behaviour</button>
+      <p class="finenote" style="margin:8px 0 0">A wider range trades less and earns less per dollar; rebalancing later means fewer swap fees but more time out of range. Each rebalance pays a fee, so it only moves once price has drifted this far out.</p>
+    </div>
   </div>`;
 }
 
@@ -6106,6 +6165,21 @@ async function lpSavePolicy(i) {
     toast("Saving policy…");
     await (await c.setPolicy(drift, slip, loss, review, twap, cool)).wait();
     toast("Policy saved", "ok");
+    lpLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function lpSaveTuning(i) {
+  if (!signer) return connect();
+  const v = myLpVaults[i];
+  try {
+    const width = Math.max(1, Math.min(100, Math.round(Number($("lcWidth" + i).value))));
+    const edge = Math.max(1, Math.min(99, Math.round(Number($("lcEdge" + i).value))));
+    // An LP vault ignores the buyback pair, so carry its current band/mult
+    // through unchanged; setConfig writes all four.
+    const c = new ethers.Contract(NET.mintd.agentConfig, AGENTCFG_ABI, signer);
+    await (await c.setConfig(v.addr, v.kcfg.band, v.kcfg.sellMult, width, edge)).wait();
+    toast("Saved. The keeper picks it up next cycle.", "ok");
     lpLoad(true);
   } catch (e) { toast(e.shortMessage || e.message, "err"); }
 }

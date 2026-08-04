@@ -9,7 +9,7 @@
 // cache is kept and nothing is ever re-fetched. The arcswap rebrand shipped a
 // new logo and icon set and every visitor kept seeing mintd's green mark,
 // because this string still said v1.
-const VERSION = "mintd-v20";
+const VERSION = "mintd-v21";
 const SHELL = "shell-" + VERSION;
 const ASSETS = "assets-" + VERSION;
 
