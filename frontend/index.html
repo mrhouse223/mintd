@@ -5772,6 +5772,7 @@ const LPFACTORY_ABI = [
   "function createVault(address pool, address agent, address numeraire) returns (address)",
   "function vaultsOf(address) view returns (address[])",
   "function vaultCount() view returns (uint256)",
+  "function allVaultsSlice(uint256,uint256) view returns (address[])",
 ];
 const LPV_ABI = [
   "function owner() view returns (address)",
@@ -5797,19 +5798,26 @@ async function lpLoad(force) {
   const rows = $("agLpRows");
   const fa = NET.mintd && NET.mintd.agentFactory;
   if (!fa) { rows.innerHTML = `<div class="empty">Not on this chain.</div>`; return; }
-  if (!wallet) { rows.innerHTML = `<div class="empty">Connect a wallet to see your LP agents.</div>`; return; }
   if (force || !tokens.length) await loadAll();
   rows.innerHTML = `<div class="empty">Loading…</div>`;
   try {
     const f = new ethers.Contract(fa, LPFACTORY_ABI, rp);
-    const list = await retryRead(() => f.vaultsOf(wallet));
+    // EVERY LP vault, not just the connected wallet's. Same as the buyback list:
+    // agents are public, so anyone can see what is running without connecting.
+    const n = Number(await retryRead(() => f.vaultCount()));
     myLpVaults = [];
-    for (const a of list) {
+    const me = wallet ? wallet.toLowerCase() : null;
+    // Sequential per gotcha 1, newest first, capped.
+    for (let i = n - 1; i >= 0 && myLpVaults.length < 40; i--) {
+      let a;
+      try { a = (await retryRead(() => f.allVaultsSlice(i, 1)))[0]; }
+      catch (e) { console.error("lp vault", i, "unreadable:", e.shortMessage || e.message); continue; }
       const v = new ethers.Contract(a, LPV_ABI, rp);
       try {
-        const [t0, t1] = [await retryRead(() => v.token0()), await retryRead(() => v.token1())];
+        const owner = await retryRead(() => v.owner());
         myLpVaults.push({
-          addr: a, token0: t0, token1: t1,
+          addr: a, owner, mine: me && owner.toLowerCase() === me,
+          token0: await retryRead(() => v.token0()), token1: await retryRead(() => v.token1()),
           agent: await retryRead(() => v.agent()),
           mode: Number(await retryRead(() => v.mode())),
           positionId: await retryRead(() => v.positionId()),
@@ -5819,7 +5827,7 @@ async function lpLoad(force) {
     }
     lpPaint();
   } catch (e) {
-    rows.innerHTML = `<div class="empty">Could not read your LP agents: ${esc(e.shortMessage || e.message)}</div>`;
+    rows.innerHTML = `<div class="empty">Could not read LP agents: ${esc(e.shortMessage || e.message)}</div>`;
   }
 }
 
@@ -5831,19 +5839,21 @@ function lpPaint() {
     const sym = coin ? coin.symbol : "pool";
     const p = v.proposal;
     const hasPos = v.positionId && v.positionId !== 0n;
-    const pending = p.open && !p.approved && v.mode === 1; // PROPOSE-ONLY awaiting owner
+    const pending = v.mine && p.open && !p.approved && v.mode === 1; // PROPOSE-ONLY awaiting owner
     return `<div class="bondcard">
       <div class="bhead">
         ${bondLogo({ token: coin ? coin.addr : v.token0, sym })}
         <b style="font-size:16px">$${esc(sym)} / USDT0</b>
         <span class="bchip ${v.mode === 0 ? "off" : v.mode === 3 ? "on" : "soon"}">${LP_MODES[v.mode]}</span>
         ${hasPos ? `<span class="bchip on">IN RANGE</span>` : `<span class="bchip off">NO POSITION</span>`}
+        ${v.mine ? `<span class="bchip soon">YOURS</span>` : ""}
         <div class="spacer"></div>
         <a class="finenote" href="${NET.chain.blockExplorerUrls[0]}/address/${v.addr}" target="_blank" rel="noopener">${esc(short(v.addr))} &#8599;</a>
       </div>
+      ${hasPos ? `<div class="finenote" style="margin:6px 0 0">Position ticks ${p.lower} to ${p.upper}${v.mine ? "" : ", owned by " + esc(short(v.owner))}.</div>` : ""}
       ${pending ? `<div class="finenote" style="margin:8px 0;color:#7d9bff"><b>The agent has proposed a range: ${p.lower} to ${p.upper}.</b> It will not move until you approve it.</div>
         <div class="bactions"><button class="btn" onclick="lpApprove(${i})">Approve this range</button></div>` : ``}
-      <div class="bactions" style="margin-top:10px">
+      ${v.mine ? `<div class="bactions" style="margin-top:10px">
         <input id="lpD0${i}" placeholder="0.00 $${esc(sym)}" autocomplete="off" style="max-width:150px">
         <input id="lpD1${i}" placeholder="0.00 USDT0" autocomplete="off" style="max-width:150px">
         <button class="btn" onclick="lpDeposit(${i})">Deposit</button>
@@ -5855,9 +5865,48 @@ function lpPaint() {
         </select>
         <button class="chip" onclick="lpSetMode(${i})">Set mode</button>
         <button class="chip" onclick="lpToggleAgent(${i})">${v.agent === ethers.ZeroAddress ? "Turn agent on" : "Turn agent off"}</button>
-      </div>
+      </div>` : ""}
+      <div id="lpTrades${i}" class="finenote" style="margin-top:10px">Loading rebalances…</div>
     </div>`;
   }).join("");
+  (async () => { for (let i = 0; i < myLpVaults.length; i++) await lpTrades(i); })();
+}
+
+/// LP "trades" are rebalances: each Executed carries the new range. Same 500
+/// block / 500 result cap and 4-day pruning as everywhere, so a recent window.
+async function lpTrades(i) {
+  const el = $("lpTrades" + i);
+  if (!el) return;
+  const v = myLpVaults[i];
+  try {
+    const lp = logProvider();
+    const c = new ethers.Contract(v.addr, LPV_ABI, lp);
+    const head = await lp.getBlockNumber();
+    const SPAN = 500, WINDOW = 8;
+    const out = [];
+    for (let k = 0; k < WINDOW && out.length < 20; k++) {
+      const to = head - k * SPAN, from = Math.max(0, to - SPAN + 1);
+      if (to < 0) break;
+      let logs = [];
+      try { logs = await c.queryFilter(c.filters.Executed(), from, to); } catch { continue; }
+      for (const l of logs.reverse()) out.push(l);
+    }
+    if (!out.length) {
+      el.innerHTML = (v.positionId && v.positionId !== 0n)
+        ? `In range, no rebalance recently. It only moves the range once price drifts three quarters of the way to an edge.`
+        : (v.agent === ethers.ZeroAddress
+            ? `No position yet. The agent is off, so nothing will happen until you turn it on and it mints a range.`
+            : `No position yet. The agent mints one on its next cycle after a deposit.`);
+      return;
+    }
+    el.innerHTML = out.slice(0, 20).map((l) =>
+      `<div style="display:flex;gap:8px;padding:3px 0">
+        <b style="color:var(--green2)">REBALANCE</b>
+        <span>ticks ${l.args.lower} to ${l.args.upper}</span>
+        <div class="spacer"></div>
+        <a href="${NET.chain.blockExplorerUrls[0]}/tx/${l.transactionHash}" target="_blank" rel="noopener" style="opacity:.6">${esc(l.transactionHash.slice(0, 10))}&#8599;</a>
+      </div>`).join("");
+  } catch (e) { el.textContent = "Could not read rebalances: " + (e.shortMessage || e.message); }
 }
 
 function lpShowCreate() {

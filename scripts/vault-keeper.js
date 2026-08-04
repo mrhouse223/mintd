@@ -249,6 +249,21 @@ async function lpCycle(provider, signer, me, dry) {
         console.log(`   sent ${(await tx.wait()).hash}`);
       } else console.log("   would send (dry run)");
       acted++;
+
+      // AUTONOMOUS has nobody to wait for, so proposing and then sitting on the
+      // proposal for a full interval before executing is pure latency: a fresh
+      // vault would take two cycles, up to half an hour, just to mint its first
+      // position. Execute in the same cycle. PROPOSE_ONLY and TIMELOCKED still
+      // wait, which is their whole point.
+      if (mode === 3) {
+        try { await v.execute.staticCall(); }
+        catch (e) { console.log(`   execute not yet possible: ${(e.shortMessage || e.message).slice(0, 70)}`); continue; }
+        console.log(`lp ${addr} EXECUTE ${lower}..${upper} (same cycle, AUTONOMOUS)`);
+        if (!dry) {
+          const tx = await v.execute({ gasLimit: 2_500_000 });
+          console.log(`   sent ${(await tx.wait()).hash}`);
+        } else console.log("   would send (dry run)");
+      }
     } catch (e) {
       console.error(`lp ${addr} errored: ${(e.shortMessage || e.message || "").slice(0, 100)}`);
     }
