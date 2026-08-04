@@ -295,5 +295,5 @@ Keep it this way. An inflated TVL is the easiest thing for a critic to disprove.
 The live security state (role holders, Safe threshold, the compromised
 deployer, stranded funds) and the open-items list live in `private/security-notes.md`,
 which is gitignored and never enters the public repo. Re-run
-`node scripts/audit-ownership.js` to check on-chain roles before trusting any
-written summary.
+the on-chain role holders directly (Safe owners/threshold, each contract's
+owner) before trusting any written summary.
