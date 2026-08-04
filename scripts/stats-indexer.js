@@ -481,21 +481,31 @@ async function main() {
   }
 
   if (WATCH) {
+    // Lock around EACH pass, not once for the whole process lifetime. Holding it
+    // for the lifetime meant the watch loop and a publish one-shot could never
+    // coexist, and exiting when the lock was briefly held (a publish mid cold
+    // sweep) made pm2 restart-loop and burn its whole restart budget in a few
+    // minutes, then stop for good. Now a held lock just skips the tick.
     for (;;) {
-      try { await pass(); } catch (e) { console.error("pass failed:", e.shortMessage || e.message); }
+      if (acquireLock()) {
+        try { await pass(); }
+        catch (e) { console.error("pass failed:", e.shortMessage || e.message); }
+        finally { releaseLock(); }
+      } else {
+        console.log("another pass holds the lock, skipping this tick");
+      }
       await new Promise((r) => setTimeout(r, POLL_MS));
     }
   } else {
-    await pass();
+    // One-shot, used by publish-stats.sh: it needs the lock for its single pass.
+    if (!acquireLock()) { console.error("another indexer pass is already running, exiting"); return; }
+    try { await pass(); } finally { releaseLock(); }
   }
 }
 
-if (!acquireLock()) {
-  // Exit 0, not 1: this is the lock doing its job, and a non-zero status would
-  // make pm2 treat a normal overlap as a crash and restart-loop.
-  console.error("another indexer pass is already running, exiting");
-  process.exit(0);
-}
+// Locking moved INTO main(), per pass, so the watch loop never exits on a held
+// lock (which is what made pm2 burn its restart budget). This safety net still
+// releases the lock if we hold it when the process dies.
 process.on("exit", releaseLock);
 for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { releaseLock(); process.exit(0); });
 
