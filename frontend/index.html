@@ -1224,6 +1224,70 @@
     border: 1px solid var(--line);
     border-radius: 10px;
   }
+  /* ============================================================ polish layer
+     Additive refinements over the base styles: one shared easing, consistent
+     micro-interactions, keyboard focus rings, loading skeletons, and a
+     reduced-motion guard. Nothing here changes layout. */
+  :root { --ease: cubic-bezier(.22,.8,.28,1); --ring: color-mix(in srgb, var(--green) 55%, transparent); }
+  html { scroll-behavior: smooth; }
+
+  /* Buttons feel physical: a small lift on hover, a press on active. */
+  .btn { transition: background .18s var(--ease), transform .12s var(--ease), box-shadow .2s var(--ease), opacity .15s; will-change: transform; }
+  .btn:not(:disabled):hover { transform: translateY(-1.5px); box-shadow: 0 8px 22px color-mix(in srgb, var(--green) 32%, transparent); }
+  .btn:not(:disabled):active { transform: translateY(0) scale(.985); box-shadow: 0 3px 10px color-mix(in srgb, var(--green) 26%, transparent); }
+  .btn.ghost:not(:disabled):hover { box-shadow: 0 8px 22px rgba(25,40,55,.14); border-color: color-mix(in srgb, var(--green) 70%, var(--line)); }
+  .btn.sell:not(:disabled):hover { box-shadow: 0 8px 22px color-mix(in srgb, var(--red) 34%, transparent); }
+
+  /* Chips and pills settle smoothly instead of snapping. */
+  .chip, nav button, .tokbtn, .filterChips .chip, .themebtn { transition: background .18s var(--ease), color .15s var(--ease), border-color .18s var(--ease), transform .14s var(--ease), box-shadow .2s var(--ease); }
+  .chip:hover { border-color: color-mix(in srgb, var(--green) 55%, var(--line)); color: var(--ink); transform: translateY(-1px); }
+  nav button:hover { background: color-mix(in srgb, var(--green) 12%, transparent); }
+  nav button.active { background: var(--ink); color: var(--bg); }
+
+  /* Inputs bloom a soft green ring on focus instead of a hard outline. */
+  input, select, textarea, .amtbox, .bigsearch { transition: border-color .18s var(--ease), box-shadow .2s var(--ease), background .18s var(--ease); }
+  .field input:focus, .field select:focus, .field textarea:focus, .bactions input:focus, .amtbox:focus-within, .bigsearch:focus-within {
+    border-color: color-mix(in srgb, var(--green) 60%, var(--line));
+    box-shadow: 0 0 0 3px var(--ring);
+    outline: none;
+  }
+
+  /* Keyboard focus is visible and on-brand everywhere, without touching mouse users. */
+  :focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); border-radius: 8px; }
+  button:focus-visible, a:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+
+  /* Cards lift a touch more and gain a hairline glow, so the grid feels alive. */
+  .tcard:hover { border-color: color-mix(in srgb, var(--green) 65%, var(--line)); }
+  .bondcard, .agcard { transition: border-color .2s var(--ease), box-shadow .24s var(--ease), transform .2s var(--ease); }
+  .bondcard:hover, .agcard:hover { border-color: color-mix(in srgb, var(--green) 34%, var(--line)); box-shadow: 0 10px 30px rgba(25,40,55,.10); }
+
+  /* A themed, slim scrollbar rather than the OS default. */
+  * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--green) 40%, var(--line)) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--green) 34%, var(--line)); border-radius: 999px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--green) 55%, var(--line)); }
+  ::selection { background: color-mix(in srgb, var(--green) 30%, transparent); }
+
+  /* Views fade and rise in when switched, so navigation feels continuous. */
+  .view.on { animation: viewIn .32s var(--ease) both; }
+  @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* Loading skeletons: shimmer placeholders while the grid fetches, instead of
+     a blank hole or a premature "no tokens" message. */
+  @keyframes shimmer { 100% { background-position: -200% 0; } }
+  .skel { position: relative; overflow: hidden; }
+  .skcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+  .skline { border-radius: 8px; background: linear-gradient(90deg,
+              color-mix(in srgb, var(--line) 60%, transparent) 25%,
+              color-mix(in srgb, var(--line) 100%, transparent) 37%,
+              color-mix(in srgb, var(--line) 60%, transparent) 63%);
+            background-size: 200% 100%; animation: shimmer 1.3s var(--ease) infinite; }
+  .skdot { width: 44px; height: 44px; border-radius: 50%; flex: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, .view.on { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -3252,6 +3316,9 @@ function compressImage(file, maxW, maxH, budgetChars) {
 /* ------------------------------------------------------------------ state */
 let rp, pad, weth, signer, wallet, quoterR;
 let tokens = [], filter = "all", sort = "mcap", pairFilter = "all", isBuy = true, cur = null;
+// False until the first token load resolves, so the grid shows shimmer
+// skeletons while fetching instead of a blank hole or a premature "no tokens".
+let tokensLoaded = false;
 // Discover paging. 117 tokens in one grid is a long scroll and a lot of DOM,
 // and every filter change rebuilt all of it.
 let page = 0;
@@ -6735,6 +6802,7 @@ async function loadAllInner() {
     // the portfolio all read this same array, so dropping it here keeps them
     // from disagreeing about whether the token exists.
     tokens = loaded.filter(Boolean).filter((t) => !isHiddenToken(t.addr));
+    tokensLoaded = true;
 
     // featured tokens launched outside the launchpad (standalone USDT0 V3 pools)
     const ext = await Promise.all(EXTERNAL_TOKENS.map(async (e) => {
@@ -6838,6 +6906,22 @@ function renderCards() {
   // build off-document, attach once: one reflow instead of one per card
   const frag = document.createDocumentFragment();
   if (!list.length) {
+    // Before the first load resolves, show shimmer skeletons rather than the
+    // "no tokens" copy, which would otherwise flash on every cold open.
+    if (!tokensLoaded) {
+      el.innerHTML = Array.from({ length: 8 }, () => `
+        <div class="skcard skel">
+          <div style="display:flex;gap:11px;align-items:center">
+            <div class="skline skdot"></div>
+            <div style="flex:1"><div class="skline" style="height:13px;width:60%"></div>
+              <div class="skline" style="height:10px;width:38%;margin-top:7px"></div></div>
+          </div>
+          <div class="skline" style="height:34px;margin-top:14px"></div>
+          <div class="skline" style="height:10px;width:80%;margin-top:12px"></div>
+        </div>`).join("");
+      renderPager(0, 0);
+      return;
+    }
     el.innerHTML = '<div class="empty">No tokens yet. Be the first to launch.</div>';
     renderPager(0, 0);
     return;
