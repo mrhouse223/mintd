@@ -1,6 +1,6 @@
 # MINTR on Solana (a tab on mintd.fun)
 
-Status: draft
+Status: approved (building)
 Date: 2026-08-06
 
 ## What problem this solves
