@@ -505,6 +505,38 @@
   .lform h3 small { color: var(--dim); font-weight: 500; }
   .frow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .field { margin-bottom: 12px; }
+  /* Bond form: one control per line. The controls previously inherited the
+     card's inline flow, so label and input sat side by side and seven fields
+     wrapped into an unreadable paragraph. */
+  .bdform { display: grid; gap: 14px; }
+  .bdform .field input, .bdform .field select { width: 100%; }
+  .bondcard .bhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .bondcard .blogo { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex: none; }
+  .bondcard .blogo.bfb { display: grid; place-items: center; font-size: 11px; font-weight: 800;
+                         background: var(--card2, rgba(127,127,127,.16)); color: var(--dim); }
+  /* Numbers get their own boxes. A row of bare text made the market price and
+     the bond price look like the same field. */
+  .bondcard { border: 1px solid var(--line, rgba(127,127,127,.18)); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+  /* Generic, not scoped to one card. These were .bondcard-only and the agents
+     page reused the markup, so every stat rendered as a run-on line of text. */
+  .bgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 14px 0 12px; }
+  .bbox { border: 1px solid var(--line, rgba(127,127,127,.16)); border-radius: 10px; padding: 10px 12px; }
+  .bbox label { display: block; font-size: 9px; letter-spacing: .11em; font-weight: 800;
+                color: var(--dim); margin-bottom: 5px; white-space: nowrap; }
+  .bbox b { font-size: 15px; font-weight: 700; display: block; line-height: 1.25; }
+  .bbox small { display: block; font-size: 10.5px; color: var(--dim); margin-top: 2px; }
+  .bondcard .bbar { height: 6px; border-radius: 99px; background: var(--line, rgba(127,127,127,.18)); overflow: hidden; margin: 2px 0 12px; }
+  .bondcard .bbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--green), var(--green2)); }
+  .agcard { border: 1px solid var(--line, rgba(127,127,127,.18)); border-radius: 14px; padding: 18px; margin-bottom: 14px; }
+  .agcard .aghead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .agcard .aghead b { font-size: 18px; }
+  .agcard .bgrid { margin-top: 14px; }
+  .bchip { font-size: 10px; font-weight: 800; letter-spacing: .08em; padding: 4px 9px; border-radius: 99px; }
+  .bchip.on  { background: var(--green); color: #fff; }
+  .bchip.off { background: var(--line, rgba(127,127,127,.2)); color: var(--dim); }
+  .bchip.soon{ background: rgba(120,150,255,.18); color: #7d9bff; }
+  .bactions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .bactions input { max-width: 200px; }
   .field label { font-size: 10px; letter-spacing: .12em; font-weight: 800; color: var(--dim); display: block; margin-bottom: 6px; }
   .field input, .field textarea { width: 100%; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; color: var(--ink); padding: 11px 12px; font-size: 14px; font-family: inherit; }
   .field textarea { resize: vertical; min-height: 70px; }
@@ -1192,6 +1224,70 @@
     border: 1px solid var(--line);
     border-radius: 10px;
   }
+  /* ============================================================ polish layer
+     Additive refinements over the base styles: one shared easing, consistent
+     micro-interactions, keyboard focus rings, loading skeletons, and a
+     reduced-motion guard. Nothing here changes layout. */
+  :root { --ease: cubic-bezier(.22,.8,.28,1); --ring: color-mix(in srgb, var(--green) 55%, transparent); }
+  html { scroll-behavior: smooth; }
+
+  /* Buttons feel physical: a small lift on hover, a press on active. */
+  .btn { transition: background .18s var(--ease), transform .12s var(--ease), box-shadow .2s var(--ease), opacity .15s; will-change: transform; }
+  .btn:not(:disabled):hover { transform: translateY(-1.5px); box-shadow: 0 8px 22px color-mix(in srgb, var(--green) 32%, transparent); }
+  .btn:not(:disabled):active { transform: translateY(0) scale(.985); box-shadow: 0 3px 10px color-mix(in srgb, var(--green) 26%, transparent); }
+  .btn.ghost:not(:disabled):hover { box-shadow: 0 8px 22px rgba(25,40,55,.14); border-color: color-mix(in srgb, var(--green) 70%, var(--line)); }
+  .btn.sell:not(:disabled):hover { box-shadow: 0 8px 22px color-mix(in srgb, var(--red) 34%, transparent); }
+
+  /* Chips and pills settle smoothly instead of snapping. */
+  .chip, nav button, .tokbtn, .filterChips .chip, .themebtn { transition: background .18s var(--ease), color .15s var(--ease), border-color .18s var(--ease), transform .14s var(--ease), box-shadow .2s var(--ease); }
+  .chip:hover { border-color: color-mix(in srgb, var(--green) 55%, var(--line)); color: var(--ink); transform: translateY(-1px); }
+  nav button:hover { background: color-mix(in srgb, var(--green) 12%, transparent); }
+  nav button.active { background: var(--ink); color: var(--bg); }
+
+  /* Inputs bloom a soft green ring on focus instead of a hard outline. */
+  input, select, textarea, .amtbox, .bigsearch { transition: border-color .18s var(--ease), box-shadow .2s var(--ease), background .18s var(--ease); }
+  .field input:focus, .field select:focus, .field textarea:focus, .bactions input:focus, .amtbox:focus-within, .bigsearch:focus-within {
+    border-color: color-mix(in srgb, var(--green) 60%, var(--line));
+    box-shadow: 0 0 0 3px var(--ring);
+    outline: none;
+  }
+
+  /* Keyboard focus is visible and on-brand everywhere, without touching mouse users. */
+  :focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); border-radius: 8px; }
+  button:focus-visible, a:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+
+  /* Cards lift a touch more and gain a hairline glow, so the grid feels alive. */
+  .tcard:hover { border-color: color-mix(in srgb, var(--green) 65%, var(--line)); }
+  .bondcard, .agcard { transition: border-color .2s var(--ease), box-shadow .24s var(--ease), transform .2s var(--ease); }
+  .bondcard:hover, .agcard:hover { border-color: color-mix(in srgb, var(--green) 34%, var(--line)); box-shadow: 0 10px 30px rgba(25,40,55,.10); }
+
+  /* A themed, slim scrollbar rather than the OS default. */
+  * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--green) 40%, var(--line)) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--green) 34%, var(--line)); border-radius: 999px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--green) 55%, var(--line)); }
+  ::selection { background: color-mix(in srgb, var(--green) 30%, transparent); }
+
+  /* Views fade and rise in when switched, so navigation feels continuous. */
+  .view.on { animation: viewIn .32s var(--ease) both; }
+  @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* Loading skeletons: shimmer placeholders while the grid fetches, instead of
+     a blank hole or a premature "no tokens" message. */
+  @keyframes shimmer { 100% { background-position: -200% 0; } }
+  .skel { position: relative; overflow: hidden; }
+  .skcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+  .skline { border-radius: 8px; background: linear-gradient(90deg,
+              color-mix(in srgb, var(--line) 60%, transparent) 25%,
+              color-mix(in srgb, var(--line) 100%, transparent) 37%,
+              color-mix(in srgb, var(--line) 60%, transparent) 63%);
+            background-size: 200% 100%; animation: shimmer 1.3s var(--ease) infinite; }
+  .skdot { width: 44px; height: 44px; border-radius: 50%; flex: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, .view.on { animation: none !important; transition: none !important; }
+  }
 
   /* arcswap: squared, flatter, more institutional than the launchpad's look */
   :root { --radius: 2px; }
@@ -1222,12 +1318,12 @@
   <nav>
     <button id="nav-discover" class="active" onclick="go('discover')">Discover</button>
     <button id="nav-agent" onclick="go('agent')">Agent</button>
-    <button id="nav-launch" onclick="go('launch')">Launch</button>
     <button id="nav-mintswap" onclick="go('mintswap')">Swap</button>
     <button id="nav-bridge" onclick="go('bridge')">Bridge</button>
     <button id="nav-earn" onclick="go('earn')">Farms</button>
+    <button id="nav-bonds" onclick="go('bonds')" style="display:none">Bonds</button>
+    <button id="nav-agents" onclick="go('agents')" style="display:none">Agents</button>
     <button id="nav-pools" onclick="go('pools')" style="display:none">Pools</button>
-    <button id="nav-screener" onclick="go('screener')">Screener</button>
     <button id="nav-mintr" onclick="go('mintr')">MINTR</button>
     <button id="nav-synth" onclick="go('synth')">Gold</button>
     <button id="nav-more" onclick="toggleMore(event)">More ▾</button>
@@ -1515,6 +1611,218 @@
     </div>
   </section>
 
+  <!-- MINTD AGENTS -->
+  <section class="view" id="view-agents">
+    <div class="launchC" style="max-width:1040px">
+      <div class="heroC" style="margin:28px auto 20px">
+        <div class="badgepill">MINTD AGENTS</div>
+        <h1 style="font-size:38px">Contracts that run themselves.</h1>
+        <p>Rules that execute on a schedule instead of when somebody remembers. Every action is a
+           transaction you can check, and every agent below states plainly whether it is actually running.</p>
+      </div>
+
+      <div class="agcard" id="agRes">
+        <div class="aghead">
+          <b>Reservoir</b>
+          <span class="bchip off" id="agResChip">CHECKING…</span>
+          <div class="spacer"></div>
+          <a class="finenote" id="agResLink" target="_blank" rel="noopener">contract ↗</a>
+        </div>
+        <p class="finenote" style="margin:6px 0 0">
+          Collects protocol fees in <span class="paySymTxt">USDT0</span> and spends them buying $MINTD,
+          which goes straight to the burn address. The contract has no owner and no withdrawal path:
+          the only thing it can do with a balance is buy $MINTD and destroy it.
+        </p>
+        <div class="bgrid" id="agResStats"></div>
+        <div class="finenote" id="agResNote"></div>
+      </div>
+
+      <div class="agcard">
+        <div class="aghead">
+          <b>Liquidity vault</b>
+          <span class="bchip on" id="agLpChip">LIVE</span>
+          <div class="spacer"></div>
+          <a class="finenote" id="agLpLink" target="_blank" rel="noopener">factory ↗</a>
+        </div>
+        <p class="finenote" style="margin:6px 0 0">
+          Holds one Uniswap V3 position and rebalances it. The agent proposes a <b>range and a time</b>
+          and nothing else: the range is clamped to a band around the pool's time averaged price, and
+          every value-carrying number is derived inside the vault, so a stolen keeper key can waste gas
+          but cannot choose an execution price or a venue.
+        </p>
+        <p class="finenote" style="margin:8px 0 0">
+          It starts in <b>propose-only</b>, meaning the agent cannot move anything until you approve each
+          action. You can move it to a timelock, where proposals become executable after a review window
+          you set, or let it run on its own. Rebalancing waits until price has drifted three quarters of
+          the way to the edge of the range, because every rebalance pays a swap fee.
+        </p>
+        <div class="bgrid" id="agLpStats"></div>
+        <div class="aghead" style="margin-top:14px;border-top:1px solid var(--line,rgba(127,127,127,.18));padding-top:14px">
+          <b style="font-size:15px">Your LP agents</b>
+          <div class="spacer"></div>
+          <button class="chip" onclick="lpLoad(true)">Refresh</button>
+          <button class="btn" onclick="lpShowCreate()">New LP agent</button>
+        </div>
+        <div id="agLpRows" style="margin-top:10px"><div class="empty">Connect a wallet to see your LP agents.</div></div>
+        <div id="agLpCreate" style="display:none;margin-top:12px;border-top:1px solid var(--line,rgba(127,127,127,.18));padding-top:12px">
+          <div class="bdform">
+            <div class="field">
+              <label>POOL (COIN / USDT0, 1% TIER)</label>
+              <button type="button" class="tokbtn" id="lpTok" style="width:100%;justify-content:space-between" onclick="openTokMenu('lpTok')">Select &#9662;</button>
+            </div>
+          </div>
+          <div id="lpCreateNote" class="finenote" style="margin:12px 0"></div>
+          <button class="btn" id="lpGo" style="width:100%" onclick="lpCreate()">Deploy LP agent</button>
+        </div>
+      </div>
+
+      <div class="agcard">
+        <div class="aghead"><b>How the agents decide</b></div>
+        <div class="bgrid" style="margin-top:12px">
+          <div class="bbox"><label>EVERY 10-15 MIN</label><b>Look</b><small>randomised, never a fixed clock</small></div>
+          <div class="bbox"><label>FELL 0.03%</label><b>Buy</b><small>a 5% slice of your USDT0</small></div>
+          <div class="bbox"><label>ROSE 0.09%</label><b>Sell</b><small>only if heavy in the coin</small></div>
+          <div class="bbox"><label>OTHERWISE</label><b>Hold</b><small>most cycles do nothing</small></div>
+        </div>
+        <p class="finenote" style="margin:4px 0 0">
+          It takes <b>three times the move to sell as to buy</b>, so it leans toward accumulating rather than
+          trading. Every threshold here, the slice size, the slippage tolerance, the cooldown, the sell
+          ratio and the drawdown stop, is <b>yours to adjust</b> per agent from its Settings, within limits
+          the contract enforces so no setting can be turned into a way to lose the vault.
+          Each move is a slice of the balance, never all of it, and there is a cooldown between moves.
+        </p>
+        <div style="border-top:1px solid var(--line,rgba(127,127,127,.18));margin:14px 0 0;padding-top:14px">
+          <b style="font-size:14px">Why the agent cannot rob you</b>
+          <p class="finenote" style="margin:6px 0 0">
+            The agent's only power is choosing <b>when</b>. It cannot name a price, a size, or where anything goes:
+            those are fixed in your vault, not passed in by the caller. The minimum it will accept on any trade is
+            worked out inside the vault from the pool's own time-averaged price, so a stolen agent key cannot
+            quote itself a bad fill and pocket the difference. It cannot withdraw, ever. You can, at any moment,
+            without asking it, and you can switch it off in one transaction.
+          </p>
+          <p class="finenote" style="margin:8px 0 0">
+            There is also a stop: the vault remembers its high-water value, and if it drifts more than a set amount
+            below that, every trade halts until you re-arm it. That is what bounds a misbehaving agent to a few
+            percent rather than the whole balance.
+          </p>
+        </div>
+      </div>
+
+      <div class="agcard" id="agMine">
+        <div class="aghead">
+          <b>Live agents</b>
+          <span class="bchip on" id="agVaultChip">LIVE</span>
+          <div class="spacer"></div>
+          <button class="chip" onclick="vaultLoad(true)">Refresh</button>
+          <button class="btn" onclick="vaultShowCreate()">New agent</button>
+        </div>
+        <p class="finenote" style="margin:6px 0 10px">
+          Every agent running on mintd, on any coin. Yours are marked, and only you can touch those.
+          Fund one with <span class="paySymTxt">USDT0</span>, with the coin itself, or both. The agent buys
+          dips and can take profit on pumps,
+          and everything it buys stays yours. <b>Only the owner can withdraw</b>, at any time, with no
+          help from the agent.
+        </p>
+        <div id="agVaultRows"><div class="empty">Loading…</div></div>
+
+        <div id="agVaultCreate" style="display:none;margin-top:14px;border-top:1px solid var(--line,rgba(127,127,127,.18));padding-top:14px">
+          <div class="bdform">
+            <div class="field">
+              <label>COIN TO BUY</label>
+              <button type="button" class="tokbtn" id="avTok" style="width:100%;justify-content:space-between" onclick="openTokMenu('avTok')">Select &#9662;</button>
+            </div>
+          </div>
+          <div id="avNote" class="finenote" style="margin:12px 0"></div>
+          <button class="btn" id="avGo" style="width:100%" onclick="vaultCreate()">Deploy my agent</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BONDS -->
+  <section class="view" id="view-bonds">
+    <div class="launchC" style="max-width:1000px">
+      <div class="heroC" style="margin:28px auto 20px">
+        <div class="badgepill">BONDS</div>
+        <h1 style="font-size:38px">Raise without dumping</h1>
+        <p>Escrow tokens, sell them at a discount for <span class="paySymTxt">USDT0</span>, and let buyers vest in over time.
+           The tokens sit in the contract before anyone pays, and only the unsold remainder can come back to you.</p>
+      </div>
+
+      <div class="trade" style="margin-bottom:18px">
+        <div class="mkthead">
+          <h2>Open bonds</h2>
+          <div class="spacer"></div>
+          <button class="chip" onclick="bondLoad(true)">Refresh</button>
+          <button class="btn" onclick="bondShowCreate()">Create a bond</button>
+        </div>
+        <div id="bondNote" class="finenote" style="margin-bottom:10px"></div>
+        <div id="bondRows"><div class="empty">Loading…</div></div>
+      </div>
+
+      <div class="trade" id="bondMine" style="margin-bottom:18px;display:none">
+        <div class="mkthead"><h2>Your positions</h2></div>
+        <div id="bondMineRows"></div>
+      </div>
+
+      <div class="trade" id="bondCreate" style="display:none">
+        <div class="mkthead"><h2>Create a bond</h2></div>
+        <div class="finenote" style="margin-bottom:12px">
+          Your tokens move into the contract when you create the bond. You can take back
+          whatever does not sell once the window closes, but nothing that has sold.
+        </div>
+        <div class="bdform">
+          <div class="field">
+            <label>TOKEN</label>
+            <button type="button" class="tokbtn" id="bdTok" style="width:100%;justify-content:space-between" onclick="openTokMenu('bdTok')">Select &#9662;</button>
+          </div>
+          <div class="field">
+            <label>TOKENS TO ESCROW</label>
+            <input id="bdAmt" placeholder="20000000" oninput="bondQuote()" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>DISCOUNT OFF THE CURRENT PRICE</label>
+            <select id="bdDisc" onchange="bondQuote()">
+              <option value="5">5%</option><option value="10" selected>10%</option>
+              <option value="20">20%</option><option value="30">30%</option>
+              <option value="40">40%</option><option value="50">50%</option>
+              <option value="60">60%</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>SALE OPEN FOR</label>
+            <select id="bdSale" onchange="bondQuote()">
+              <option value="1">1 day</option><option value="3">3 days</option>
+              <option value="7" selected>7 days</option><option value="14">14 days</option>
+              <option value="30">30 days</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>BUYERS VEST OVER</label>
+            <select id="bdVest" onchange="bondQuote()">
+              <option value="1">1 day</option><option value="7">7 days</option>
+              <option value="14">14 days</option><option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>RELEASE STYLE</label>
+            <select id="bdStep" onchange="bondQuote()">
+              <option value="0" selected>Continuously</option>
+              <option value="600">Every 10 minutes</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>MAX ONE WALLET CAN BUY (0 = NO CAP)</label>
+            <input id="bdCap" placeholder="0" oninput="bondQuote()" autocomplete="off">
+          </div>
+        </div>
+        <div id="bdPreview" class="finenote" style="margin:14px 0"></div>
+        <button class="btn" id="bdGo" style="width:100%" onclick="bondCreate()">Escrow tokens and open the bond</button>
+      </div>
+    </div>
+  </section>
+
   <!-- POOLS -->
   <section class="view" id="view-pools">
     <div class="launchC" style="max-width:760px">
@@ -1599,7 +1907,7 @@
         <p>Everything on <span class="brand">mintd.fun</span>, explained. All contracts are onchain and verifiable on <span class="cexp">stablescan.xyz</span>. Nothing here is financial advice, and all code is unaudited: do your own research.</p>
       </div>
       <div class="trade docs">
-        <p class="d-toc"><b>Contents:</b> <a href="#d-start">Getting started</a> · <a href="#d-overview">Overview</a> · <a href="#d-launchpad">Launchpad</a> · <a href="#d-curve">Bonding curve &amp; graduation</a> · <a href="#d-fees">Fees</a><span data-chain="arc-testnet"> · <a href="#d-devbuy">Dev buy cap</a> · <a href="#d-tokenomics">Tokenomics</a></span> · <a href="#d-editing">Editing your token page</a> · <a href="#d-swap">Swap</a><span data-chain="stable"> · <a href="#d-pools">Pools</a> · <a href="#d-earn">Earn / farms</a> · <a href="#d-zap">Zap</a><span data-chain="stable"> · <a href="#d-stableearn">StableEarn</a></span></span> · <a href="#d-mintr">MINTR</a><span data-chain="stable"> · <a href="#d-gold">Mintd Gold</a></span> · <a href="#d-locker">Locker</a> · <a href="#d-bridge"><span data-chain="stable">Bridge</span><span data-chain="arc-testnet">Faucet</span></a> · <a href="#d-buyback">Buyback &amp; burn</a><span data-chain="stable"> · <a href="#d-mintd">$MINTD</a></span><span data-chain="stable"> · <a href="#d-contracts">Contracts</a></span> · <a href="#d-safety">Security</a></p>
+        <p class="d-toc"><b>Contents:</b> <a href="#d-start">Getting started</a> · <a href="#d-overview">Overview</a> · <a href="#d-launchpad">Launchpad</a> · <a href="#d-curve">Bonding curve &amp; graduation</a> · <a href="#d-fees">Fees</a><span data-chain="arc-testnet"> · <a href="#d-devbuy">Dev buy cap</a> · <a href="#d-tokenomics">Tokenomics</a></span> · <a href="#d-editing">Editing your token page</a> · <a href="#d-swap">Swap</a><span data-chain="stable"> · <a href="#d-pools">Pools</a> · <a href="#d-earn">Earn / farms</a> · <a href="#d-zap">Zap</a><span data-chain="stable"> · <a href="#d-stableearn">StableEarn</a></span></span> · <a href="#d-mintr">MINTR</a><span data-chain="stable"> · <a href="#d-gold">Mintd Gold</a></span> · <a href="#d-locker">Locker</a> · <a href="#d-bridge"><span data-chain="stable">Bridge</span><span data-chain="arc-testnet">Faucet</span></a> · <a href="#d-buyback">Buyback &amp; burn</a><span data-chain="stable"> · <a href="#d-mintd">$MINTD</a></span><span data-chain="stable"> · <a href="#d-agents">Agents</a> · <a href="#d-contracts">Contracts</a></span> · <a href="#d-safety">Security</a></p>
 
         <p data-chain="arc-testnet" style="border-left:3px solid var(--green);padding-left:12px">
           <b>You are reading the <span class="cname">Arc Testnet</span> docs.</b> This is a test network:
@@ -1746,6 +2054,51 @@
         <div data-chain="stable">
         <h2 id="d-mintd">$MINTD</h2>
         <p>$MINTD is the platform token, launched through the launchpad itself as token #0 with permanently locked liquidity. Its value is tied to platform activity: 100% of its token-side trading fees are burned, and the buyback-and-burn converts platform revenue into MINTD buys and burns. The live burn counter on the homepage reads the dead-address balance directly.</p>
+        </div>
+
+        <h2 id="d-agents" data-chain="stable">Agents</h2>
+        <div data-chain="stable">
+        <p>An agent is a vault you own that buys a coin for you on a rule. You fund it with USDT0, with
+        the coin itself, or both; it buys dips and can take profit on pumps, and everything it holds stays
+        yours. Funding it with the coin lets it start overweight and take profit straight away, without
+        buying its way in first.
+        The factory is <code>0xAEfc1555cFd2F1a20C73F8CAF3b031A6f429a9bB</code>, it has no owner, and
+        it holds nothing.</p>
+
+        <h3>The rule</h3>
+        <p>Every 10 to 15 minutes, at a randomised interval rather than a fixed clock, the agent
+        compares the pool price with the price it last saw:</p>
+        <ul>
+          <li><b>Buy</b> when the price has fallen past a band, spending a slice of your USDT0.</li>
+          <li><b>Sell</b> only when it has risen past <b>three times</b> that band, and only when the
+              vault is already heavy in the coin. The contract checks that, not the agent.</li>
+          <li><b>Hold</b> otherwise, which is most cycles.</li>
+        </ul>
+        <p>Currently a 0.03% fall to buy and 0.09% rise to sell, three times as much movement to sell as
+        to buy, so it leans toward accumulating. The interval is
+        deliberately irregular and the next one is never published: a buyer whose timing is public,
+        in a thin pool, is somebody else's free lunch.</p>
+
+        <h3>What the agent can and cannot do</h3>
+        <p>Its only power is choosing <b>when</b>. The functions it calls take no arguments at all,
+        so it cannot name a price, a size, or a destination. The minimum it will accept on a trade is
+        computed inside your vault from the pool's own time-averaged price, so an agent whose key was
+        stolen still cannot quote itself a bad fill and keep the difference. It can never withdraw.
+        You can, at any time, whether the agent is on, off, or halted, and you can switch it off in
+        one transaction.</p>
+        <p>The vault also remembers its high-water value. If it drifts more than a set amount below
+        that, every trade stops until you re-arm it. That is what bounds a misbehaving agent to a few
+        percent rather than the whole balance.</p>
+
+        <h3>Things to know before you fund one</h3>
+        <ul>
+          <li>An agent is a buyer, not a strategy that promises anything. If the coin falls, you own
+              more of a coin that fell.</li>
+          <li>It trades against the pool's time-averaged price. A pool that has not traded recently
+              has no usable average, and the agent refuses to act rather than trading on a stale one.</li>
+          <li>Trade history on the site is a recent window, because the chain keeps roughly four days
+              of logs. The vault's own totals are always current.</li>
+        </ul>
         </div>
 
         <h2 id="d-contracts" data-chain="stable">Contracts</h2>
@@ -2376,8 +2729,11 @@
           <div class="spacer"></div>
           <button class="chip" onclick="devLoad(true)">Rescan</button>
           <button class="btn" id="dvClaimBtn" onclick="devClaimAll()">Claim all</button>
+          <button class="btn ghost" id="dvSellBtn" onclick="devSellAll()">Sell claimed tokens</button>
         </div>
+        <div class="finenote" style="margin-bottom:10px">Selling never includes $MINTD. It walks the wallet's other launched-token balances, prices each one, and shows the full list for confirmation before any transaction is sent.</div>
         <div id="dvNote" class="finenote" style="margin-bottom:10px"></div>
+        <div id="dvProgress" class="finenote" style="margin-bottom:10px;display:none"></div>
         <div id="dvRows"><div class="empty">Connect an operator wallet.</div></div>
       </div>
     </div>
@@ -2437,6 +2793,7 @@
         <button id="nav-portfolio" onclick="go('portfolio')"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="1.5"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg> Portfolio</button>
         <button id="nav-burn" onclick="go('burn')"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3c1.5 3 4.5 4.2 4.5 8a4.5 4.5 0 0 1-9 0C7.5 8 9 6.5 12 3z"/><path d="M12 21c-3 0-5.5-2-5.5-4.5"/><path d="M12 21c3 0 5.5-2 5.5-4.5"/></svg> Burner</button>
         <button id="nav-docs" onclick="go('docs')"><svg class="ic" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg> Docs</button>
+        <button id="nav-screener" onclick="go('screener')"><svg class="ic" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg> Screener</button>
         <button id="nav-holders" onclick="go('holders')"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg> Holders</button>
         <button id="nav-dev" onclick="go('dev')" style="display:none"><svg class="ic" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg> Dev</button>
         <button id="nav-install" onclick="a2hsShowNow()" style="display:none"><svg class="ic" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></svg> Add to Home Screen</button>
@@ -2488,11 +2845,14 @@ const CHAINS = {
     chain: {
       chainId: "0x13b2", chainName: "Arc",
       nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-      // Answers eth_call and eth_chainId, accepts batches, and sends CORS "*",
-      // so the page reads the chain directly with no wallet. eth_getLogs is
-      // DISABLED on it, which is why charts and the trade feed still cannot
-      // load. Replaces the thirdweb endpoint, which errored on every method.
-      rpcUrls: ["https://real-pump-soon-trust-me-bro-again.poptyedev.com/b71fac7173778c3f6a9148c157b8b4f61d275b447b087327"],
+      // thirdweb came online when Arc mainnet opened publicly. It answers
+      // eth_call, eth_getCode, eth_getBalance AND eth_getLogs (20k-result cap,
+      // and it hands back a narrower range to retry), accepts batches, and sends
+      // CORS "*", so the page reads the chain directly with no wallet and the
+      // charts and trade feed can load. Replaces a personal endpoint that went
+      // dark and blacked out every Arc read; that one had logs disabled, which
+      // is the stale reason charts were off.
+      rpcUrls: ["https://5042.rpc.thirdweb.com"],
       blockExplorerUrls: ["https://arc.exploreme.pro"],
     },
     // Every address below was read off the chain, not copied from another
@@ -2818,6 +3178,9 @@ function compressImage(file, maxW, maxH, budgetChars) {
 /* ------------------------------------------------------------------ state */
 let rp, pad, weth, signer, wallet, quoterR;
 let tokens = [], filter = "all", sort = "mcap", pairFilter = "all", isBuy = true, cur = null;
+// False until the first token load resolves, so the grid shows shimmer
+// skeletons while fetching instead of a blank hole or a premature "no tokens".
+let tokensLoaded = false;
 // Discover paging. 117 tokens in one grid is a long scroll and a lot of DOM,
 // and every filter change rebuilt all of it.
 let page = 0;
@@ -3068,6 +3431,14 @@ async function route() {
     if (isSoon("earn")) return; // placeholder tab: no contracts to read
     if (!tokens.length && padAddr()) await loadAll();
     loadFarm(); loadFeePools(); loadPools(); seLoad();
+  } else if (h === "agents") {
+    showView("agents");
+    agentsLoad();
+    vaultLoad();
+    lpLoad();
+  } else if (h === "bonds") {
+    showView("bonds");
+    bondLoad();
   } else if (h === "pools") {
     // On a chain where Pools is a placeholder tab it gets its own view. Without
     // this the retirement redirect below sends it to Earn, so clicking Pools
@@ -3144,7 +3515,7 @@ function applyChainUi() {
   const map = { "nav-launch": "launch", "nav-mintswap": "swap", "nav-earn": "earn",
                 "nav-mintr": "mintr", "nav-synth": "gold", "nav-locker": "locker", "nav-burn": "burn",
                 "nav-screener": "screener", "nav-bridge": "bridge", "nav-holders": "holders",
-                "nav-pools": "pools",
+                "nav-pools": "pools", "nav-bonds": "bonds", "nav-agents": "agents",
                 "nav-agent": "agent" };
   // A "soon" tab is shown even though its feature is off. The feature flag still
   // reads false everywhere else, so nothing tries to talk to a contract that is
@@ -3703,6 +4074,9 @@ async function connect() {
     // only fetched for the connected wallet, so a repaint alone would leave the
     // controls missing on the vaults that just became theirs.
     if ($("view-agent").classList.contains("on")) agLoad(true);
+    // Same reasoning: the list is public, but which vaults are YOURS, and the
+    // controls that go with them, are only known once a wallet is connected.
+    if ($("view-agents").classList.contains("on")) { vaultLoad(true); lpLoad(true); }
     if ($("view-bridge").classList.contains("on")) brRender();
     if (cur) refreshTrade();
     if ($("view-mintswap").classList.contains("on")) swBalance();
@@ -4022,6 +4396,7 @@ const AGENT_VAULT_ABI = [
   "function positionId() view returns (uint256)",
   "function valueNow() view returns (uint256)",
   "function valueCheckpoint() view returns (uint256)",
+  "function valueAtTwap() view returns (uint256)",
   "function token0() view returns (address)",
   "function token1() view returns (address)",
   "function valueInToken0() view returns (bool)",
@@ -4686,6 +5061,7 @@ const CLAIMER_ABI = [
 ];
 
 let dvPending = [];   // rows with something to claim
+let dvScanId = 0;
 
 function devNavSync() {
   const b = $("nav-dev");
@@ -4701,71 +5077,105 @@ async function devLoad(force) {
     rows.innerHTML = `<div class="empty">Connect an operator wallet.</div>`;
     return;
   }
-  const claimer = NET.mintd.claimer;
-  if (!claimer) {
-    rows.innerHTML = `<div class="empty">FeeClaimAll is not deployed on ${esc(NET.label)} yet.</div>`;
-    note.textContent = "";
-    return;
-  }
-  if (!pad) await init(); // init is async now: unawaited, rp is still null below
-  rows.innerHTML = `<div class="empty">Scanning…</div>`;
-  note.textContent = "Reading pending fees. This simulates a claim per token, so it takes a moment.";
+  if (!pad) await init();
+  // The scan reads the SAME token list the rest of the site already loaded, so
+  // a warm page costs nothing extra here.
+  if (force || !tokens.length) await loadAll();
 
+  // Launchpad tokens only. External and locked positions are not this pad's to
+  // claim, and `padOf` is the thing that says which pad owns the position.
+  const list = tokens.filter((t) => t.padOf && t.positionId);
+  if (!list.length) { rows.innerHTML = `<div class="empty">No launched tokens found.</div>`; note.textContent = ""; return; }
+
+  note.textContent = "Reading pending fees. This simulates a collect per token, so it takes a moment.";
+
+  // One scan at a time. Opening the page also triggers a scan, so a Rescan
+  // click while the first is still walking 126 tokens left both running and
+  // both appending to dvPending: the totals read nearly double, with a token
+  // count higher than the number scanned. The later scan wins and the earlier
+  // one stops at its next token.
+  const scanId = ++dvScanId;
   try {
-    const c = new ethers.Contract(claimer, CLAIMER_ABI, rp);
-    const quote = ADDR.usdt0;
-    const out = [];
-    // BOTH pads. The 121 tokens on the old pad keep earning fees forever, so
-    // scanning only the new pad would silently strand every one of their fee
-    // streams. FeeClaimAll takes the launchpad as an argument, so the same
-    // contract works against either. Deduped by nothing: the two pads share no
-    // tokens.
-    const pads = [padAddr(), OLD_PAD].filter(Boolean);
-    for (const pa of pads) {
-      const padC = new ethers.Contract(pa, PAD_ABI, rp);
-      const total = Number(await retryRead(() => padC.tokenCount()));
-      // Chunked because preview performs a real collect per token inside the
-      // eth_call; the whole list at once exceeds the node's call gas budget.
-      for (let i = 0; i < total; i += 20) {
-        const part = await c.previewRange.staticCall(pa, i, 20, quote);
-        for (const r of part) out.push({ ...r, pad: pa });
-      }
+    // Creator share per pad, not one global figure: the two pads were deployed
+    // with their own creatorShareBps and nothing keeps them equal.
+    const share = {};
+    for (const pa of allPads()) {
+      try { share[pa.toLowerCase()] = await retryRead(() => new ethers.Contract(pa, PAD_ABI, rp).creatorShareBps()); }
+      catch { share[pa.toLowerCase()] = cfg.share; }
     }
+    let mintrUsd = 0n;
+    if (MINTR_ADDR) { try { mintrUsd = await retryRead(() => new ethers.Contract(MINTR_ADDR, MINTR_ABI, rp).price1e18()); } catch {} }
 
+    const npm = new ethers.Contract(ADDR.npm, NPM_ABI, rp);
     const me = wallet.toLowerCase();
-    let proto = 0n, mine = 0n, n = 0;
+    const MAXU128 = (1n << 128n) - 1n;
     dvPending = [];
-    for (const r of out) {
-      const has = r.creatorQuote > 0n || r.protocolQuote > 0n || r.creatorToken > 0n || r.protocolToken > 0n;
-      if (!has) continue;
-      n++;
-      proto += r.protocolQuote;
-      // Counted once, not twice: when the connected wallet is both the
-      // creator and the feeRecipient, both legs describe the same address.
-      if (r.creator.toLowerCase() === me) mine += r.creatorQuote;
-      dvPending.push(r);
+    let scanned = 0, failed = 0;
+
+    // Sequential on purpose. Gotcha 1: two concurrent reads in a scan path get
+    // batched into one JSON-RPC array and Stable rejects the whole thing.
+    for (const t of list) {
+      if (scanId !== dvScanId) return; // superseded
+      scanned++;
+      let a0, a1;
+      try {
+        // Simulated as the pad, because the pad owns the position. Reading
+        // pending V3 fees any other way is not possible: `collect` is the only
+        // function that reports them, and only the owner may call it.
+        [a0, a1] = await npm.collect.staticCall(
+          { tokenId: t.positionId, recipient: t.padOf, amount0Max: MAXU128, amount1Max: MAXU128 },
+          { from: t.padOf }
+        );
+      } catch { failed++; continue; }
+      if (a0 === 0n && a1 === 0n) { if (scanned % 10 === 0) paint(); continue; }
+
+      const tokAmt = t.tokenIs0 ? a0 : a1;
+      const qRaw = t.tokenIs0 ? a1 : a0;
+      const bps = share[t.padOf.toLowerCase()] ?? cfg.share;
+      const cr = (x) => (x * bps) / 10000n;
+      // Everything below is 1e18 USD. The quote leg is 6-dec USDT0 or 18-dec
+      // MINTR, and mixing those two is the 1,000,000x error in gotcha 6.
+      const quoteUsd = t.isMintr ? (qRaw * mintrUsd) / 10n ** 18n : qRaw * D6;
+      const tokenUsd = (tokAmt * t.price) / 10n ** 18n;
+
+      dvPending.push({
+        token: t.addr, pad: t.padOf, creator: t.creator, sym: t.symbol,
+        isMintr: t.isMintr, tokenRaw: tokAmt, quoteRaw: qRaw,
+        creatorUsd: cr(quoteUsd) + cr(tokenUsd),
+        protocolUsd: (quoteUsd - cr(quoteUsd)) + (tokenUsd - cr(tokenUsd)),
+        mine: sameAddr(t.creator, wallet),
+      });
+      paint();
     }
 
-    $("dvProto").textContent = "$" + nf(Number(ethers.formatUnits(proto, 6)), 2);
-    $("dvMine").textContent = "$" + nf(Number(ethers.formatUnits(mine, 6)), 2);
-    $("dvCount").textContent = String(n);
-    $("dvScanned").textContent = String(total);
+    function paint() {
+      let proto = 0n, mine = 0n;
+      for (const r of dvPending) { proto += r.protocolUsd; if (r.mine) mine += r.creatorUsd; }
+      $("dvProto").textContent = "$" + nf(Number(ethers.formatEther(proto)), 2);
+      $("dvMine").textContent = "$" + nf(Number(ethers.formatEther(mine)), 2);
+      $("dvCount").textContent = String(dvPending.length);
+      $("dvScanned").textContent = scanned + " / " + list.length;
+      if (!dvPending.length) { rows.innerHTML = `<div class="empty">Scanning… ${scanned} of ${list.length}</div>`; return; }
+      // Biggest first: with 120+ tokens the tail is dust and the top few rows
+      // are the only ones worth acting on.
+      const sorted = [...dvPending].sort((a, b) => (b.creatorUsd + b.protocolUsd > a.creatorUsd + a.protocolUsd ? 1 : -1));
+      rows.innerHTML = `<table class="dvt" style="width:100%;border-collapse:collapse">
+        <tr style="text-align:left;opacity:.6;font-size:12px">
+          <th style="padding:6px 4px">TOKEN</th><th>CREATOR</th><th>CREATOR FEES</th><th>PROTOCOL FEES</th></tr>
+        ${sorted.map((r) => `<tr style="border-top:1px solid rgba(255,255,255,.06)">
+          <td style="padding:8px 4px"><a href="/token/${r.token}" onclick="event.preventDefault();navTo('/token/${r.token}')">$${esc(r.sym)}</a></td>
+          <td style="opacity:.7">${esc(short(r.creator))}${r.mine ? " (you)" : ""}</td>
+          <td>$${nf(Number(ethers.formatEther(r.creatorUsd)), 4)}</td>
+          <td>$${nf(Number(ethers.formatEther(r.protocolUsd)), 4)}</td></tr>`).join("")}
+      </table>`;
+    }
 
-    if (!n) { rows.innerHTML = `<div class="empty">Nothing pending across ${total} tokens.</div>`; note.textContent = ""; return; }
-
-    const tokName = (a) => { const t = tokens.find((x) => x.addr.toLowerCase() === a.toLowerCase()); return t ? t.sym : a.slice(0, 10) + "…"; };
-    rows.innerHTML = `<table class="dvt" style="width:100%;border-collapse:collapse">
-      <tr style="text-align:left;opacity:.6;font-size:12px">
-        <th style="padding:6px 4px">TOKEN</th><th>CREATOR</th><th>CREATOR FEES</th><th>PROTOCOL FEES</th></tr>
-      ${dvPending.map((r) => `<tr style="border-top:1px solid rgba(255,255,255,.06)">
-        <td style="padding:8px 4px"><a href="/token/${r.token}" onclick="event.preventDefault();navTo('/token/${r.token}')">$${esc(tokName(r.token))}</a></td>
-        <td style="opacity:.7">${esc(short(r.creator))}${r.creator.toLowerCase() === me ? " (you)" : ""}</td>
-        <td>$${nf(Number(ethers.formatUnits(r.creatorQuote, 6)), 4)}</td>
-        <td>$${nf(Number(ethers.formatUnits(r.protocolQuote, 6)), 4)}</td></tr>`).join("")}
-    </table>`;
+    paint();
+    if (!dvPending.length) rows.innerHTML = `<div class="empty">Nothing pending across ${list.length} tokens.</div>`;
     note.innerHTML = `Claiming pays each token's creator and the protocol recipient directly. `
       + `You only pay gas; nothing routes to the caller. `
-      + `<b>${dvPending.length}</b> token(s) have fees waiting.`;
+      + `<b>${dvPending.length}</b> token(s) have fees waiting`
+      + (failed ? `, ${failed} position(s) could not be read` : "") + `.`;
   } catch (e) {
     rows.innerHTML = `<div class="empty">Scan failed: ${esc(e.shortMessage || e.message)}</div>`;
     note.textContent = "";
@@ -4807,6 +5217,1300 @@ async function devClaimAll() {
     btn.disabled = false;
     btn.textContent = "Claim all";
   }
+}
+
+// Sell the claimed fee tokens back into USDT0.
+//
+// TWO CLICKS, ALWAYS. The first builds and shows the plan, the second sends it.
+// This sells real balances across thin pools and there is no undo, so the
+// operator sees every token and its quoted proceeds before anything moves.
+//
+// It sells WALLET BALANCES, not "what was just claimed": nothing on chain
+// records which tokens arrived from a fee claim, so any figure claiming to know
+// that would be invented. MINTD is excluded outright, since the operator holding
+// it is a position rather than fee dust.
+let dvSellPlan = null;
+
+async function devSellAll() {
+  if (!signer) return toast("Connect a wallet first", "err");
+  const btn = $("dvSellBtn"), prog = $("dvProgress");
+  prog.style.display = "";
+
+  if (dvSellPlan) { // second click: execute the plan already on screen
+    const plan = dvSellPlan;
+    dvSellPlan = null;
+    btn.disabled = true;
+    const router = new ethers.Contract(ADDR.router, SWAP_ROUTER_ABI, signer);
+    let sold = 0, skipped = 0;
+    for (const [i, s] of plan.entries()) {
+      try {
+        btn.textContent = `Selling ${i + 1} of ${plan.length}…`;
+        prog.textContent = `Selling $${s.sym}…`;
+        const erc = new ethers.Contract(s.token, ERC20_ABI, signer);
+        if ((await erc.allowance(wallet, ADDR.router)) < s.bal) {
+          await (await erc.approve(ADDR.router, ethers.MaxUint256)).wait();
+        }
+        // 5%, not the 1% the trade box uses. The quote already prices this
+        // sell's own impact, so what is left to absorb is movement between
+        // quoting and mining, and a 1% bound reverts constantly on pools this
+        // thin. Every leg is still bounded; none is a market order.
+        const minOut = (s.out * 95n) / 100n;
+        const tx = s.isMintr
+          ? await router.exactInput({
+              path: ethers.solidityPacked(["address", "uint24", "address", "uint24", "address"],
+                                          [s.token, POOL_FEE, MINTR_ADDR, POOL_FEE, ADDR.usdt0]),
+              recipient: wallet, amountIn: s.bal, amountOutMinimum: minOut })
+          : await router.exactInputSingle({ tokenIn: s.token, tokenOut: ADDR.usdt0, fee: POOL_FEE,
+              recipient: wallet, amountIn: s.bal, amountOutMinimum: minOut, sqrtPriceLimitX96: 0 });
+        await tx.wait();
+        sold++;
+      } catch (e) {
+        // One thin pool must not strand the rest of the batch.
+        skipped++;
+        console.error(`sell ${s.sym} failed`, e.shortMessage || e.message);
+      }
+    }
+    btn.disabled = false;
+    btn.textContent = "Sell claimed tokens";
+    prog.textContent = `Sold ${sold} token(s)` + (skipped ? `, ${skipped} failed (see console)` : "") + ".";
+    toast(`Sold ${sold} token(s)`, sold ? "ok" : "err");
+    return;
+  }
+
+  // first click: price everything the wallet actually holds
+  btn.disabled = true;
+  btn.textContent = "Checking balances…";
+  try {
+    if (!tokens.length) await loadAll();
+    const q = new ethers.Contract(ADDR.quoter, QUOTER2_ABI, rp);
+    const plan = [];
+    let n = 0;
+    const list = tokens.filter((t) => t.padOf && !sameAddr(t.addr, MINTD_ADDR));
+    for (const t of list) {
+      n++;
+      prog.textContent = `Checking ${n} of ${list.length}…`;
+      let bal;
+      // Sequential, same reason as the fee scan: batched reads are rejected.
+      try { bal = await new ethers.Contract(t.addr, ERC20_ABI, rp).balanceOf(wallet); } catch { continue; }
+      if (bal === 0n) continue;
+      let out = 0n;
+      try {
+        [out] = t.isMintr
+          ? await q.quoteExactInput.staticCall(
+              ethers.solidityPacked(["address", "uint24", "address", "uint24", "address"],
+                                    [t.addr, POOL_FEE, MINTR_ADDR, POOL_FEE, ADDR.usdt0]), bal)
+          : await q.quoteExactInputSingle.staticCall(
+              { tokenIn: t.addr, tokenOut: ADDR.usdt0, amountIn: bal, fee: POOL_FEE, sqrtPriceLimitX96: 0 });
+      } catch { continue; }
+      // Below a cent the swap costs more gas than it returns.
+      if (out < 10000n) continue;
+      plan.push({ token: t.addr, sym: t.symbol, bal, out, isMintr: t.isMintr });
+    }
+    if (!plan.length) {
+      prog.textContent = "No sellable balances above $0.01.";
+      btn.disabled = false; btn.textContent = "Sell claimed tokens";
+      return;
+    }
+    plan.sort((a, b) => (b.out > a.out ? 1 : -1));
+    const total = plan.reduce((a, s) => a + s.out, 0n);
+    dvSellPlan = plan;
+    prog.innerHTML = `<b>Review before selling.</b> ${plan.length} token(s) for about `
+      + `$${nf(Number(ethers.formatUnits(total, 6)), 2)} USDT0, one transaction each, `
+      + `5% slippage bound. MINTD is never included.<br>`
+      + plan.map((s) => `$${esc(s.sym)} ${nf(Number(ethers.formatEther(s.bal)), 2)} `
+          + `-> $${nf(Number(ethers.formatUnits(s.out, 6)), 4)}`).join(" &middot; ");
+    btn.disabled = false;
+    btn.textContent = `Confirm sell of ${plan.length}`;
+  } catch (e) {
+    dvSellPlan = null;
+    prog.textContent = "Could not price the sell: " + (e.shortMessage || e.message);
+    btn.disabled = false; btn.textContent = "Sell claimed tokens";
+  }
+}
+
+/* ------------------------------------------------------------ mintd agents */
+const BURNER_ABI = [
+  "function pending() view returns (uint256)",
+  "function totalUsdtSpent() view returns (uint256)",
+  "function totalMintdBurned() view returns (uint256)",
+];
+
+async function agentsLoad() {
+  const addr = NET.mintd && NET.mintd.burner;
+  const stats = $("agResStats"), chip = $("agResChip"), note = $("agResNote");
+  const link = $("agResLink");
+  if (!addr) {
+    chip.textContent = "NOT ON THIS CHAIN";
+    stats.innerHTML = "";
+    note.textContent = "";
+    return;
+  }
+  link.href = NET.chain.blockExplorerUrls[0] + "/address/" + addr + "#code";
+  try {
+    const c = new ethers.Contract(addr, BURNER_ABI, rp);
+    // Sequential: gotcha 1, concurrent reads get batched and Stable rejects them.
+    const pending = await retryRead(() => c.pending());
+    const spent = await retryRead(() => c.totalUsdtSpent());
+    const burned = await retryRead(() => c.totalMintdBurned());
+
+    // The dead address holds burns from EVERY source, not just this contract.
+    // Reporting that total as the agent's work would overstate it by 200x.
+    let dead = 0n, supply = 0n;
+    try {
+      const m = new ethers.Contract(MINTD_ADDR, ERC20_ABI, rp);
+      dead = await retryRead(() => m.balanceOf("0x000000000000000000000000000000000000dEaD"));
+      supply = await retryRead(() => m.totalSupply());
+    } catch {}
+
+    const burnedN = Number(ethers.formatEther(burned));
+    const spentN = Number(ethers.formatUnits(spent, 6));
+    const avg = burnedN > 0 ? spentN / burnedN : 0;
+
+    // The contract is live and has burned before, but nothing calls it on a
+    // schedule. Saying "ACTIVE" here would be the claim, not the fact.
+    chip.textContent = "LIVE, RUNS MANUALLY";
+    chip.className = "bchip soon";
+
+    stats.innerHTML = `
+      <div class="bbox"><label>RESERVOIR</label><b>$${nf(Number(ethers.formatUnits(pending, 6)), 2)}</b><small>waiting to be spent</small></div>
+      <div class="bbox"><label>SPENT ON BUYBACKS</label><b>$${nf(spentN, 2)}</b><small>all time</small></div>
+      <div class="bbox"><label>MINTD BURNED HERE</label><b>${nfCompact(burnedN)}</b><small>by this contract</small></div>
+      <div class="bbox"><label>AVG BURN PRICE</label><b>$${avg ? avg.toExponential(2) : "–"}</b><small>paid per MINTD</small></div>
+      <div class="bbox"><label>BURNED, ALL SOURCES</label><b>${nfCompact(Number(ethers.formatEther(dead)))}</b><small>${supply > 0n ? nf(Number(ethers.formatEther(dead)) / Number(ethers.formatEther(supply)) * 100, 2) + "% of supply" : ""}</small></div>`;
+
+    const pctOfDead = dead > 0n ? (burnedN / Number(ethers.formatEther(dead))) * 100 : 0;
+    note.innerHTML = `Two different numbers, kept apart on purpose. `
+      + `<b>${nfCompact(burnedN)}</b> MINTD is what this contract has bought and burned; `
+      + `<b>${nfCompact(Number(ethers.formatEther(dead)))}</b> is everything at the burn address from every source, `
+      + `of which the buyback is <b>${nf(pctOfDead, 2)}%</b>. `
+      + `Nothing calls it on a schedule yet, so it fires when someone triggers it.`;
+  } catch (e) {
+    chip.textContent = "UNREADABLE";
+    stats.innerHTML = "";
+    note.textContent = "Could not read the burner: " + (e.shortMessage || e.message);
+  }
+  await lpStats();
+}
+
+/// The LP factory's headline. Deliberately just a count: how many vaults exist
+/// and how many have handed their agent the keys. Anything richer needs a walk
+/// over every vault, and this card is not the place to pay for that.
+async function lpStats() {
+  const fa = NET.mintd && NET.mintd.agentFactory;
+  const el = $("agLpStats"), chip = $("agLpChip"), link = $("agLpLink");
+  if (!el) return;
+  if (!fa) { chip.textContent = "NOT ON THIS CHAIN"; chip.className = "bchip off"; el.innerHTML = ""; return; }
+  link.href = NET.chain.blockExplorerUrls[0] + "/address/" + fa + "#code";
+  try {
+    const f = new ethers.Contract(fa, ["function vaultCount() view returns (uint256)"], rp);
+    const n = Number(await retryRead(() => f.vaultCount()));
+    el.innerHTML = `
+      <div class="bbox"><label>LP VAULTS</label><b>${n}</b><small>${n ? "deployed" : "none yet"}</small></div>
+      <div class="bbox"><label>STARTS IN</label><b>Propose only</b><small>you approve each move</small></div>
+      <div class="bbox"><label>REBALANCES AT</label><b>75%</b><small>of the way to an edge</small></div>`;
+  } catch (e) {
+    chip.textContent = "UNREADABLE"; chip.className = "bchip off";
+    el.innerHTML = "";
+  }
+}
+
+
+const VFACTORY_ABI = [
+  "function create(address token, address pool) returns (address)",
+  "function byOwner(address) view returns (address[])",
+  "function vaultCount() view returns (uint256)",
+  "function vaults(uint256) view returns (address)",
+];
+const VAULT_ABI = [
+  "function owner() view returns (address)",
+  "function token() view returns (address)",
+  "function agent() view returns (address)",
+  "function balances() view returns (uint256 quoteBal, uint256 tokenBal)",
+  "function valueCheckpoint() view returns (uint256)",
+  "function valueAtTwap() view returns (uint256)",
+  "function sliceBps() view returns (uint16)",
+  "function maxSlippageBps() view returns (uint16)",
+  "function twapWindow() view returns (uint32)",
+  "function cooldown() view returns (uint32)",
+  "function sellRatioBps() view returns (uint16)",
+  "function maxDrawdownBps() view returns (uint16)",
+  "function setParams(uint16,uint16,uint32,uint32)",
+  "function setSellParams(uint16,uint16)",
+  "function lastExec() view returns (uint64)",
+  "function deposit(uint256)",
+  "function depositToken(uint256)",
+  "function withdraw(address,uint256)",
+  "function withdrawAll()",
+  "function setAgent(address)",
+  "function recheckpoint()",
+  "event Executed(bool indexed isBuy, uint256 amountIn, uint256 amountOut, uint256 minOut, uint64 at)",
+];
+let myVaults = [];
+
+async function vaultLoad(force) {
+  const rows = $("agVaultRows");
+  const fa = NET.mintd && NET.mintd.vaultFactory;
+  if (!fa) { rows.innerHTML = `<div class="empty">Not on this chain.</div>`; return; }
+  if (force || !tokens.length) await loadAll();
+  rows.innerHTML = `<div class="empty">Loading…</div>`;
+  try {
+    const f = new ethers.Contract(fa, VFACTORY_ABI, rp);
+    // EVERY vault, not just the connected wallet's. Agents are public: anyone
+    // should be able to see what is running on which coin without connecting
+    // anything, and reading byOwner meant a visitor saw nothing and an owner saw
+    // nothing either until their wallet happened to be connected before the page
+    // loaded.
+    const n = Number(await retryRead(() => f.vaultCount()));
+    myVaults = [];
+    const me = wallet ? wallet.toLowerCase() : null;
+    // Sequential: gotcha 1, concurrent reads get batched and Stable rejects them.
+    // Newest first, and capped, because this grows without bound.
+    for (let i = n - 1; i >= 0 && myVaults.length < 60; i--) {
+      let a;
+      try { a = await retryRead(() => f.vaults(i)); }
+      catch (e) { console.error("vault", i, "unreadable:", e.shortMessage || e.message); continue; }
+      const v = new ethers.Contract(a, VAULT_ABI, rp);
+      try {
+        const tk = await retryRead(() => v.token());
+        const [q, t] = await retryRead(() => v.balances());
+        const owner = await retryRead(() => v.owner());
+        // The high-water mark, and the vault's own valuation of itself at the
+        // pool TWAP. Both can be absent: valueAtTwap reverts when the oracle is
+        // unusable, and a vault that has never traded has no mark yet.
+        let mark = 0n, live = null;
+        try { mark = await retryRead(() => v.valueCheckpoint()); } catch {}
+        try { live = await retryRead(() => v.valueAtTwap()); } catch {}
+        const mine = me && owner.toLowerCase() === me;
+        // Only the owner needs the knobs, so only read them for owned vaults.
+        let cfg = null;
+        if (mine) {
+          cfg = {
+            slice: Number(await retryRead(() => v.sliceBps())),
+            slip: Number(await retryRead(() => v.maxSlippageBps())),
+            twap: Number(await retryRead(() => v.twapWindow())),
+            cool: Number(await retryRead(() => v.cooldown())),
+            ratio: Number(await retryRead(() => v.sellRatioBps())),
+            drawdown: Number(await retryRead(() => v.maxDrawdownBps())),
+          };
+        }
+        const kcfg = mine ? await keeperCfgFor(a) : null;
+        myVaults.push({ addr: a, token: tk, quoteBal: q, tokenBal: t, owner, mark, live, mine, cfg, kcfg,
+                        agent: await retryRead(() => v.agent()) });
+      } catch (e) { console.error("vault", a, "skipped:", e.shortMessage || e.message); }
+    }
+    vaultPaint();
+  } catch (e) {
+    rows.innerHTML = `<div class="empty">Could not read agents: ${esc(e.shortMessage || e.message)}</div>`;
+  }
+}
+
+function vaultPaint() {
+  const rows = $("agVaultRows");
+  if (!myVaults.length) {
+    rows.innerHTML = `<div class="empty">No agents have been created yet.</div>`;
+    return;
+  }
+  rows.innerHTML = myVaults.map((v, i) => {
+    const t = tokens.find((x) => sameAddr(x.addr, v.token));
+    const sym = t ? t.symbol : v.token.slice(0, 8) + "\u2026";
+    const tokUsd = t ? Number(ethers.formatEther(v.tokenBal)) * Number(ethers.formatEther(t.price)) : 0;
+    const on = v.agent !== ethers.ZeroAddress;
+    const total = Number(ethers.formatUnits(v.quoteBal, 6)) + tokUsd;
+    return `<div class="bondcard">
+      <div class="bhead">
+        ${bondLogo({ token: v.token, sym })}
+        <b style="font-size:16px">$${esc(sym)}</b>
+        <span class="bchip ${on ? "on" : "off"}">${on ? "AGENT ON" : "AGENT OFF"}</span>
+        ${v.mine ? `<span class="bchip soon">YOURS</span>` : ""}
+        <div class="spacer"></div>
+        <a class="finenote" href="${NET.chain.blockExplorerUrls[0]}/address/${v.addr}" target="_blank" rel="noopener">${esc(short(v.addr))} &#8599;</a>
+      </div>
+      <div class="bgrid">
+        <div class="bbox"><label>USDT0 READY</label><b>$${nf(Number(ethers.formatUnits(v.quoteBal, 6)), 2)}</b><small>to spend</small></div>
+        <div class="bbox"><label>$${esc(sym)} HELD</label><b>${nfCompact(Number(ethers.formatEther(v.tokenBal)))}</b><small>${tokUsd ? "$" + nf(tokUsd, 2) : "in the vault"}</small></div>
+        <div class="bbox"><label>TOTAL</label><b>$${nf(total, 2)}</b><small>${v.mine ? "you can withdraw it all" : "owned by " + esc(short(v.owner))}</small></div>
+        ${vaultPnlBox(v)}
+      </div>
+      <div class="bactions">
+        ${v.mine ? `<input id="avDep${i}" placeholder="0.00" autocomplete="off" style="max-width:130px">
+        <select id="avAsset${i}" style="max-width:120px">
+          <option value="q">${esc(quoteTicker())}</option>
+          <option value="t">$${esc(sym)}</option>
+        </select>
+        <button class="btn" onclick="vaultDeposit(${i})">Deposit</button>
+        <button class="btn ghost" onclick="vaultWithdrawAll(${i})">Withdraw everything</button>
+        <button class="chip" onclick="vaultToggleAgent(${i})">${on ? "Turn agent off" : "Turn agent on"}</button>
+        <button class="chip" onclick="vaultSettings(${i})">Settings</button>` : ``}
+      </div>
+      ${v.mine && v.cfg ? vaultSettingsPanel(v, i) : ""}
+      <div id="avTrades${i}" class="finenote" style="margin-top:10px">Loading recent trades…</div>
+    </div>`;
+  }).join("");
+  // Trades render inline, read ONE VAULT AT A TIME. Fanning them out ran five
+  // log scans at once, whose getLogs calls collide in a single tick and get
+  // batched, which Stable rejects wholesale (gotcha 1). Serialised, they are
+  // slower but they actually return.
+  (async () => { for (let i = 0; i < myVaults.length; i++) await vaultTrades(i); })();
+}
+
+/// Performance, measured against the vault's own high-water mark.
+///
+/// NOT against a cost basis summed from events, and the reason matters: deposit
+/// and depositToken emit the SAME Deposited event, one carrying 6-decimal USDT0
+/// and the other 18-decimal coin, so those amounts cannot be added up. A number
+/// derived that way would be wrong by a factor of a trillion on any vault that
+/// was funded with both.
+///
+/// The mark starts at exactly what was put in and only ratchets upward, so for a
+/// vault that has not yet gained this IS "versus what you deposited". Once it
+/// gains, it becomes "versus its best", which is the more useful number anyway
+/// because it is what the vault's own safety breaker acts on.
+function vaultPnlBox(v) {
+  if (!v.mark || v.mark === 0n || v.live === null) {
+    return `<div class="bbox"><label>VS PEAK</label><b>&ndash;</b><small>needs a live price</small></div>`;
+  }
+  const pct = Number(((v.live - v.mark) * 10000n) / v.mark) / 100;
+  const col = pct < -0.01 ? "var(--red,#e5534b)" : pct > 0.01 ? "var(--green)" : "";
+  const sign = pct > 0 ? "+" : "";
+  return `<div class="bbox"><label>VS PEAK</label>
+    <b style="color:${col}">${sign}${nf(pct, 2)}%</b>
+    <small>$${nf(Number(ethers.formatUnits(v.live, 6)), 2)} against $${nf(Number(ethers.formatUnits(v.mark, 6)), 2)}</small></div>`;
+}
+
+function vaultShowCreate() {
+  const el = $("agVaultCreate");
+  el.style.display = el.style.display === "none" ? "" : "none";
+  if (el.style.display !== "") return;
+  if (!$("avTok").value) {
+    const first = tokens.find((t) => t.padOf);
+    if (first) $("avTok").value = first.addr;
+  }
+  tokLabel("avTok");
+  vaultQuote();
+}
+
+function vaultQuote() {
+  const t = tokens.find((x) => sameAddr(x.addr, $("avTok").value));
+  $("avNote").innerHTML = t
+    ? `Deploys a vault you own outright, pointed at the $${esc(t.symbol)} pool. `
+      + `It starts with no agent and no money: you deposit after, and you can withdraw at any time.`
+    : "Pick a coin.";
+}
+
+async function vaultCreate() {
+  if (!signer) return connect();
+  const t = tokens.find((x) => sameAddr(x.addr, $("avTok").value));
+  if (!t) return toast("Pick a coin", "err");
+  const btn = $("avGo");
+  btn.disabled = true;
+  try {
+    // The pool the vault will price against. The vault re-checks it against the
+    // canonical factory on chain, so a wrong one is rejected at construction
+    // rather than becoming a live vault reading a fake TWAP.
+    const fac = new ethers.Contract(ADDR.v3factory,
+      ["function getPool(address,address,uint24) view returns (address)"], rp);
+    const pool = await fac.getPool(t.addr, ADDR.usdt0, 10000);
+    if (!pool || pool === ethers.ZeroAddress) throw new Error("no 1% pool for that coin");
+    const f = new ethers.Contract(NET.mintd.vaultFactory, VFACTORY_ABI, signer);
+    const tx = await f.create(t.addr, pool);
+    toast("Deploying your agent…");
+    await tx.wait();
+    toast("Agent deployed", "ok");
+    $("agVaultCreate").style.display = "none";
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+  finally { btn.disabled = false; }
+}
+
+// Every field here maps to an on-chain setter that is bounded in the contract,
+// so this exposes control, not new power: the worst an owner can set is still
+// safe by construction. Values are shown in the units a person thinks in
+// (percent, minutes) and converted to the contract's bps/seconds on save.
+function vaultSettingsPanel(v, i) {
+  const c = v.cfg;
+  const row = (label, id, val, suffix, hint) =>
+    `<label style="display:block;font-size:11px;opacity:.7;margin:8px 0 3px">${label}${hint ? ` <span style="opacity:.6">${hint}</span>` : ""}</label>
+     <div style="display:flex;align-items:center;gap:6px"><input id="${id}${i}" value="${val}" style="max-width:120px">${suffix ? `<span class="finenote">${suffix}</span>` : ""}</div>`;
+  return `<div id="avCfg${i}" style="display:none;margin-top:10px;border-top:1px solid var(--line,rgba(127,127,127,.18));padding-top:10px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>${row("Buy slice", "cfSlice", c.slice / 100, "% of USDT0", "max 25")}</div>
+      <div>${row("Max slippage", "cfSlip", c.slip / 100, "% vs TWAP", "max 10")}</div>
+      <div>${row("Cooldown", "cfCool", Math.round(c.cool / 60), "min between trades", "")}</div>
+      <div>${row("TWAP window", "cfTwap", Math.round(c.twap / 60), "min average", "min 5")}</div>
+      <div>${row("Sell when heavy", "cfRatio", c.ratio / 10000, "x the USDT0 leg", "min 1")}</div>
+      <div>${row("Drawdown stop", "cfDraw", c.drawdown / 100, "% below peak", "max 30")}</div>
+    </div>
+    <div class="bactions" style="margin-top:12px">
+      <button class="btn" onclick="vaultSaveSettings(${i})">Save settings</button>
+      <button class="chip" onclick="vaultRecheckpoint(${i})">Re-arm the stop</button>
+    </div>
+    <p class="finenote" style="margin:8px 0 0">The drawdown stop halts trading once the vault falls this far below its best value. A volatile coin can trip a tight one, so widen it or re-arm after a big move.</p>
+    <div style="border-top:1px solid var(--line,rgba(127,127,127,.18));margin-top:12px;padding-top:12px">
+      <b style="font-size:13px">When it acts</b> ${v.kcfg && !v.kcfg.set ? `<span class="finenote">(keeper defaults)</span>` : ``}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
+        <div>${row("Buy trigger", "cfBand", (v.kcfg.band / 10000).toFixed(2), "% drop to buy", "0.01-5")}</div>
+        <div>${row("Sell trigger", "cfMult", v.kcfg.sellMult, "x the buy trigger", "1-20")}</div>
+      </div>
+      <button class="btn" style="margin-top:10px" onclick="vaultSaveTuning(${i})">Save when-it-acts</button>
+      <p class="finenote" style="margin:8px 0 0">The agent buys when the price drops past the buy trigger, and sells at that multiple of it. A higher multiple accumulates more before taking profit.</p>
+    </div>
+  </div>`;
+}
+
+async function vaultSaveTuning(i) {
+  if (!signer) return connect();
+  const v = myVaults[i];
+  try {
+    // band is the keeper's ppm-ish unit: 10000 == a 1% move.
+    const band = Math.max(1, Math.min(50000, Math.round(Number($("cfBand" + i).value) * 10000)));
+    const mult = Math.max(1, Math.min(20, Math.round(Number($("cfMult" + i).value))));
+    // setConfig writes all four; a buyback vault ignores the LP pair, so carry
+    // its current width/edge through unchanged.
+    const c = new ethers.Contract(NET.mintd.agentConfig, AGENTCFG_ABI, signer);
+    await (await c.setConfig(v.addr, band, mult, v.kcfg.lpWidth, v.kcfg.lpEdgePct)).wait();
+    toast("Saved. The keeper picks it up next cycle.", "ok");
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+function vaultSettings(i) {
+  const el = $("avCfg" + i);
+  if (el) el.style.display = el.style.display === "none" ? "" : "none";
+}
+
+async function vaultSaveSettings(i) {
+  if (!signer) return connect();
+  const v = myVaults[i];
+  const num = (id, min, max) => {
+    const n = Number($(id + i).value);
+    if (!isFinite(n) || n < min || n > max) throw new Error(`${id} out of range (${min}-${max})`);
+    return n;
+  };
+  try {
+    // percent/minutes back to bps/seconds. Rounded, and re-clamped to the
+    // contract's own caps so a rounding step cannot push a value over.
+    const slice = Math.min(2500, Math.round(num("cfSlice", 0.01, 25) * 100));
+    const slip = Math.min(1000, Math.round(num("cfSlip", 0, 10) * 100));
+    const twap = Math.max(300, Math.round(num("cfTwap", 5, 1440) * 60));
+    const cool = Math.max(60, Math.round(num("cfCool", 1, 1440) * 60));
+    const ratio = Math.max(10000, Math.round(num("cfRatio", 1, 100) * 10000));
+    const draw = Math.min(3000, Math.round(num("cfDraw", 0.01, 30) * 100));
+    const c = new ethers.Contract(v.addr, VAULT_ABI, signer);
+    toast("Saving trade settings…");
+    await (await c.setParams(slice, slip, twap, cool)).wait();
+    toast("Saving sell and stop…");
+    await (await c.setSellParams(ratio, draw)).wait();
+    toast("Settings saved", "ok");
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function vaultRecheckpoint(i) {
+  if (!signer) return connect();
+  try {
+    const c = new ethers.Contract(myVaults[i].addr, VAULT_ABI, signer);
+    await (await c.recheckpoint()).wait();
+    toast("Stop re-armed to the current value", "ok");
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function vaultDeposit(i) {
+  if (!signer) return connect();
+  const v = myVaults[i];
+  const raw = $("avDep" + i).value;
+  if (!raw || Number(raw) <= 0) return toast("Enter an amount", "err");
+  const isToken = $("avAsset" + i).value === "t";
+  // 6-dec USDT0 against an 18-dec coin. Parsing both at 6 would be a
+  // 1,000,000x error, which is gotcha 6 and has bitten this repo before.
+  const asset = isToken ? v.token : ADDR.usdt0;
+  const amt = isToken ? E(raw) : ethers.parseUnits(String(raw), 6);
+  try {
+    const erc = new ethers.Contract(asset, ERC20_ABI, signer);
+    if ((await erc.allowance(wallet, v.addr)) < amt) {
+      toast("Approving…");
+      await (await erc.approve(v.addr, ethers.MaxUint256)).wait();
+    }
+    const c = new ethers.Contract(v.addr, VAULT_ABI, signer);
+    await (await (isToken ? c.depositToken(amt) : c.deposit(amt))).wait();
+    toast("Deposited", "ok");
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+/// Naming the keeper is the entire opt-in. Until a vault does this its agent is
+/// the zero address and execute() reverts for everyone but the owner, so a vault
+/// nobody has switched on simply never trades.
+async function vaultToggleAgent(i) {
+  if (!signer) return connect();
+  const v = myVaults[i];
+  const on = v.agent !== ethers.ZeroAddress;
+  try {
+    const c = new ethers.Contract(v.addr, VAULT_ABI, signer);
+    await (await c.setAgent(on ? ethers.ZeroAddress : NET.mintd.keeper)).wait();
+    toast(on ? "Agent off. It can no longer trade." : "Agent on. It can trade, never withdraw.", "ok");
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function vaultWithdrawAll(i) {
+  if (!signer) return connect();
+  try {
+    const c = new ethers.Contract(myVaults[i].addr, VAULT_ABI, signer);
+    await (await c.withdrawAll()).wait();
+    toast("Everything withdrawn", "ok");
+    vaultLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+/// Trade history from Executed logs. Two hard limits shape this: the RPC caps a
+/// range at 500 blocks AND 500 results (gotcha 2), and prunes at roughly four
+/// days (gotcha 3), so this is a recent window and says so rather than implying
+/// it is the whole life of the vault.
+async function vaultTrades(i) {
+  const el = $("avTrades" + i);
+  const v = myVaults[i];
+  const t = tokens.find((x) => sameAddr(x.addr, v.token));
+  const sym = t ? t.symbol : "token";
+  const trades = await agentTradesFor(v.addr);
+  if (!trades.length) {
+    el.innerHTML = v.agent === ethers.ZeroAddress
+      ? `No trades yet. The agent is <b>off</b>, so this vault only moves when you do.`
+      : `No trades yet. It buys only on a drop past its band and sells only on a rise, so a quiet market means it is correctly sitting still.`;
+    return;
+  }
+  el.innerHTML = trades.slice(0, 25).map((tr) => {
+    const buy = tr.type === "buy";
+    const inA = buy ? `$${nf(Number(ethers.formatUnits(tr.amountIn, 6)), 2)}`
+                    : `${nfCompact(Number(ethers.formatEther(tr.amountIn)))} $${esc(sym)}`;
+    const outA = buy ? `${nfCompact(Number(ethers.formatEther(tr.amountOut)))} $${esc(sym)}`
+                     : `$${nf(Number(ethers.formatUnits(tr.amountOut, 6)), 2)}`;
+    return `<div style="display:flex;gap:8px;padding:3px 0;font-size:12px">
+      <b style="color:${buy ? "var(--green)" : "var(--red,#e5534b)"}">${buy ? "BUY" : "SELL"}</b>
+      <span>${inA} &rarr; ${outA}</span>
+      <span style="opacity:.5">${agoFromTs(tr.ts)}</span>
+      <div class="spacer"></div>
+      <a href="${NET.chain.blockExplorerUrls[0]}/tx/${tr.tx}" target="_blank" rel="noopener" style="opacity:.6">${esc(tr.tx.slice(0, 10))}&#8599;</a>
+    </div>`;
+  }).join("");
+}
+// Not named tradeAgo: a pre-existing tradeAgo(block) for the buy ticker takes a
+// BLOCK number, and function-declaration hoisting made the later one win, so a
+// unix timestamp handed to it read as a block and rendered "just now" for
+// everything. This one takes a unix ts and stands alone.
+function agoFromTs(ts) {
+  if (!ts) return "";
+  const s = Math.floor(Date.now() / 1000) - ts;
+  if (s < 3600) return Math.round(s / 60) + "m ago";
+  if (s < 86400) return Math.round(s / 3600) + "h ago";
+  return Math.round(s / 86400) + "d ago";
+}
+
+
+/* ------------------------------------------------ per-vault keeper tuning */
+// AgentConfig stores the DECISION params the keeper reads (buy band and sell
+// multiple for a buyback vault, range width and rebalance edge for an LP one).
+// Ownerless; each write is gated on the vault's own owner. The keeper falls back
+// to these defaults when a vault has no override, so the UI shows the same
+// numbers a fresh vault runs on.
+const AGENTCFG_ABI = [
+  "function get(address) view returns (uint16 band, uint8 sellMult, uint8 lpWidth, uint8 lpEdgePct, bool set)",
+  "function setConfig(address vault, uint16 band, uint8 sellMult, uint8 lpWidth, uint8 lpEdgePct)",
+];
+const KEEPER_DEFAULTS = { band: 300, sellMult: 3, lpWidth: 8, lpEdgePct: 75 };
+async function keeperCfgFor(vault) {
+  const a = NET.mintd && NET.mintd.agentConfig;
+  if (!a) return { ...KEEPER_DEFAULTS, set: false };
+  try {
+    const c = await retryRead(() => new ethers.Contract(a, AGENTCFG_ABI, rp).get(vault));
+    return c.set
+      ? { band: Number(c.band), sellMult: Number(c.sellMult), lpWidth: Number(c.lpWidth), lpEdgePct: Number(c.lpEdgePct), set: true }
+      : { ...KEEPER_DEFAULTS, set: false };
+  } catch { return { ...KEEPER_DEFAULTS, set: false }; }
+}
+
+/* --------------------------------------------------- committed agent trades */
+// The keeper appends every trade to frontend/agent-trades.json and publish-stats
+// commits it, so the site has complete history without scanning logs against a
+// 500-block-capped, 4-day-pruning RPC. Read once, cached, shared by both card
+// types. A stale-but-present file beats a live scan that can only see 45 minutes.
+let _agentTrades = null;
+async function agentTradesFor(vault) {
+  if (_agentTrades === null) {
+    try {
+      const r = await fetch("/agent-trades.json?t=" + Math.floor(Date.now() / 60000));
+      _agentTrades = r.ok ? (await r.json()).trades || [] : [];
+    } catch { _agentTrades = []; }
+  }
+  const v = vault.toLowerCase();
+  return _agentTrades.filter((t) => t.vault === v).sort((a, b) => b.block - a.block);
+}
+
+/* ------------------------------------------------------------- LP agents */
+const LPFACTORY_ABI = [
+  "function createVault(address pool, address agent, address numeraire) returns (address)",
+  "function vaultsOf(address) view returns (address[])",
+  "function vaultCount() view returns (uint256)",
+  "function allVaultsSlice(uint256,uint256) view returns (address[])",
+];
+const LPV_ABI = [
+  "function owner() view returns (address)",
+  "function pool() view returns (address)",
+  "function token0() view returns (address)",
+  "function token1() view returns (address)",
+  "function agent() view returns (address)",
+  "function mode() view returns (uint8)",
+  "function positionId() view returns (uint256)",
+  "function valueCheckpoint() view returns (uint256)",
+  "function proposal() view returns (int24 lower, int24 upper, uint64 readyAt, bool approved, bool open, uint256 nonce)",
+  "function deposit(uint256 amount0, uint256 amount1)",
+  "function withdrawAll()",
+  "function setAgent(address)",
+  "function setMode(uint8)",
+  "function approve(uint256 nonce)",
+  "function maxTickDrift() view returns (int24)",
+  "function maxSlippageBps() view returns (uint256)",
+  "function lossToleranceBps() view returns (uint256)",
+  "function reviewWindow() view returns (uint256)",
+  "function twapWindow() view returns (uint32)",
+  "function cooldown() view returns (uint256)",
+  "function setPolicy(int24,uint256,uint256,uint256,uint32,uint256)",
+  "function resetCheckpoint()",
+  "event Rebalanced(int24 lower, int24 upper, uint256 valueBefore, uint256 valueAfter)",
+];
+const LP_MODES = ["PAUSED", "PROPOSE-ONLY", "TIMELOCKED", "AUTONOMOUS"];
+let myLpVaults = [];
+
+async function lpLoad(force) {
+  const rows = $("agLpRows");
+  const fa = NET.mintd && NET.mintd.agentFactory;
+  if (!fa) { rows.innerHTML = `<div class="empty">Not on this chain.</div>`; return; }
+  if (force || !tokens.length) await loadAll();
+  rows.innerHTML = `<div class="empty">Loading…</div>`;
+  try {
+    const f = new ethers.Contract(fa, LPFACTORY_ABI, rp);
+    // EVERY LP vault, not just the connected wallet's. Same as the buyback list:
+    // agents are public, so anyone can see what is running without connecting.
+    const n = Number(await retryRead(() => f.vaultCount()));
+    myLpVaults = [];
+    const me = wallet ? wallet.toLowerCase() : null;
+    // Sequential per gotcha 1, newest first, capped.
+    for (let i = n - 1; i >= 0 && myLpVaults.length < 40; i--) {
+      let a;
+      try { a = (await retryRead(() => f.allVaultsSlice(i, 1)))[0]; }
+      catch (e) { console.error("lp vault", i, "unreadable:", e.shortMessage || e.message); continue; }
+      const v = new ethers.Contract(a, LPV_ABI, rp);
+      try {
+        const owner = await retryRead(() => v.owner());
+        myLpVaults.push({
+          addr: a, owner, mine: me && owner.toLowerCase() === me,
+          token0: await retryRead(() => v.token0()), token1: await retryRead(() => v.token1()),
+          agent: await retryRead(() => v.agent()),
+          mode: Number(await retryRead(() => v.mode())),
+          positionId: await retryRead(() => v.positionId()),
+          proposal: await retryRead(() => v.proposal()),
+          cfg: (me && owner.toLowerCase() === me) ? {
+            drift: Number(await retryRead(() => v.maxTickDrift())),
+            slip: Number(await retryRead(() => v.maxSlippageBps())),
+            loss: Number(await retryRead(() => v.lossToleranceBps())),
+            review: Number(await retryRead(() => v.reviewWindow())),
+            twap: Number(await retryRead(() => v.twapWindow())),
+            cool: Number(await retryRead(() => v.cooldown())),
+          } : null,
+          kcfg: (me && owner.toLowerCase() === me) ? await keeperCfgFor(a) : null,
+        });
+      } catch (e) { console.error("lp vault", a, "skipped:", e.shortMessage || e.message); }
+    }
+    lpPaint();
+  } catch (e) {
+    rows.innerHTML = `<div class="empty">Could not read LP agents: ${esc(e.shortMessage || e.message)}</div>`;
+  }
+}
+
+function lpPaint() {
+  const rows = $("agLpRows");
+  if (!myLpVaults.length) { rows.innerHTML = `<div class="empty">You have no LP agents yet.</div>`; return; }
+  rows.innerHTML = myLpVaults.map((v, i) => {
+    const coin = tokens.find((t) => !sameAddr(t.addr, ADDR.usdt0) && (sameAddr(t.addr, v.token0) || sameAddr(t.addr, v.token1)));
+    const sym = coin ? coin.symbol : "pool";
+    const p = v.proposal;
+    const hasPos = v.positionId && v.positionId !== 0n;
+    const pending = v.mine && p.open && !p.approved && v.mode === 1; // PROPOSE-ONLY awaiting owner
+    return `<div class="bondcard">
+      <div class="bhead">
+        ${bondLogo({ token: coin ? coin.addr : v.token0, sym })}
+        <b style="font-size:16px">$${esc(sym)} / USDT0</b>
+        <span class="bchip ${v.mode === 0 ? "off" : v.mode === 3 ? "on" : "soon"}">${LP_MODES[v.mode]}</span>
+        ${hasPos ? `<span class="bchip on">IN RANGE</span>` : `<span class="bchip off">NO POSITION</span>`}
+        ${v.mine ? `<span class="bchip soon">YOURS</span>` : ""}
+        <div class="spacer"></div>
+        <a class="finenote" href="${NET.chain.blockExplorerUrls[0]}/address/${v.addr}" target="_blank" rel="noopener">${esc(short(v.addr))} &#8599;</a>
+      </div>
+      ${hasPos ? `<div class="finenote" style="margin:6px 0 0">Position ticks ${p.lower} to ${p.upper}${v.mine ? "" : ", owned by " + esc(short(v.owner))}.</div>` : ""}
+      ${pending ? `<div class="finenote" style="margin:8px 0;color:#7d9bff"><b>The agent has proposed a range: ${p.lower} to ${p.upper}.</b> It will not move until you approve it.</div>
+        <div class="bactions"><button class="btn" onclick="lpApprove(${i})">Approve this range</button></div>` : ``}
+      ${v.mine ? `<div class="bactions" style="margin-top:10px">
+        <input id="lpD0${i}" placeholder="0.00 $${esc(sym)}" autocomplete="off" style="max-width:150px">
+        <input id="lpD1${i}" placeholder="0.00 USDT0" autocomplete="off" style="max-width:150px">
+        <button class="btn" onclick="lpDeposit(${i})">Deposit</button>
+        <button class="btn ghost" onclick="lpWithdraw(${i})">Withdraw everything</button>
+      </div>
+      <div class="bactions" style="margin-top:8px">
+        <select id="lpMode${i}">
+          ${LP_MODES.map((m, mi) => `<option value="${mi}" ${mi === v.mode ? "selected" : ""}>${m}</option>`).join("")}
+        </select>
+        <button class="chip" onclick="lpSetMode(${i})">Set mode</button>
+        <button class="chip" onclick="lpToggleAgent(${i})">${v.agent === ethers.ZeroAddress ? "Turn agent on" : "Turn agent off"}</button>
+        <button class="chip" onclick="lpSettings(${i})">Settings</button>
+      </div>
+      ${v.cfg ? lpSettingsPanel(v, i) : ""}` : ""}
+      <div id="lpTrades${i}" class="finenote" style="margin-top:10px">Loading rebalances…</div>
+    </div>`;
+  }).join("");
+  (async () => { for (let i = 0; i < myLpVaults.length; i++) await lpTrades(i); })();
+}
+
+/// LP "trades" are rebalances: each Executed carries the new range. Same 500
+/// block / 500 result cap and 4-day pruning as everywhere, so a recent window.
+async function lpTrades(i) {
+  const el = $("lpTrades" + i);
+  if (!el) return;
+  const v = myLpVaults[i];
+  const trades = await agentTradesFor(v.addr);
+  if (!trades.length) {
+    el.innerHTML = (v.positionId && v.positionId !== 0n)
+      ? `In range, no rebalance yet. It moves the range only once price drifts three quarters of the way to an edge.`
+      : (v.agent === ethers.ZeroAddress
+          ? `No position yet. The agent is off until you turn it on.`
+          : `No position yet. The agent mints one on its next cycle after a deposit.`);
+    return;
+  }
+  el.innerHTML = trades.slice(0, 20).map((tr) =>
+    `<div style="display:flex;gap:8px;padding:3px 0;font-size:12px">
+      <b style="color:var(--green2)">REBALANCE</b>
+      <span>ticks ${tr.lower} to ${tr.upper}</span>
+      <span style="opacity:.5">${agoFromTs(tr.ts)}</span>
+      <div class="spacer"></div>
+      <a href="${NET.chain.blockExplorerUrls[0]}/tx/${tr.tx}" target="_blank" rel="noopener" style="opacity:.6">${esc(tr.tx.slice(0, 10))}&#8599;</a>
+    </div>`).join("");
+}
+
+function lpShowCreate() {
+  const el = $("agLpCreate");
+  el.style.display = el.style.display === "none" ? "" : "none";
+  if (el.style.display !== "") return;
+  if (!$("lpTok").value) {
+    const first = tokens.find((t) => t.padOf && !t.isMintr);
+    if (first) $("lpTok").value = first.addr;
+  }
+  tokLabel("lpTok");
+  lpCreateQuote();
+}
+
+function lpCreateQuote() {
+  const t = tokens.find((x) => sameAddr(x.addr, $("lpTok").value));
+  $("lpCreateNote").innerHTML = t
+    ? `Deploys a vault you own, managing the <b>$${esc(t.symbol)} / USDT0</b> 1% pool. It starts in propose-only `
+      + `with no agent and no money: you deposit both tokens after, and the agent cannot move anything until you approve it.`
+    : "Pick a coin.";
+}
+
+async function lpCreate() {
+  if (!signer) return connect();
+  const t = tokens.find((x) => sameAddr(x.addr, $("lpTok").value));
+  if (!t) return toast("Pick a coin", "err");
+  const btn = $("lpGo");
+  btn.disabled = true;
+  try {
+    const fac = new ethers.Contract(ADDR.v3factory, ["function getPool(address,address,uint24) view returns (address)"], rp);
+    const pool = await fac.getPool(t.addr, ADDR.usdt0, 10000);
+    if (!pool || pool === ethers.ZeroAddress) throw new Error("no 1% pool for that coin");
+    const f = new ethers.Contract(NET.mintd.agentFactory, LPFACTORY_ABI, signer);
+    // numeraire = USDT0, so the vault values itself and its loss breaker in
+    // dollars rather than in the memecoin. agent left unset: propose-only anyway,
+    // and the owner turns it on when ready.
+    const tx = await f.createVault(pool, ethers.ZeroAddress, ADDR.usdt0);
+    toast("Deploying your LP agent…");
+    await tx.wait();
+    toast("LP agent deployed", "ok");
+    $("agLpCreate").style.display = "none";
+    lpLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+  finally { btn.disabled = false; }
+}
+
+// Every field maps to setPolicy, which is bounded in the contract. Shown in
+// human units, converted to the contract's bps/seconds/ticks on save.
+function lpSettingsPanel(v, i) {
+  const c = v.cfg;
+  const row = (label, id, val, suffix, hint) =>
+    `<label style="display:block;font-size:11px;opacity:.7;margin:8px 0 3px">${label}${hint ? ` <span style="opacity:.6">${hint}</span>` : ""}</label>
+     <div style="display:flex;align-items:center;gap:6px"><input id="${id}${i}" value="${val}" style="max-width:120px">${suffix ? `<span class="finenote">${suffix}</span>` : ""}</div>`;
+  return `<div id="lpCfg${i}" style="display:none;margin-top:10px;border-top:1px solid var(--line,rgba(127,127,127,.18));padding-top:10px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>${row("Max range drift", "lcDrift", c.drift, "ticks from TWAP", "max 20000")}</div>
+      <div>${row("Max slippage", "lcSlip", c.slip / 100, "% vs TWAP", "max 5")}</div>
+      <div>${row("Loss tolerance", "lcLoss", c.loss / 100, "% before it stops", "max 20")}</div>
+      <div>${row("Review window", "lcReview", Math.round(c.review / 60), "min to veto (timelock)", "min 5")}</div>
+      <div>${row("TWAP window", "lcTwap", Math.round(c.twap / 60), "min average", "min 5")}</div>
+      <div>${row("Cooldown", "lcCool", Math.round(c.cool / 60), "min between moves", "")}</div>
+    </div>
+    <div class="bactions" style="margin-top:12px">
+      <button class="btn" onclick="lpSavePolicy(${i})">Save settings</button>
+      <button class="chip" onclick="lpResetCheckpoint(${i})">Re-arm the stop</button>
+    </div>
+    <div style="border-top:1px solid var(--line,rgba(127,127,127,.18));margin-top:12px;padding-top:12px">
+      <b style="font-size:13px">How it manages the range</b> ${v.kcfg && !v.kcfg.set ? `<span class="finenote">(keeper defaults)</span>` : ``}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
+        <div>${row("Range width", "lcWidth", v.kcfg.lpWidth, "tick spacings each side", "1-100")}</div>
+        <div>${row("Rebalance at", "lcEdge", v.kcfg.lpEdgePct, "% of the way to an edge", "1-99")}</div>
+      </div>
+      <button class="btn" style="margin-top:10px" onclick="lpSaveTuning(${i})">Save range behaviour</button>
+      <p class="finenote" style="margin:8px 0 0">A wider range trades less and earns less per dollar; rebalancing later means fewer swap fees but more time out of range. Each rebalance pays a fee, so it only moves once price has drifted this far out.</p>
+    </div>
+  </div>`;
+}
+
+function lpSettings(i) {
+  const el = $("lpCfg" + i);
+  if (el) el.style.display = el.style.display === "none" ? "" : "none";
+}
+
+async function lpSavePolicy(i) {
+  if (!signer) return connect();
+  const num = (id, min, max) => {
+    const n = Number($(id + i).value);
+    if (!isFinite(n) || n < min || n > max) throw new Error(`${id} out of range (${min}-${max})`);
+    return n;
+  };
+  try {
+    const drift = Math.min(20000, Math.round(num("lcDrift", 1, 20000)));
+    const slip = Math.min(500, Math.round(num("lcSlip", 0, 5) * 100));
+    const loss = Math.min(2000, Math.round(num("lcLoss", 0, 20) * 100));
+    const review = Math.max(300, Math.round(num("lcReview", 5, 10080) * 60));
+    const twap = Math.max(300, Math.round(num("lcTwap", 5, 1440) * 60));
+    const cool = Math.round(num("lcCool", 0, 1440) * 60);
+    const c = new ethers.Contract(myLpVaults[i].addr, LPV_ABI, signer);
+    toast("Saving policy…");
+    await (await c.setPolicy(drift, slip, loss, review, twap, cool)).wait();
+    toast("Policy saved", "ok");
+    lpLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function lpSaveTuning(i) {
+  if (!signer) return connect();
+  const v = myLpVaults[i];
+  try {
+    const width = Math.max(1, Math.min(100, Math.round(Number($("lcWidth" + i).value))));
+    const edge = Math.max(1, Math.min(99, Math.round(Number($("lcEdge" + i).value))));
+    // An LP vault ignores the buyback pair, so carry its current band/mult
+    // through unchanged; setConfig writes all four.
+    const c = new ethers.Contract(NET.mintd.agentConfig, AGENTCFG_ABI, signer);
+    await (await c.setConfig(v.addr, v.kcfg.band, v.kcfg.sellMult, width, edge)).wait();
+    toast("Saved. The keeper picks it up next cycle.", "ok");
+    lpLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function lpResetCheckpoint(i) {
+  if (!signer) return connect();
+  try {
+    const c = new ethers.Contract(myLpVaults[i].addr, LPV_ABI, signer);
+    await (await c.resetCheckpoint()).wait();
+    toast("Stop re-armed", "ok");
+    lpLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function lpDeposit(i) {
+  if (!signer) return connect();
+  const v = myLpVaults[i];
+  const raw0 = $("lpD0" + i).value, raw1 = $("lpD1" + i).value;
+  const coinIs0 = !sameAddr(v.token0, ADDR.usdt0);
+  // token0/token1 are the pool's ordering; the coin is 18-dec and USDT0 is 6.
+  const coinAmt = raw0 && Number(raw0) > 0 ? E(raw0) : 0n;
+  const usdtAmt = raw1 && Number(raw1) > 0 ? ethers.parseUnits(String(raw1), 6) : 0n;
+  if (coinAmt === 0n && usdtAmt === 0n) return toast("Enter an amount", "err");
+  const amount0 = coinIs0 ? coinAmt : usdtAmt;
+  const amount1 = coinIs0 ? usdtAmt : coinAmt;
+  try {
+    for (const [tok, amt] of [[v.token0, amount0], [v.token1, amount1]]) {
+      if (amt === 0n) continue;
+      const erc = new ethers.Contract(tok, ERC20_ABI, signer);
+      if ((await erc.allowance(wallet, v.addr)) < amt) {
+        toast("Approving…");
+        await (await erc.approve(v.addr, ethers.MaxUint256)).wait();
+      }
+    }
+    const c = new ethers.Contract(v.addr, LPV_ABI, signer);
+    // Explicit gasLimit: deposit reads the pool through external calls and the
+    // vault's header warns estimateGas under-reports it.
+    await (await c.deposit(amount0, amount1, { gasLimit: 3_000_000 })).wait();
+    toast("Deposited", "ok");
+    lpLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function lpWithdraw(i) {
+  if (!signer) return connect();
+  try {
+    const c = new ethers.Contract(myLpVaults[i].addr, LPV_ABI, signer);
+    await (await c.withdrawAll({ gasLimit: 3_000_000 })).wait();
+    toast("Everything withdrawn", "ok");
+    lpLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function lpApprove(i) {
+  if (!signer) return connect();
+  try {
+    const c = new ethers.Contract(myLpVaults[i].addr, LPV_ABI, signer);
+    await (await c.approve(myLpVaults[i].proposal.nonce)).wait();
+    toast("Range approved. The agent can act on it now.", "ok");
+    lpLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function lpSetMode(i) {
+  if (!signer) return connect();
+  const m = Number($("lpMode" + i).value);
+  try {
+    const c = new ethers.Contract(myLpVaults[i].addr, LPV_ABI, signer);
+    await (await c.setMode(m)).wait();
+    toast("Mode set to " + LP_MODES[m], "ok");
+    lpLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function lpToggleAgent(i) {
+  if (!signer) return connect();
+  const v = myLpVaults[i];
+  const on = v.agent !== ethers.ZeroAddress;
+  try {
+    const c = new ethers.Contract(v.addr, LPV_ABI, signer);
+    await (await c.setAgent(on ? ethers.ZeroAddress : NET.mintd.keeper)).wait();
+    toast(on ? "Agent off." : "Agent on. It can only propose; you approve.", "ok");
+    lpLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+/* ------------------------------------------------------------------ bonds */
+const BOND_ABI = [
+  "function bondCount() view returns (uint256)",
+  "function bonds(uint256) view returns (address token, address creator, uint128 escrowed, uint128 sold, uint128 price, uint128 walletCap, uint64 saleStart, uint64 saleEnd, uint32 vestDuration, uint32 vestStep, uint16 feeBps, bool reclaimed)",
+  "function positions(uint256, address) view returns (uint128 total, uint128 claimed, uint128 bought, uint64 start)",
+  "function claimable(uint256, address) view returns (uint256)",
+  "function isAllowed(address) view returns (bool)",
+  "function createFee() view returns (uint256)",
+  "function create(address,uint256,uint128,uint32,uint32,uint32,uint32,uint128) payable returns (uint256)",
+  "function buy(uint256,uint256,uint256) returns (uint256)",
+  "function claim(uint256) returns (uint256)",
+  "function reclaim(uint256) returns (uint256)",
+];
+let bondList = [];
+
+// SIMPLE APR OVER THE TERM, and nothing else.
+//
+// The same 50%-off-over-30-days bond is 1,217%, 2,355%, 460,000% or about
+// 1,000,000,000% depending only on which convention you pick, all arithmetically
+// correct. Printing the biggest is not generosity, it is a claim this project
+// would have to walk back. So: one convention, stated, with its assumption
+// attached, and never without the breakeven price beside it.
+function bondApr(discountPct, days) {
+  if (!(discountPct > 0) || !(days > 0) || discountPct >= 100) return null;
+  const gain = discountPct / (100 - discountPct); // pay (100-d), receive 100
+  return gain * (365 / days) * 100;
+}
+
+async function bondLoad(force) {
+  const rows = $("bondRows"), note = $("bondNote");
+  const addr = NET.mintd.bondMarket;
+  if (!addr) {
+    rows.innerHTML = `<div class="empty">Bonds are not deployed on ${esc(NET.label)} yet.</div>`;
+    note.textContent = "";
+    return;
+  }
+  if (!pad) await init();
+  if (force || !tokens.length) await loadAll();
+  rows.innerHTML = `<div class="empty">Loading…</div>`;
+  try {
+    const c = new ethers.Contract(addr, BOND_ABI, rp);
+    const n = Number(await retryRead(() => c.bondCount()));
+    bondList = [];
+    // Sequential: gotcha 1, two concurrent reads in one tick get batched and
+    // Stable rejects the whole array.
+    for (let i = 0; i < n; i++) {
+      let b;
+      try { b = await retryRead(() => c.bonds(i)); } catch { continue; }
+      const t = tokens.find((x) => sameAddr(x.addr, b.token));
+      let owed = 0n, mine = null;
+      if (wallet) {
+        try { owed = await c.claimable(i, wallet); } catch {}
+        try { mine = await c.positions(i, wallet); } catch {}
+      }
+      bondList.push({ id: i, ...bondRow(b, t), raw: b, owed, mine });
+    }
+    bondPaint();
+  } catch (e) {
+    rows.innerHTML = `<div class="empty">Could not load bonds: ${esc(e.shortMessage || e.message)}</div>`;
+  }
+}
+
+// Everything a card shows, derived once.
+function bondRow(b, t) {
+  const remaining = b.reclaimed ? 0n : b.escrowed - b.sold;
+  // price is quote units (6-dec) per 1e18 tokens, so this is USD per token in 1e18.
+  const bondPx = (BigInt(b.price) * 10n ** 12n);
+  const spot = t ? t.price : 0n;
+  const discount = spot > 0n ? Number(((spot - bondPx) * 10000n) / spot) / 100 : null;
+  const days = Number(b.vestDuration) / 86400;
+  const now = Math.floor(Date.now() / 1000);
+  const started = now >= Number(b.saleStart);
+  const ended = now >= Number(b.saleEnd);
+  const soldOut = remaining === 0n;
+  return {
+    token: b.token, sym: t ? t.symbol : b.token.slice(0, 8) + "…",
+    creator: b.creator, escrowed: b.escrowed, soldTokens: b.sold, remaining,
+    bondPx, spot, discount, days,
+    apr: discount !== null ? bondApr(discount, days) : null,
+    open: started && !ended && !soldOut,
+    started, ended, soldOut, reclaimed: b.reclaimed,
+    // Progress and the money raised so far, both derived here so the card is
+    // pure formatting.
+    pct: b.escrowed > 0n ? Number((b.sold * 10000n) / b.escrowed) / 100 : 0,
+    raised: (Number(ethers.formatEther(b.sold)) * Number(ethers.formatUnits(b.price, 6))),
+    startsIn: Number(b.saleStart) - now, endsIn: Number(b.saleEnd) - now,
+    stepped: Number(b.vestStep) > 1,
+  };
+}
+
+function bondPaint() {
+  const rows = $("bondRows"), note = $("bondNote");
+  const me = wallet ? wallet.toLowerCase() : null;
+  const open = bondList.filter((b) => b.open);
+  // Closed bonds used to be dropped on the floor. A creator whose window ended
+  // then had no way to see the bond at all, let alone reclaim what did not
+  // sell, and 200,000 escrowed tokens simply vanished from the interface.
+  const other = bondList.filter((b) => !b.open);
+
+  const section = (title, list) => !list.length ? "" :
+    `<div style="font-size:11px;letter-spacing:.1em;font-weight:800;color:var(--dim);margin:18px 0 8px">${title}</div>`
+    + list.map(bondCardHTML).join("");
+
+  rows.innerHTML = (open.length ? open.map(bondCardHTML).join("") : `<div class="empty">No bonds are open right now.</div>`)
+    + section("CLOSED &amp; UPCOMING", other);
+
+  note.innerHTML = `A bond is a bet on the token, not a yield product. `
+    + `The discount is your only cushion, and the creator can still sell their own supply while you vest.`;
+
+  const mine = bondList.filter((b) => b.mine && b.mine.total > 0n);
+  $("bondMine").style.display = mine.length ? "" : "none";
+  if (mine.length) {
+    $("bondMineRows").innerHTML = mine.map((b) => `
+      <div style="display:flex;align-items:center;gap:12px;border-top:1px solid rgba(255,255,255,.06);padding:10px 0">
+        ${bondLogo(b)}
+        <div>
+          <b>$${esc(b.sym)}</b>
+          <div style="font-size:12px;opacity:.7">${nfCompact(Number(ethers.formatEther(b.mine.total - b.mine.claimed)))} still to come</div>
+        </div>
+        <div class="spacer"></div>
+        <span style="font-size:13px">${nf(Number(ethers.formatEther(b.owed)), 4)} claimable</span>
+        <button class="btn" ${b.owed > 0n ? "" : "disabled"} onclick="bondClaim(${b.id})">Claim</button>
+      </div>`).join("");
+  }
+}
+
+function bondCardHTML(b) {
+  const me = wallet ? wallet.toLowerCase() : null;
+  const isMine = me && b.creator.toLowerCase() === me;
+  const chip = b.open ? `<span class="bchip on">OPEN</span>`
+    : !b.started ? `<span class="bchip soon">OPENS IN ${bondDur(b.startsIn)}</span>`
+    : b.soldOut ? `<span class="bchip off">SOLD OUT</span>`
+    : `<span class="bchip off">CLOSED</span>`;
+  const px = (x, d) => "$" + nf(Number(ethers.formatEther(x)), d);
+
+  // Reclaim is the creator's only route to unsold escrow, and it exists only
+  // after the window closes. Without this button the tokens are stranded.
+  const canReclaim = isMine && b.ended && !b.reclaimed && b.remaining > 0n;
+  const actions = b.open
+    ? `<input id="bdBuy${b.id}" placeholder="0.00 ${esc(quoteTicker())}" autocomplete="off">
+       <button class="btn" onclick="bondBuy(${b.id})">Buy</button>`
+    : canReclaim
+    ? `<button class="btn" onclick="bondReclaim(${b.id})">Reclaim ${nfCompact(Number(ethers.formatEther(b.remaining)))} unsold $${esc(b.sym)}</button>`
+    : b.reclaimed ? `<span class="finenote">Unsold tokens have been returned to the creator.</span>`
+    : b.ended ? `<span class="finenote">This sale has closed.${isMine ? "" : " Buyers keep vesting on schedule."}</span>`
+    : `<span class="finenote">Sale has not opened yet.</span>`;
+
+  return `<div class="bondcard">
+    <div class="bhead">
+      ${bondLogo(b)}
+      <b style="font-size:17px">$${esc(b.sym)}</b>
+      ${chip}
+      ${bondDiscountBadge(b)}
+      <div class="spacer"></div>
+      <span style="opacity:.6;font-size:12px">${b.open ? "closes in " + bondDur(b.endsIn) : ""}</span>
+    </div>
+
+    <div class="bgrid">
+      <div class="bbox"><label>BOND PRICE</label><b>${px(b.bondPx, 8)}</b><small>per $${esc(b.sym)}</small></div>
+      <div class="bbox"><label>MARKET</label><b>${px(b.spot, 8)}</b><small>right now</small></div>
+      <div class="bbox"><label>BREAKEVEN</label><b>${px(b.bondPx, 8)}</b><small>avg over ${nf(b.days, 0)}d</small></div>
+      <div class="bbox"><label>VESTS OVER</label><b>${nf(b.days, 0)} days</b><small>${b.stepped ? "every 10 min" : "continuously"}</small></div>
+      <div class="bbox"><label>SOLD</label><b>${nf(b.pct, 1)}%</b><small>$${nf(b.raised, 2)} raised</small></div>
+      <div class="bbox"><label>LEFT</label><b>${nfCompact(Number(ethers.formatEther(b.remaining)))}</b><small>of ${nfCompact(Number(ethers.formatEther(b.escrowed)))}</small></div>
+    </div>
+    <div class="bbar"><i style="width:${Math.min(100, b.pct)}%"></i></div>
+
+    ${b.discount !== null && b.discount <= 0 ? `<div class="finenote" style="margin-bottom:10px;color:var(--red,#e5534b)"><b>This bond costs more than the open market.</b> It was priced when $${esc(b.sym)} was higher, and a bond's price is fixed at creation. Buying $${esc(b.sym)} on the Swap tab is cheaper right now.</div>` : ""}
+    ${b.apr ? `<div class="finenote" style="margin-bottom:10px">${nf(b.apr, 0)}% APR <b>if the price is unchanged</b>. You receive tokens, not dollars: you are whole only while the average price across the ${nf(b.days, 0)} days stays above ${px(b.bondPx, 8)}.</div>` : ""}
+    <div class="bactions">${actions}</div>
+  </div>`;
+}
+
+// A bond's price is fixed at creation, so if the market falls under it the
+// "discount" goes negative. Rendering that as "-96.1% off" is worse than
+// useless: it reads like a bigger discount at a glance.
+function bondDiscountBadge(b) {
+  if (b.discount === null) return "";
+  if (b.discount <= 0) return `<span class="bchip off" style="background:rgba(229,83,75,.16);color:#e5534b">ABOVE MARKET</span>`;
+  return `<span class="badgepill" style="background:var(--green);color:#fff">${nf(b.discount, 1)}% off</span>`;
+}
+
+async function bondReclaim(id) {
+  if (!signer) return connect();
+  try {
+    const c = new ethers.Contract(NET.mintd.bondMarket, BOND_ABI, signer);
+    const tx = await c.reclaim(id);
+    toast("Transaction sent…");
+    await tx.wait();
+    toast("Unsold tokens returned", "ok");
+    bondLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+// Same source the swap picker uses, so a coin looks identical wherever it appears.
+function bondLogo(b) {
+  const t = tokens.find((x) => sameAddr(x.addr, b.token));
+  const src = t && (t.platform ? coinLogo() : safeImg(t.meta && t.meta.image)) || tokLogo(b.token);
+  const ini = esc((b.sym || "?").slice(0, 3));
+  return src
+    ? `<img src="${src}" class="blogo" loading="lazy" onerror="this.outerHTML='<span class=\\'blogo bfb\\'>${ini}</span>'">`
+    : `<span class="blogo bfb">${ini}</span>`;
+}
+
+const bondDur = (s) => s <= 0 ? "0m" : s < 3600 ? Math.round(s / 60) + "m"
+  : s < 86400 ? Math.round(s / 3600) + "h" : Math.round(s / 86400) + "d";
+
+async function bondBuy(id) {
+  if (!signer) return connect();
+  const el = $("bdBuy" + id);
+  const v = el && el.value;
+  if (!v || Number(v) <= 0) return toast("Enter an amount", "err");
+  const b = bondList.find((x) => x.id === id);
+  const amt = ethers.parseUnits(String(v), 6);
+  try {
+    const q = new ethers.Contract(ADDR.usdt0, ERC20_ABI, signer);
+    if ((await q.allowance(wallet, NET.mintd.bondMarket)) < amt) {
+      toast("Approving " + quoteTicker() + "…");
+      await (await q.approve(NET.mintd.bondMarket, ethers.MaxUint256)).wait();
+    }
+    const c = new ethers.Contract(NET.mintd.bondMarket, BOND_ABI, signer);
+    // minTokens at 100%: the price is fixed, so the only way to receive less
+    // than quoted is the bond selling out underneath you, which should revert
+    // rather than silently fill smaller.
+    const expect = (amt * 10n ** 18n) / BigInt(b.raw.price);
+    const tx = await c.buy(id, amt, expect);
+    toast("Transaction sent…");
+    await tx.wait();
+    toast("Bought $" + b.sym + " bond", "ok");
+    bondLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+async function bondClaim(id) {
+  if (!signer) return connect();
+  try {
+    const c = new ethers.Contract(NET.mintd.bondMarket, BOND_ABI, signer);
+    const tx = await c.claim(id);
+    toast("Transaction sent…");
+    await tx.wait();
+    toast("Claimed", "ok");
+    bondLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+}
+
+// Launchpad coins are allowed by construction; anything else has to be listed
+// on the contract, so it is not offered here.
+function bondTokenList() {
+  return tokens.filter((t) => t.padOf).map((t) => ({
+    addr: t.addr, sym: t.symbol, name: t.name, dec: 18,
+    logo: t.platform ? coinLogo() : safeImg(t.meta && t.meta.image),
+  }));
+}
+
+function bondShowCreate() {
+  const el = $("bondCreate");
+  el.style.display = el.style.display === "none" ? "" : "none";
+  if (el.style.display !== "") return;
+  if (!$("bdTok").value) {
+    const first = bondTokenList()[0];
+    if (first) $("bdTok").value = first.addr;
+  }
+  tokLabel("bdTok");
+  bondQuote();
+  el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function bondQuote() {
+  const t = tokens.find((x) => sameAddr(x.addr, $("bdTok").value));
+  const amt = Number($("bdAmt").value || 0);
+  const disc = Number($("bdDisc").value);
+  const vest = Number($("bdVest").value);
+  const el = $("bdPreview");
+  if (!t || !(amt > 0)) { el.textContent = "Enter an amount to see the terms."; return; }
+  const spot = Number(ethers.formatEther(t.price));
+  const px = spot * (100 - disc) / 100;
+  const raise = amt * px;
+  const apr = bondApr(disc, vest);
+  el.innerHTML = `You escrow <b>${nfCompact(amt)} $${esc(t.symbol)}</b> (worth $${nf(amt * spot, 2)} now) `
+    + `and raise up to <b>$${nf(raise, 2)}</b>, less the 1% fee, so about <b>$${nf(raise * 0.99, 2)}</b> to you.<br>`
+    + `Buyers pay $${nf(px, 8)} a token and break even at that price. `
+    + (apr ? `The page will show this as <b>${nf(apr, 0)}% APR if the price is unchanged</b>.` : "");
+}
+
+async function bondCreate() {
+  if (!signer) return connect();
+  const t = tokens.find((x) => sameAddr(x.addr, $("bdTok").value));
+  const amt = $("bdAmt").value;
+  if (!t || !amt || Number(amt) <= 0) return toast("Pick a token and an amount", "err");
+  const disc = Number($("bdDisc").value);
+  const btn = $("bdGo");
+  btn.disabled = true;
+  try {
+    const c = new ethers.Contract(NET.mintd.bondMarket, BOND_ABI, signer);
+    // price is quote units per 1e18 tokens: spot is USD 1e18, so scale down by
+    // 1e12 to reach 6-dec USDT0. Getting this wrong is a 1,000,000x mispricing.
+    const price = (t.price * BigInt(100 - disc)) / 100n / 10n ** 12n;
+    if (price <= 0n) throw new Error("price rounds to zero, the token is too cheap for a bond");
+    const tok = new ethers.Contract(t.addr, ERC20_ABI, signer);
+    const amtRaw = E(amt);
+    if ((await tok.allowance(wallet, NET.mintd.bondMarket)) < amtRaw) {
+      toast("Approving $" + t.symbol + "…");
+      await (await tok.approve(NET.mintd.bondMarket, ethers.MaxUint256)).wait();
+    }
+    const fee = await c.createFee();
+    const cap = $("bdCap").value ? E($("bdCap").value) : 0n;
+    const tx = await c.create(t.addr, amtRaw, price, 0,
+      Number($("bdSale").value) * 86400, Number($("bdVest").value) * 86400,
+      Number($("bdStep").value), cap, { value: fee });
+    toast("Transaction sent…");
+    await tx.wait();
+    toast("Bond created", "ok");
+    $("bondCreate").style.display = "none";
+    bondLoad(true);
+  } catch (e) { toast(e.shortMessage || e.message, "err"); }
+  finally { btn.disabled = false; }
 }
 
 /* ------------------------------------------------------------ market data */
@@ -4960,6 +6664,7 @@ async function loadAllInner() {
     // the portfolio all read this same array, so dropping it here keeps them
     // from disagreeing about whether the token exists.
     tokens = loaded.filter(Boolean).filter((t) => !isHiddenToken(t.addr));
+    tokensLoaded = true;
 
     // featured tokens launched outside the launchpad (standalone USDT0 V3 pools)
     const ext = await Promise.all(EXTERNAL_TOKENS.map(async (e) => {
@@ -5063,6 +6768,22 @@ function renderCards() {
   // build off-document, attach once: one reflow instead of one per card
   const frag = document.createDocumentFragment();
   if (!list.length) {
+    // Before the first load resolves, show shimmer skeletons rather than the
+    // "no tokens" copy, which would otherwise flash on every cold open.
+    if (!tokensLoaded) {
+      el.innerHTML = Array.from({ length: 8 }, () => `
+        <div class="skcard skel">
+          <div style="display:flex;gap:11px;align-items:center">
+            <div class="skline skdot"></div>
+            <div style="flex:1"><div class="skline" style="height:13px;width:60%"></div>
+              <div class="skline" style="height:10px;width:38%;margin-top:7px"></div></div>
+          </div>
+          <div class="skline" style="height:34px;margin-top:14px"></div>
+          <div class="skline" style="height:10px;width:80%;margin-top:12px"></div>
+        </div>`).join("");
+      renderPager(0, 0);
+      return;
+    }
     el.innerHTML = '<div class="empty">No tokens yet. Be the first to launch.</div>';
     renderPager(0, 0);
     return;
@@ -5565,7 +7286,10 @@ function tokRowHTML(t) {
 }
 function openTokMenu(id) {
   tokTarget = id;
-  tokAll = swBaseList();
+  // Bonds can only escrow an allowlisted token, so offering the full swap list
+  // here would let someone pick USDT0 or a custom import and get a revert at
+  // the end of a form they had already filled in.
+  tokAll = (id === "bdTok" || id === "avTok" || id === "lpTok") ? bondTokenList() : swBaseList();
   $("tokSearch").value = "";
   tokFilter();
   $("tokModal").classList.add("on");
@@ -5631,6 +7355,15 @@ function tokChoose(addr) {
     tokLabel("swIn"); tokLabel("swOutSel");
     $("swAmt").value = ""; $("swOut").value = ""; $("swRoute").textContent = "–"; swBest = null;
     swBalance();
+  } else if (tokTarget === "bdTok") {
+    tokLabel("bdTok");
+    bondQuote();
+  } else if (tokTarget === "avTok") {
+    tokLabel("avTok");
+    vaultQuote();
+  } else if (tokTarget === "lpTok") {
+    tokLabel("lpTok");
+    lpCreateQuote();
   } else {
     tokLabel("plA"); tokLabel("plB");
     $("plAmtA").value = $("plAmtB").value = "";
@@ -7764,6 +9497,7 @@ const SYNTH_ABI = [
   "function mintPaused() view returns (bool)",
   "function isLiquidatable(address) view returns (bool)",
   "function deposit(uint256)",
+  "function depositToken(uint256)",
   "function withdraw(uint256)",
   "function mint(uint256)",
   "function burn(uint256)",

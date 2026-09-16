@@ -2903,11 +2903,14 @@ const CHAINS = {
     chain: {
       chainId: "0x13b2", chainName: "Arc",
       nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-      // Answers eth_call and eth_chainId, accepts batches, and sends CORS "*",
-      // so the page reads the chain directly with no wallet. eth_getLogs is
-      // DISABLED on it, which is why charts and the trade feed still cannot
-      // load. Replaces the thirdweb endpoint, which errored on every method.
-      rpcUrls: ["https://real-pump-soon-trust-me-bro-again.poptyedev.com/b71fac7173778c3f6a9148c157b8b4f61d275b447b087327"],
+      // thirdweb came online when Arc mainnet opened publicly. It answers
+      // eth_call, eth_getCode, eth_getBalance AND eth_getLogs (20k-result cap,
+      // and it hands back a narrower range to retry), accepts batches, and sends
+      // CORS "*", so the page reads the chain directly with no wallet and the
+      // charts and trade feed can load. Replaces a personal endpoint that went
+      // dark and blacked out every Arc read; that one had logs disabled, which
+      // is the stale reason charts were off.
+      rpcUrls: ["https://5042.rpc.thirdweb.com"],
       blockExplorerUrls: ["https://arc.exploreme.pro"],
     },
     // Every address below was read off the chain, not copied from another
