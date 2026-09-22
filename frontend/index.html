@@ -2926,9 +2926,11 @@ const CHAINS = {
       // that the launchpad actually calls present in its bytecode. Checked
       // through a wallet provider, since no reachable RPC answers reads.
       router: "0x53BF6B0684Ec7eF91e1387Da3D1a1769bC5A6F77",
-      // Still unknown. Swap quoting needs it, so the swap tab stays off until
-      // it is found; nothing else depends on it.
-      quoter: null,
+      // Official Uniswap QuoterV2 on Arc (Uniswap/contracts 5042.md). Verified
+      // on chain: has code and factory() == the launchpad's factory 0xf0db7b58,
+      // so it quotes the exact pools the pad creates. WETH9() points at Arc's
+      // UnsupportedProtocol stub, expected on a USDC-gas chain with no WETH.
+      quoter: "0x7dfd4f31be6814d2906bde155c3e1b146eac1468",
       usdt0: "0x3600000000000000000000000000000000000000",
     },
     mintd: {
@@ -2984,7 +2986,11 @@ const CHAINS = {
     // it needs is deployed and its wiring verified: launch and screener need the
     // pad, swap needs a confirmed router, agent needs the factory. Shipping a
     // tab that half works is worse than not shipping it.
-    features: { launch: true, swap: false, earn: false, mintr: false, gold: false, locker: false, burn: false, pools: false, screener: true, bridge: false, holders: false, agent: false, mintdStat: false },
+    // Every hidden tab must be an explicit `false`, not a missing key: the nav
+    // gate in applyChainUi hides only on `=== false`, so an absent flag (bonds,
+    // agents) reads as "show" and leaks the tab. gold/agent/bonds/agents are the
+    // ones dropped for a lean Arc bar; mintr turns true once it is deployed.
+    features: { launch: true, swap: false, earn: false, mintr: false, gold: false, locker: false, burn: false, pools: false, screener: true, bridge: false, holders: false, agent: false, agents: false, bonds: false, mintdStat: false },
     statsFile: null,
     dexSlug: null,   // Dexscreener does not index Arc
     faucet: null,
@@ -2996,10 +3002,10 @@ const CHAINS = {
     // Trailing slash on purpose: Netlify's "/arcapi/*" splat does not reliably
     // match a bare "/arcapi", and upstream accepts "/api/?query" either way.
     explorerApi: "/arcapi/",
-    // Navigation entries that exist as placeholders. Their feature flags stay
-    // false, so no code path tries to reach a contract that is not deployed;
-    // these only add the tab and a "coming soon" panel. See applySoonViews().
-    soon: ["earn", "locker", "burn", "pools"],
+    // No "coming soon" placeholder tabs: a bar padded with dead tabs reads as
+    // cluttered and unfinished, the opposite of the goal. A tab turns on for
+    // real only once its contract is deployed on Arc (MINTR, then locker/farms).
+    soon: [],
     // This RPC answered a two-call batch cleanly, unlike Stable's, which rejects
     // any batch outright. Kept small anyway: a cold load fires enough reads that
     // an oversized batch is the first thing a rate limiter drops.
